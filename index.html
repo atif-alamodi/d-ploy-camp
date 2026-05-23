@@ -2013,21 +2013,23 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
           <span data-i18n="passwordSecurityInfo">حافظ على حسابك آمناً بكلمة مرور قوية وفريدة</span>
         </div>
 
-        <form onsubmit="handleChangePassword(event)" style="max-width: 400px">
+        <div style="max-width: 400px">
           <div class="form-group">
             <label data-i18n="newPassword">كلمة المرور الجديدة (6+ أحرف)</label>
-            <input type="password" id="settingsNewPassword" class="form-input" placeholder="••••••••" required>
+            <input type="password" id="settingsNewPassword" class="form-input" placeholder="••••••••"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('settingsConfirmPassword').focus();}">
           </div>
 
           <div class="form-group">
             <label data-i18n="confirmPassword">تأكيد كلمة المرور</label>
-            <input type="password" id="settingsConfirmPassword" class="form-input" placeholder="••••••••" required>
+            <input type="password" id="settingsConfirmPassword" class="form-input" placeholder="••••••••"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();doChangePassword();}">
           </div>
 
-          <div id="changePasswordAlert" class="alert hidden" style="margin-bottom:15px"></div>
+          <div id="changePasswordAlert" style="display:none;padding:12px 16px;border-radius:10px;font-weight:600;margin-bottom:15px;"></div>
 
-          <button type="submit" class="btn btn-primary" id="settingsChangePasswordBtn" data-i18n="changePassword">تغيير كلمة المرور</button>
-        </form>
+          <button type="button" class="btn btn-primary" id="settingsChangePasswordBtn" onclick="doChangePassword()">تغيير كلمة المرور</button>
+        </div>
       </div>
 
       <div class="section-card">
@@ -3017,8 +3019,7 @@ async function handleLogout() {
   location.reload();
 }
 
-async function handleChangePassword(e) {
-  e.preventDefault();
+async function doChangePassword() {
   const newPassword = document.getElementById('settingsNewPassword').value.trim();
   const confirmPassword = document.getElementById('settingsConfirmPassword').value.trim();
   const changePasswordBtn = document.getElementById('settingsChangePasswordBtn');
