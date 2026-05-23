@@ -1980,6 +1980,60 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
         <div id="allProjectsList"></div>
       </div>
 
+      <!-- Invite Users Section -->
+      <div class="section-card">
+        <div class="section-header">
+          <h3 class="section-title">
+            <span class="section-icon" style="background:#fce7f3">✉️</span>
+            <span>دعوة مستخدمين للمنصة</span>
+          </h3>
+          <button class="btn btn-primary" onclick="toggleAdminInvitePanel()">
+            <span id="adminInviteToggleLabel">➕ إضافة دعوات</span>
+          </button>
+        </div>
+
+        <!-- Invite Panel (hidden by default) -->
+        <div id="adminInvitePanel" style="display:none; margin-top:16px">
+          <div style="background:var(--bg-elevated); border-radius:var(--radius); padding:20px; border:1px solid var(--border);">
+
+            <!-- Email input -->
+            <div class="form-group">
+              <label style="font-weight:600; margin-bottom:8px; display:block">📧 أدخل الإيميلات (افصل بينها بفاصلة أو Enter)</label>
+              <div id="adminChipArea" style="display:flex; flex-wrap:wrap; gap:6px; min-height:48px; padding:8px 12px; border:1.5px solid var(--border); border-radius:var(--radius); background:white; cursor:text;" onclick="document.getElementById('adminChipInput').focus()">
+                <input id="adminChipInput" type="email" placeholder="example@email.com" style="border:none; outline:none; flex:1; min-width:200px; font-size:14px; background:transparent;"
+                  onkeydown="handleAdminChipKey(event)">
+              </div>
+              <div style="font-size:12px; color:var(--text-muted); margin-top:6px">يمكنك لصق عدة إيميلات مرة واحدة مفصولة بفاصلة أو مسافة</div>
+            </div>
+
+            <!-- Select project (optional) -->
+            <div class="form-group">
+              <label style="font-weight:600; margin-bottom:8px; display:block">📁 إضافة مباشرة لمشروع (اختياري)</label>
+              <select id="adminInviteProject" class="form-input">
+                <option value="">— بدون مشروع (دعوة للمنصة فقط) —</option>
+              </select>
+            </div>
+
+            <div id="adminInviteAlert" style="display:none; padding:12px 16px; border-radius:10px; font-weight:600; margin-bottom:15px;"></div>
+
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button class="btn btn-primary" onclick="sendAdminInvites()" id="adminInviteBtn">
+                ✉️ إرسال الدعوات
+              </button>
+              <button class="btn btn-ghost" onclick="clearAdminInvites()">
+                🗑️ مسح الكل
+              </button>
+            </div>
+          </div>
+
+          <!-- Results -->
+          <div id="adminInviteResults" style="display:none; margin-top:16px"></div>
+        </div>
+
+        <!-- Pending invitations list -->
+        <div id="adminPendingInvites" style="margin-top:16px"></div>
+      </div>
+
       <div class="section-card">
         <div class="section-header">
           <h3 class="section-title">
@@ -4419,6 +4473,9 @@ async function loadAdminPanel() {
     </div>
   `).join('') || `<div class="empty-state"><div class="empty-icon">📁</div><div class="empty-text">${t('noProjects')}</div></div>`;
 
+  // Load admin pending invites
+  loadAdminPendingInvites();
+
   // Load all users
   const { data: allUsers } = await sb.from('profiles').select('*').order('created_at', { ascending: false });
   document.getElementById('allUsersList').innerHTML = (allUsers || []).map(u => `
@@ -4444,6 +4501,195 @@ async function loadAdminPanel() {
       ` : `<span class="role-pill admin">${t('you') || 'You'}</span>`}
     </div>
   `).join('') || `<div class="empty-state"><div class="empty-icon">👥</div></div>`;
+}
+
+// ============================================
+// ADMIN INVITE SYSTEM
+// ============================================
+let adminInviteEmails = [];
+
+function toggleAdminInvitePanel() {
+  const panel = document.getElementById('adminInvitePanel');
+  const label = document.getElementById('adminInviteToggleLabel');
+  const isHidden = panel.style.display === 'none';
+  panel.style.display = isHidden ? 'block' : 'none';
+  label.textContent = isHidden ? '▲ إغلاق' : '➕ إضافة دعوات';
+  if (isHidden) loadAdminProjectsDropdown();
+}
+
+async function loadAdminProjectsDropdown() {
+  const { data: projects } = await sb.from('projects').select('id, name, icon').order('name');
+  const select = document.getElementById('adminInviteProject');
+  const current = select.value;
+  select.innerHTML = '<option value="">— بدون مشروع (دعوة للمنصة فقط) —</option>';
+  (projects || []).forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = p.icon + ' ' + p.name;
+    select.appendChild(opt);
+  });
+  if (current) select.value = current;
+}
+
+function handleAdminChipKey(event) {
+  if (['Enter','Tab',',',';',' '].includes(event.key)) {
+    event.preventDefault();
+    processAdminChipInput();
+  } else if (event.key === 'Backspace' && event.target.value === '') {
+    const chips = document.querySelectorAll('#adminChipArea .email-chip');
+    if (chips.length > 0) chips[chips.length - 1].remove();
+  }
+}
+
+function processAdminChipInput() {
+  const input = document.getElementById('adminChipInput');
+  const raw = input.value;
+  if (!raw.trim()) return;
+  raw.split(/[,;\s\n\r\t]+/).filter(p => p.trim()).forEach(p => addAdminChip(p.trim()));
+  input.value = '';
+}
+
+function addAdminChip(email) {
+  if (!email) return;
+  const area = document.getElementById('adminChipArea');
+  const existing = Array.from(area.querySelectorAll('.email-chip')).map(c => c.dataset.email);
+  if (existing.includes(email.toLowerCase())) return;
+  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const chip = document.createElement('div');
+  chip.className = 'email-chip' + (valid ? '' : ' invalid');
+  chip.dataset.email = email.toLowerCase();
+  chip.innerHTML = `<span>${escapeHTML(email)}</span><button class="email-chip-remove" onclick="this.parentElement.remove()">×</button>`;
+  const input = document.getElementById('adminChipInput');
+  area.insertBefore(chip, input);
+}
+
+function clearAdminInvites() {
+  document.getElementById('adminChipArea').querySelectorAll('.email-chip').forEach(c => c.remove());
+  document.getElementById('adminChipInput').value = '';
+  document.getElementById('adminInviteProject').value = '';
+  document.getElementById('adminInviteResults').style.display = 'none';
+  document.getElementById('adminInviteAlert').style.display = 'none';
+}
+
+async function sendAdminInvites() {
+  // Process any remaining input
+  processAdminChipInput();
+
+  const chips = document.querySelectorAll('#adminChipArea .email-chip:not(.invalid)');
+  const emails = Array.from(chips).map(c => c.dataset.email).filter(Boolean);
+  const projectId = document.getElementById('adminInviteProject').value;
+  const alertDiv = document.getElementById('adminInviteAlert');
+  const btn = document.getElementById('adminInviteBtn');
+
+  if (emails.length === 0) {
+    alertDiv.style.cssText = 'display:block;background:#fee2e2;color:#991b1b;padding:12px 16px;border-radius:10px;font-weight:600;margin-bottom:15px;';
+    alertDiv.textContent = '⚠️ يرجى إدخال إيميل واحد على الأقل صحيح';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="width:16px;height:16px;margin:0;border-width:2px;display:inline-block;"></div> جارٍ الإرسال...';
+  alertDiv.style.display = 'none';
+
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const appUrl = window.location.origin + window.location.pathname;
+
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/send-invitation`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        emails: emails,
+        projectId: projectId || null,
+        appUrl: appUrl
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      alertDiv.style.cssText = 'display:block;background:#fee2e2;color:#991b1b;padding:12px 16px;border-radius:10px;font-weight:600;';
+      alertDiv.textContent = '❌ ' + (result.error || 'فشل الإرسال');
+      return;
+    }
+
+    // Show results
+    const results = result.results || [];
+    const sent = results.filter(r => r.status === 'sent').length;
+    const partial = results.filter(r => r.status === 'partial').length;
+    const failed = results.filter(r => r.status === 'error' || r.status === 'invalid').length;
+    const skipped = results.filter(r => r.status === 'already_member').length;
+
+    const resultsDiv = document.getElementById('adminInviteResults');
+    resultsDiv.style.display = 'block';
+    resultsDiv.innerHTML = `
+      <div style="background:var(--bg-elevated); border-radius:var(--radius); padding:16px; border:1px solid var(--border);">
+        <div style="font-weight:700; margin-bottom:12px; font-size:16px">📊 نتائج الإرسال</div>
+        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+          <div style="background:#d1fae5;color:#065f46;padding:8px 16px;border-radius:8px;font-weight:600">✅ أُرسل: ${sent + partial}</div>
+          ${failed > 0 ? `<div style="background:#fee2e2;color:#991b1b;padding:8px 16px;border-radius:8px;font-weight:600">❌ فشل: ${failed}</div>` : ''}
+          ${skipped > 0 ? `<div style="background:#ede9fe;color:#5b21b6;padding:8px 16px;border-radius:8px;font-weight:600">⏭️ موجود: ${skipped}</div>` : ''}
+        </div>
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          ${results.map(r => `
+            <div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:white; border-radius:8px; font-size:13px; border:1px solid var(--border);">
+              <span>${r.status === 'sent' || r.status === 'partial' ? '✅' : r.status === 'already_member' ? '⏭️' : '❌'}</span>
+              <span style="flex:1; font-family:monospace">${r.email}</span>
+              <span style="color:var(--text-muted)">${
+                r.status === 'sent' ? 'إيميل أُرسل' :
+                r.status === 'partial' ? 'دعوة أُنشئت (rate limit)' :
+                r.status === 'already_member' ? 'موجود مسبقاً' :
+                r.error || 'فشل'
+              }</span>
+              ${r.invite_link ? `<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="navigator.clipboard.writeText('${r.invite_link}').then(()=>toast('تم نسخ الرابط'))">📋 نسخ الرابط</button>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+
+    // Clear chips after success
+    document.getElementById('adminChipArea').querySelectorAll('.email-chip').forEach(c => c.remove());
+    
+    // Reload pending invites
+    loadAdminPendingInvites();
+
+  } catch (err) {
+    alertDiv.style.cssText = 'display:block;background:#fee2e2;color:#991b1b;padding:12px 16px;border-radius:10px;font-weight:600;';
+    alertDiv.textContent = '❌ خطأ: ' + err.message;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '✉️ إرسال الدعوات';
+  }
+}
+
+async function loadAdminPendingInvites() {
+  const { data: invites } = await sb.from('invitations')
+    .select('*, project:project_id(name, icon)')
+    .eq('accepted', false)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  const div = document.getElementById('adminPendingInvites');
+  if (!invites || invites.length === 0) {
+    div.innerHTML = `<div style="color:var(--text-muted); font-size:13px; padding:8px 0">لا توجد دعوات معلّقة</div>`;
+    return;
+  }
+
+  div.innerHTML = `
+    <div style="font-weight:600; margin-bottom:10px; font-size:14px">⏳ الدعوات المعلّقة (${invites.length})</div>
+    ${invites.map(inv => `
+      <div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--bg-elevated); border-radius:8px; font-size:13px; margin-bottom:6px; border:1px solid var(--border);">
+        <span>📧</span>
+        <span style="flex:1; font-family:monospace">${escapeHTML(inv.email)}</span>
+        ${inv.project ? `<span style="background:var(--primary-light);color:var(--primary);padding:2px 8px;border-radius:6px;font-size:11px">${inv.project.icon} ${escapeHTML(inv.project.name)}</span>` : ''}
+        <span style="color:var(--text-muted); font-size:11px">${timeAgo(inv.created_at)}</span>
+      </div>
+    `).join('')}
+  `;
 }
 
 async function adminDeleteProject(id, name) {
