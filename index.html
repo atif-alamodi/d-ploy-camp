@@ -1643,6 +1643,51 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
   margin-top: 4px;
 }
 
+/* === Campfire Chat === */
+.campfire-wrap { display:flex; flex-direction:column; height:calc(100vh - 350px); min-height:400px; }
+.campfire-messages { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; background:var(--bg-elevated); border-radius:var(--radius-lg); margin-bottom:12px; border:1px solid var(--border); }
+.campfire-msg { display:flex; gap:10px; align-items:flex-start; animation: fadeUp 0.2s ease; }
+.campfire-msg.mine { flex-direction:row-reverse; }
+.campfire-msg .avatar { width:36px; height:36px; min-width:36px; font-size:15px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:var(--gradient-warm); color:white; font-weight:700; }
+.campfire-bubble { max-width:70%; background:white; border:1px solid var(--border); border-radius:var(--radius-lg); padding:10px 14px; box-shadow:var(--shadow-xs); }
+.campfire-msg.mine .campfire-bubble { background:var(--gradient-warm); color:white; border-color:transparent; }
+.campfire-bubble-name { font-size:11px; font-weight:700; color:var(--primary); margin-bottom:4px; }
+.campfire-msg.mine .campfire-bubble-name { color:rgba(255,255,255,0.8); }
+.campfire-bubble-text { font-size:14px; line-height:1.5; word-break:break-word; }
+.campfire-bubble-time { font-size:10px; color:var(--text-muted); margin-top:4px; }
+.campfire-msg.mine .campfire-bubble-time { color:rgba(255,255,255,0.7); }
+.campfire-input-row { display:flex; gap:8px; align-items:center; }
+.campfire-input { flex:1; padding:12px 16px; border:1.5px solid var(--border); border-radius:var(--radius-xl); font-size:14px; font-family:inherit; outline:none; transition:border-color 0.2s; background:white; }
+.campfire-input:focus { border-color:var(--primary); }
+.campfire-send-btn { width:44px; height:44px; border-radius:50%; background:var(--gradient-warm); border:none; cursor:pointer; font-size:18px; display:flex; align-items:center; justify-content:center; transition:transform 0.2s; flex-shrink:0; }
+.campfire-send-btn:hover { transform:scale(1.1); }
+.campfire-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; height:200px; color:var(--text-muted); gap:8px; }
+
+/* === Notifications === */
+.notif-badge { position:absolute; top:-4px; right:-4px; background:var(--secondary); color:white; border-radius:50%; width:18px; height:18px; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.notif-bell { position:relative; cursor:pointer; font-size:22px; padding:6px; }
+.notif-dropdown { position:absolute; top:44px; left:0; width:320px; background:white; border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); border:1px solid var(--border); z-index:1000; overflow:hidden; }
+.notif-item { padding:12px 16px; border-bottom:1px solid var(--border); cursor:pointer; transition:background 0.15s; font-size:13px; }
+.notif-item:hover { background:var(--bg-elevated); }
+.notif-item.unread { background:var(--primary-light); }
+.notif-item-time { font-size:11px; color:var(--text-muted); margin-top:2px; }
+
+/* === Activity Feed === */
+.activity-item { display:flex; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); }
+.activity-item:last-child { border-bottom:none; }
+.activity-icon { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+.activity-content { flex:1; }
+.activity-text { font-size:13px; line-height:1.5; }
+.activity-time { font-size:11px; color:var(--text-muted); margin-top:2px; }
+
+/* === Todo Comments === */
+.todo-comments { margin-top:8px; padding-top:8px; border-top:1px solid var(--border); }
+.todo-comment { display:flex; gap:8px; margin-bottom:8px; }
+.todo-comment-bubble { background:var(--bg-elevated); border-radius:var(--radius); padding:8px 12px; font-size:12px; flex:1; border:1px solid var(--border); }
+.todo-comment-input-row { display:flex; gap:6px; }
+.todo-comment-input { flex:1; padding:7px 12px; border:1.5px solid var(--border); border-radius:var(--radius); font-size:12px; font-family:inherit; outline:none; }
+.todo-comment-input:focus { border-color:var(--primary); }
+
 /* === Check-in === */
 .checkin-card {
   background: linear-gradient(135deg, rgba(255, 217, 61, 0.15) 0%, rgba(255, 107, 53, 0.1) 100%);
@@ -1804,6 +1849,10 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
     <div class="sidebar-header">
       <div class="sidebar-brand-icon">🏕️</div>
       <div class="sidebar-brand">D-Ploy</div>
+      <div class="notif-bell" onclick="toggleNotifDropdown()" title="الإشعارات">
+        🔔
+        <span class="notif-badge" id="notifBadge" style="display:none">0</span>
+      </div>
     </div>
 
     <div class="nav-section">
@@ -1936,6 +1985,16 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
           <div class="tool-card-icon" style="background:#ede9fe">👥</div>
           <div class="tool-card-title" data-i18n="members">الأعضاء</div>
           <div class="tool-card-count" id="membersCount">0</div>
+        </div>
+        <div class="tool-card" onclick="showProjectTab('campfire')">
+          <div class="tool-card-icon" style="background:#fff7ed">🔥</div>
+          <div class="tool-card-title">Campfire</div>
+          <div class="tool-card-count" id="campfireCount">0</div>
+        </div>
+        <div class="tool-card" onclick="showProjectTab('activity')">
+          <div class="tool-card-icon" style="background:#f0fdf4">📊</div>
+          <div class="tool-card-title">النشاط</div>
+          <div class="tool-card-count" id="activityCount"></div>
         </div>
       </div>
 
@@ -3153,6 +3212,7 @@ async function onAuthSuccess(user) {
 
   // Update UI
   document.getElementById('userName').textContent = currentProfile.full_name || currentProfile.email;
+  loadNotifications();
   document.getElementById('userEmail').textContent = currentProfile.email;
   document.getElementById('userAvatar').textContent = initials(currentProfile.full_name || currentProfile.email);
   document.getElementById('heroName').textContent = currentProfile.full_name || currentProfile.email;
@@ -3391,6 +3451,8 @@ async function loadProjectTab(tab) {
 
   if (tab === 'todos') await renderTodos(container);
   else if (tab === 'messages') await renderMessages(container);
+  else if (tab === 'campfire') await renderCampfire(container);
+  else if (tab === 'activity') await renderActivity(container);
   else if (tab === 'schedule') await renderSchedule(container);
   else if (tab === 'files') await renderFiles(container);
   else if (tab === 'checkins') await renderCheckins(container);
@@ -3435,6 +3497,7 @@ async function renderTodos(container) {
                   <span class="priority-badge priority-${td.priority}">${t(td.priority)}</span>
                 </div>
               </div>
+              <button class="btn btn-ghost" style="padding:6px" title="تعليقات" onclick="showTodoDetail('${td.id}')">💬</button>
               <button class="btn btn-ghost" style="padding:6px" onclick="deleteTodo('${td.id}')">🗑️</button>
             </div>
           `).join('')}
@@ -3498,6 +3561,7 @@ async function createTodo() {
     due_date: due || null, priority, created_by: currentUser.id,
     assigned_to: assignee || currentUser.id
   });
+  await logActivity('أضاف مهمة جديدة', 'todo', title);
   closeModal('newTodoModal');
   toast(currentLang === 'ar' ? 'تمت الإضافة' : 'Added');
   await loadProjectTab('todos');
@@ -4778,6 +4842,339 @@ async function loadMyTasks() {
       </div>
     </div>
   `).join('')}</div>`;
+}
+
+
+// ============================================
+// CAMPFIRE (Real-time Chat)
+// ============================================
+let campfireChannel = null;
+
+async function renderCampfire(container) {
+  container.innerHTML = `
+    <div class="section-card">
+      <div class="section-header">
+        <h3 class="section-title">
+          <span class="section-icon" style="background:#fff7ed">🔥</span>
+          Campfire - دردشة المشروع
+        </h3>
+      </div>
+      <div class="campfire-wrap">
+        <div class="campfire-messages" id="campfireMessages">
+          <div class="campfire-empty">🔥<div>ابدأ المحادثة...</div></div>
+        </div>
+        <div class="campfire-input-row">
+          <input class="campfire-input" id="campfireInput" placeholder="اكتب رسالة..." 
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendCampfireMsg();}">
+          <button class="campfire-send-btn" onclick="sendCampfireMsg()">🔥</button>
+        </div>
+      </div>
+    </div>
+  `;
+  await loadCampfireMessages();
+  subscribeCampfire();
+}
+
+async function loadCampfireMessages() {
+  const { data: msgs } = await sb.from('campfire_messages')
+    .select('*, profile:user_id(full_name)')
+    .eq('project_id', activeProject.id)
+    .order('created_at', { ascending: true })
+    .limit(100);
+
+  const box = document.getElementById('campfireMessages');
+  if (!box) return;
+
+  if (!msgs || msgs.length === 0) {
+    box.innerHTML = '<div class="campfire-empty">🔥<div>ابدأ المحادثة...</div></div>';
+    return;
+  }
+
+  box.innerHTML = msgs.map(m => renderCampfireMsg(m)).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+function renderCampfireMsg(m) {
+  const isMine = m.user_id === currentUser.id;
+  const name = m.profile?.full_name || 'مستخدم';
+  const initial = name.charAt(0).toUpperCase();
+  const time = new Date(m.created_at).toLocaleTimeString('ar-SA', { hour:'2-digit', minute:'2-digit' });
+  return `
+    <div class="campfire-msg ${isMine ? 'mine' : ''}">
+      <div class="avatar" style="font-size:14px">${initial}</div>
+      <div class="campfire-bubble">
+        ${!isMine ? `<div class="campfire-bubble-name">${escapeHTML(name)}</div>` : ''}
+        <div class="campfire-bubble-text">${escapeHTML(m.content)}</div>
+        <div class="campfire-bubble-time">${time}</div>
+      </div>
+    </div>
+  `;
+}
+
+async function sendCampfireMsg() {
+  const input = document.getElementById('campfireInput');
+  if (!input) return;
+  const content = input.value.trim();
+  if (!content) return;
+  input.value = '';
+  const { error } = await sb.from('campfire_messages').insert({
+    project_id: activeProject.id,
+    user_id: currentUser.id,
+    content
+  });
+  if (error) { toast('خطأ في الإرسال'); input.value = content; return; }
+  await logActivity('أرسل رسالة في Campfire', 'campfire', 'رسالة جديدة');
+}
+
+function subscribeCampfire() {
+  if (campfireChannel) sb.removeChannel(campfireChannel);
+  campfireChannel = sb.channel('campfire-' + activeProject.id)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'campfire_messages',
+      filter: 'project_id=eq.' + activeProject.id
+    }, async (payload) => {
+      const box = document.getElementById('campfireMessages');
+      if (!box) return;
+      // Fetch user profile for new message
+      const { data: profile } = await sb.from('profiles').select('full_name').eq('id', payload.new.user_id).single();
+      const msg = { ...payload.new, profile };
+      if (box.querySelector('.campfire-empty')) box.innerHTML = '';
+      box.insertAdjacentHTML('beforeend', renderCampfireMsg(msg));
+      box.scrollTop = box.scrollHeight;
+    })
+    .subscribe();
+}
+
+// ============================================
+// ACTIVITY LOG
+// ============================================
+async function logActivity(action, entityType, entityName) {
+  if (!activeProject?.id || !currentUser?.id) return;
+  await sb.from('activity_log').insert({
+    project_id: activeProject.id,
+    user_id: currentUser.id,
+    action, entity_type: entityType, entity_name: entityName
+  }).then(() => {}).catch(() => {});
+}
+
+async function renderActivity(container) {
+  const { data: acts } = await sb.from('activity_log')
+    .select('*, profile:user_id(full_name)')
+    .eq('project_id', activeProject.id)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  const icons = { todo: '✅', message: '💬', file: '📁', campfire: '🔥', member: '👥', schedule: '📅' };
+
+  container.innerHTML = `
+    <div class="section-card">
+      <div class="section-header">
+        <h3 class="section-title">
+          <span class="section-icon" style="background:#f0fdf4">📊</span>
+          سجل نشاط المشروع
+        </h3>
+      </div>
+      ${!acts || acts.length === 0
+        ? '<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">لا يوجد نشاط بعد</div></div>'
+        : `<div style="padding:0 4px">${acts.map(a => `
+          <div class="activity-item">
+            <div class="activity-icon" style="background:var(--bg-elevated)">${icons[a.entity_type] || '📌'}</div>
+            <div class="activity-content">
+              <div class="activity-text">
+                <strong>${escapeHTML(a.profile?.full_name || 'مستخدم')}</strong>
+                ${escapeHTML(a.action)}
+                ${a.entity_name ? `<em style="color:var(--primary)"> "${escapeHTML(a.entity_name)}"</em>` : ''}
+              </div>
+              <div class="activity-time">⏰ ${timeAgo(a.created_at)}</div>
+            </div>
+          </div>
+        `).join('')}</div>`
+      }
+    </div>
+  `;
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+let notifCount = 0;
+
+async function loadNotifications() {
+  const { data: notifs, count } = await sb.from('notifications')
+    .select('*', { count: 'exact' })
+    .eq('user_id', currentUser.id)
+    .eq('read', false)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  notifCount = count || 0;
+  const badge = document.getElementById('notifBadge');
+  if (badge) badge.textContent = notifCount > 0 ? notifCount : '';
+  if (badge) badge.style.display = notifCount > 0 ? 'flex' : 'none';
+  return notifs || [];
+}
+
+async function sendNotification(userId, type, title, body, projectId) {
+  if (userId === currentUser.id) return;
+  await sb.from('notifications').insert({ user_id: userId, project_id: projectId, type, title, body });
+}
+
+function toggleNotifDropdown() {
+  let dd = document.getElementById('notifDropdown');
+  if (dd) { dd.remove(); return; }
+  dd = document.createElement('div');
+  dd.id = 'notifDropdown';
+  dd.className = 'notif-dropdown';
+  dd.innerHTML = '<div style="padding:12px 16px; font-weight:700; border-bottom:1px solid var(--border); display:flex; justify-content:space-between"><span>🔔 الإشعارات</span><button onclick="markAllNotificationsRead()" style="background:none;border:none;font-size:12px;color:var(--primary);cursor:pointer">تحديد كمقروء</button></div><div id="notifList" style="max-height:300px;overflow-y:auto"><div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">جارٍ التحميل...</div></div>';
+  const bell = document.querySelector('.notif-bell');
+  if (bell) {
+    bell.style.position = 'relative';
+    bell.appendChild(dd);
+  }
+  loadNotifList();
+  setTimeout(() => document.addEventListener('click', function closeDD(e) {
+    if (!dd.contains(e.target) && !document.querySelector('.notif-bell')?.contains(e.target)) {
+      dd.remove(); document.removeEventListener('click', closeDD);
+    }
+  }), 100);
+}
+
+async function loadNotifList() {
+  const { data: notifs } = await sb.from('notifications')
+    .select('*').eq('user_id', currentUser.id)
+    .order('created_at', { ascending: false }).limit(20);
+  const list = document.getElementById('notifList');
+  if (!list) return;
+  if (!notifs || notifs.length === 0) {
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">لا توجد إشعارات</div>';
+    return;
+  }
+  list.innerHTML = notifs.map(n => `
+    <div class="notif-item ${n.read ? '' : 'unread'}" onclick="markNotifRead('${n.id}')">
+      <div style="font-weight:600;font-size:13px">${escapeHTML(n.title)}</div>
+      ${n.body ? `<div style="font-size:12px;color:var(--text-soft);margin-top:2px">${escapeHTML(n.body)}</div>` : ''}
+      <div class="notif-item-time">${timeAgo(n.created_at)}</div>
+    </div>
+  `).join('');
+}
+
+async function markNotifRead(id) {
+  await sb.from('notifications').update({ read: true }).eq('id', id);
+  await loadNotifications();
+}
+
+async function markAllNotificationsRead() {
+  await sb.from('notifications').update({ read: true }).eq('user_id', currentUser.id).eq('read', false);
+  notifCount = 0;
+  const badge = document.getElementById('notifBadge');
+  if (badge) badge.style.display = 'none';
+}
+
+// ============================================
+// TODO COMMENTS
+// ============================================
+async function loadTodoComments(todoId) {
+  const { data: comments } = await sb.from('todo_comments')
+    .select('*, profile:user_id(full_name)')
+    .eq('todo_id', todoId)
+    .order('created_at', { ascending: true });
+  return comments || [];
+}
+
+async function addTodoComment(todoId, projectId, content) {
+  if (!content.trim()) return;
+  await sb.from('todo_comments').insert({
+    todo_id: todoId, project_id: projectId,
+    user_id: currentUser.id, content: content.trim()
+  });
+  await logActivity('علّق على مهمة', 'todo', content.substring(0, 30));
+}
+
+async function showTodoDetail(todoId) {
+  const { data: todo } = await sb.from('todos')
+    .select('*, assigned_profile:assigned_to(full_name), creator:created_by(full_name)')
+    .eq('id', todoId).single();
+  if (!todo) return;
+
+  const comments = await loadTodoComments(todoId);
+
+  const priorityColors = { low: '#6ee7b7', normal: '#93c5fd', high: '#fcd34d', urgent: '#fca5a5' };
+  const priorityLabels = { low: 'منخفضة', normal: 'عادية', high: 'عالية', urgent: 'عاجلة' };
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-bg show';
+  modal.id = 'todoDetailModal';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:560px; max-height:80vh; overflow-y:auto">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px">
+        <h3 class="modal-title" style="margin:0">${escapeHTML(todo.title)}</h3>
+        <button onclick="document.getElementById('todoDetailModal').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-muted)">×</button>
+      </div>
+
+      ${todo.description ? `<div style="padding:12px; background:var(--bg-elevated); border-radius:var(--radius); margin-bottom:16px; font-size:14px; color:var(--text-soft)">${escapeHTML(todo.description)}</div>` : ''}
+
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px">
+        <span style="padding:4px 10px; border-radius:20px; font-size:12px; font-weight:600; background:${priorityColors[todo.priority]}22; color:${priorityColors[todo.priority].replace('22','')}">
+          🚦 ${priorityLabels[todo.priority]}
+        </span>
+        ${todo.assigned_profile ? `<span style="padding:4px 10px; border-radius:20px; font-size:12px; font-weight:600; background:var(--primary-light); color:var(--primary)">👤 ${escapeHTML(todo.assigned_profile.full_name)}</span>` : ''}
+        ${todo.due_date ? `<span style="padding:4px 10px; border-radius:20px; font-size:12px; font-weight:600; background:#e0f2fe; color:#0369a1">📅 ${formatDate(todo.due_date)}</span>` : ''}
+        <span style="padding:4px 10px; border-radius:20px; font-size:12px; font-weight:600; background:${todo.completed ? '#dcfce7' : '#fef9c3'}; color:${todo.completed ? '#166534' : '#713f12'}">
+          ${todo.completed ? '✅ مكتملة' : '⏳ قيد التنفيذ'}
+        </span>
+      </div>
+
+      <div style="font-weight:700; margin-bottom:10px; font-size:14px">💬 التعليقات (${comments.length})</div>
+      <div id="todoCommentsBox" style="max-height:200px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; margin-bottom:12px">
+        ${comments.length === 0
+          ? '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px">لا توجد تعليقات بعد</div>'
+          : comments.map(c => `
+            <div class="todo-comment">
+              <div class="avatar" style="width:28px;height:28px;font-size:12px;flex-shrink:0">${(c.profile?.full_name||'?').charAt(0)}</div>
+              <div class="todo-comment-bubble">
+                <div style="font-weight:600;font-size:11px;color:var(--primary);margin-bottom:4px">${escapeHTML(c.profile?.full_name||'مستخدم')}</div>
+                <div>${escapeHTML(c.content)}</div>
+                <div style="font-size:10px;color:var(--text-muted);margin-top:4px">${timeAgo(c.created_at)}</div>
+              </div>
+            </div>
+          `).join('')}
+      </div>
+      <div class="todo-comment-input-row">
+        <input class="todo-comment-input" id="todoCommentInput" placeholder="أضف تعليقاً..." 
+          onkeydown="if(event.key==='Enter'){submitTodoComment('${todoId}','${activeProject.id}')}">
+        <button class="btn btn-primary" style="padding:7px 14px; font-size:12px" onclick="submitTodoComment('${todoId}','${activeProject.id}')">إرسال</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  setTimeout(() => document.getElementById('todoCommentInput')?.focus(), 100);
+}
+
+async function submitTodoComment(todoId, projectId) {
+  const input = document.getElementById('todoCommentInput');
+  if (!input || !input.value.trim()) return;
+  const content = input.value.trim();
+  input.value = '';
+  await addTodoComment(todoId, projectId, content);
+  // Reload comments
+  const comments = await loadTodoComments(todoId);
+  const box = document.getElementById('todoCommentsBox');
+  if (box) {
+    box.innerHTML = comments.map(c => `
+      <div class="todo-comment">
+        <div class="avatar" style="width:28px;height:28px;font-size:12px;flex-shrink:0">${(c.profile?.full_name||'?').charAt(0)}</div>
+        <div class="todo-comment-bubble">
+          <div style="font-weight:600;font-size:11px;color:var(--primary);margin-bottom:4px">${escapeHTML(c.profile?.full_name||'مستخدم')}</div>
+          <div>${escapeHTML(c.content)}</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:4px">${timeAgo(c.created_at)}</div>
+        </div>
+      </div>
+    `).join('');
+    box.scrollTop = box.scrollHeight;
+  }
 }
 
 // ============================================
