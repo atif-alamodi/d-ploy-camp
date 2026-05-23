@@ -2549,6 +2549,15 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 // ============================================
 // CONFIG
 // ============================================
+// Global error protection
+window.onerror = function(msg, src, line, col, err) {
+  console.error('App Error:', msg, 'at line', line, err);
+  return false; // Don't suppress - let browser handle
+};
+window.onunhandledrejection = function(e) {
+  console.error('Unhandled Promise:', e.reason);
+};
+
 const SUPABASE_URL = 'https://liwpqggtvstqwxobhsfs.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_PwL_jLvBp9MX9n3rxz-38A_o1RcO_2b';
 
@@ -3149,15 +3158,30 @@ async function handleResetPassword() {
 }
 
 async function handleLogin() {
-  const email = document.getElementById('loginEmail').value.trim();
-  const password = document.getElementById('loginPassword').value;
-  if (!email || !password) {
-    showAlert('loginAlert', currentLang === 'ar' ? 'الرجاء إدخال البريد وكلمة المرور' : 'Please enter email and password');
-    return;
+  try {
+    const btn = document.querySelector('#loginForm .btn-primary');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ جارٍ الدخول...'; }
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    if (!email || !password) {
+      showAlert('loginAlert', currentLang === 'ar' ? 'الرجاء إدخال البريد وكلمة المرور' : 'Please enter email and password');
+      if (btn) { btn.disabled = false; btn.setAttribute('data-i18n', 'signIn'); btn.textContent = t('signIn'); }
+      return;
+    }
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+      const msg = error.message.includes('Invalid') ? (currentLang === 'ar' ? 'البريد أو كلمة المرور غير صحيحة' : 'Invalid email or password') : error.message;
+      showAlert('loginAlert', msg);
+      if (btn) { btn.disabled = false; btn.textContent = t('signIn'); }
+      return;
+    }
+    await onAuthSuccess(data.user);
+  } catch(e) {
+    console.error('handleLogin error:', e);
+    showAlert('loginAlert', currentLang === 'ar' ? 'حدث خطأ. حاول مرة أخرى.' : 'An error occurred. Please try again.');
+    const btn = document.querySelector('#loginForm .btn-primary');
+    if (btn) { btn.disabled = false; btn.textContent = t('signIn'); }
   }
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
-  if (error) { showAlert('loginAlert', error.message); return; }
-  await onAuthSuccess(data.user);
 }
 
 async function handleSignup() {
@@ -3725,10 +3749,10 @@ async function deleteMessage(id) {
 
 async function createMessage() {
   const title = document.getElementById('newMsgTitle').value.trim();
-  const content = document.getElementById('newMsgContent').value.trim();
-  if (!title || !content) return;
+  const msgBody = document.getElementById('newMsgContent').value.trim();
+  if (!title || !msgBody) return;
   const { error: msgErr } = await sb.from('messages').insert({
-    project_id: activeProject.id, title, content, created_by: currentUser.id
+    project_id: activeProject.id, title, content: msgBody, created_by: currentUser.id
   });
   if (msgErr) { toast('خطأ: ' + msgErr.message); return; }
   document.getElementById('newMsgTitle').value = '';
@@ -3736,7 +3760,7 @@ async function createMessage() {
   closeModal('newMessageModal');
   toast(currentLang === 'ar' ? '✅ تم النشر' : '✅ Posted');
   logActivity('نشر رسالة', 'message', title);
-  notifyProjectMembers('message', `${title}: ${content.substring(0,80)}`);
+  notifyProjectMembers('message', `${title}: ${msgBody.substring(0,80)}`);
   await loadProjectTab('messages');
   await loadProjectCounts();
 }
@@ -4948,20 +4972,20 @@ async function sendMentionEmail(targetUserId, senderName, msgContent, projectNam
   } catch(e) {}
 }
 
-async function notifyProjectMembers(type, content, excludeUserId) {
+async function notifyProjectMembers(notifType, notifContent, excludeUserId) {
   if (!activeProject?.id) return;
-  const { data: members } = await sb.from('project_members').select('user_id').eq('project_id', activeProject.id);
-  const senderName = currentProfile?.full_name || 'أحد الأعضاء';
-  for (const m of (members || [])) {
-    if (m.user_id === (excludeUserId || currentUser.id)) continue;
-    // In-app notification
-    sb.from('notifications').insert({
-      user_id: m.user_id, project_id: activeProject.id,
-      type, title: `تحديث في ${activeProject.name}`, body: content.substring(0, 100)
-    }).then(() => {}).catch(() => {});
-    // Email notification (non-blocking)
-    sendNotificationEmail('project_update', m.user_id, content, activeProject.id, activeProject.name);
-  }
+  try {
+    const { data: members } = await sb.from('project_members').select('user_id').eq('project_id', activeProject.id);
+    const senderName = currentProfile?.full_name || 'أحد الأعضاء';
+    for (const m of (members || [])) {
+      if (m.user_id === (excludeUserId || currentUser.id)) continue;
+      sb.from('notifications').insert({
+        user_id: m.user_id, project_id: activeProject.id,
+        type: notifType, title: `تحديث في ${activeProject.name}`, body: notifContent.substring(0, 100)
+      }).then(() => {}).catch(() => {});
+      sendNotificationEmail('project_update', m.user_id, notifContent, activeProject.id, activeProject.name);
+    }
+  } catch(e) {}
 }
 
 // ============================================
@@ -5449,8 +5473,9 @@ async function renderCampfire(container) {
           <div class="campfire-empty">🔥<div>ابدأ المحادثة...</div></div>
         </div>
         <div class="campfire-input-row">
-          <input class="campfire-input" id="campfireInput" placeholder="اكتب رسالة..." 
-            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendCampfireMsg();}">
+          <input class="campfire-input" id="campfireInput" placeholder="اكتب رسالة... (استخدم @ للإشارة لعضو)"
+            onkeydown="handleCampfireKey(event)"
+            oninput="handleCampfireInput(event)">
           <button class="campfire-send-btn" onclick="sendCampfireMsg()">🔥</button>
         </div>
       </div>
