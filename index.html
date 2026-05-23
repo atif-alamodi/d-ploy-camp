@@ -3933,7 +3933,7 @@ async function renderMembers(container) {
           </div>
           <div style="display:flex; gap:6px; align-items:center">
             ${canManageThis ? `<button class="btn btn-secondary" onclick='openManageMember(${JSON.stringify(m).replace(/'/g, "&apos;")})'>⚙️ ${t('manageMember')}</button>` : ''}
-            ${canRemove && !isMe && !isOwnerMember ? `<button class="btn btn-danger" onclick="removeProjectMember('${m.id}', '${escapeHTML(m.profile?.full_name || '')}')" title="${currentLang === 'ar' ? 'حذف العضو' : 'Remove member'}" style="padding:8px 10px">🗑️</button>` : ''}
+            ${(canRemove || isOwner || currentProfile?.is_super_admin) && !isMe && !isOwnerMember && !isSuperAdminMember ? `<button class="btn btn-danger" onclick="removeProjectMember('${m.id}', '${escapeHTML(m.profile?.full_name || '')}')" title="${currentLang === 'ar' ? 'حذف العضو' : 'Remove member'}" style="padding:8px 10px">🗑️</button>` : ''}
           </div>
         </div>
       </div>
