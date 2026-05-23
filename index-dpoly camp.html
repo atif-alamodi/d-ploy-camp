@@ -1,0 +1,4391 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>D-Ploy Camp - إدارة المشاريع الجامعية</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Outfit:wght@400;600;700;800;900&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #faf6f1;
+  --bg-card: #ffffff;
+  --bg-elevated: #fffbf6;
+  --bg-glass: rgba(255, 255, 255, 0.72);
+  --primary: #ff6b35;
+  --primary-dark: #e85a2c;
+  --primary-light: #ffe4d6;
+  --secondary: #f7468a;
+  --secondary-light: #ffd9e9;
+  --tertiary: #6c4ef5;
+  --tertiary-light: #e4dcff;
+  --accent-yellow: #ffd93d;
+  --accent-green: #06d6a0;
+  --accent-cyan: #00b4d8;
+  --text: #1a1625;
+  --text-soft: #5e5870;
+  --text-muted: #9b96a8;
+  --border: #f0e9e0;
+  --border-strong: #d9d0c4;
+  --shadow-xs: 0 1px 2px rgba(26, 22, 37, 0.04);
+  --shadow-sm: 0 2px 8px rgba(255, 107, 53, 0.08);
+  --shadow-md: 0 8px 24px rgba(255, 107, 53, 0.12);
+  --shadow-lg: 0 20px 50px rgba(255, 107, 53, 0.18);
+  --shadow-glow: 0 0 30px rgba(255, 107, 53, 0.25);
+  --gradient-warm: linear-gradient(135deg, #ff6b35 0%, #f7468a 100%);
+  --gradient-cool: linear-gradient(135deg, #6c4ef5 0%, #00b4d8 100%);
+  --gradient-sunset: linear-gradient(135deg, #ffd93d 0%, #ff6b35 45%, #f7468a 100%);
+  --gradient-aurora: linear-gradient(135deg, #6c4ef5 0%, #f7468a 50%, #ff6b35 100%);
+  --gradient-mint: linear-gradient(135deg, #06d6a0 0%, #00b4d8 100%);
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  font-family: 'Cairo', 'Outfit', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  font-feature-settings: "ss01", "cv01", "cv11";
+}
+
+body.ltr { direction: ltr; font-family: 'Outfit', 'Cairo', sans-serif; }
+
+/* === Background decoration === */
+body::before {
+  content: '';
+  position: fixed;
+  top: -200px;
+  right: -200px;
+  width: 700px;
+  height: 700px;
+  background: radial-gradient(circle, rgba(255, 107, 53, 0.18) 0%, transparent 65%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  animation: floatSlow 25s ease-in-out infinite;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  bottom: -300px;
+  left: -200px;
+  width: 800px;
+  height: 800px;
+  background: radial-gradient(circle, rgba(108, 78, 245, 0.14) 0%, transparent 65%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  animation: floatSlow 30s ease-in-out infinite reverse;
+}
+
+@keyframes floatSlow {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(50px, 30px) scale(1.05); }
+}
+
+::selection { background: var(--primary); color: white; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+/* === Auth screens === */
+.auth-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.auth-card {
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-radius: var(--radius-xl);
+  padding: 48px 40px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  position: relative;
+  overflow: hidden;
+  animation: cardEnter 0.6s var(--ease-out);
+}
+
+@keyframes cardEnter {
+  from { opacity: 0; transform: translateY(20px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.auth-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background: var(--gradient-sunset);
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+.brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+
+.brand-icon {
+  width: 60px;
+  height: 60px;
+  background: var(--gradient-warm);
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  box-shadow: var(--shadow-md), 0 0 0 1px rgba(255, 255, 255, 0.4) inset;
+  transform: rotate(-6deg);
+  transition: transform 0.4s var(--ease-bounce);
+  position: relative;
+}
+
+.brand-icon::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 20px;
+  background: var(--gradient-warm);
+  z-index: -1;
+  filter: blur(15px);
+  opacity: 0.4;
+}
+
+.auth-card:hover .brand-icon { transform: rotate(0deg) scale(1.05); }
+
+.brand-name {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 900;
+  font-size: 30px;
+  letter-spacing: -1.5px;
+  background: var(--gradient-warm);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  line-height: 1;
+}
+
+.brand-tag {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-bottom: 32px;
+  font-weight: 500;
+}
+
+.auth-title {
+  font-size: 28px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  letter-spacing: -0.5px;
+}
+
+.auth-subtitle {
+  color: var(--text-soft);
+  font-size: 14px;
+  margin-bottom: 28px;
+  line-height: 1.5;
+}
+
+.form-group { margin-bottom: 18px; }
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text-soft);
+  letter-spacing: 0.2px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-family: inherit;
+  background: var(--bg-elevated);
+  transition: all 0.25s var(--ease-out);
+  color: var(--text);
+}
+
+.form-input::placeholder { color: var(--text-muted); }
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: white;
+  box-shadow: 0 0 0 4px rgba(255, 107, 53, 0.12), var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+.btn {
+  padding: 13px 24px;
+  border: none;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+  letter-spacing: 0.1px;
+}
+
+.btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.3) 50%, transparent 70%);
+  transform: translateX(-100%);
+  transition: transform 0.6s var(--ease-out);
+}
+
+.btn:hover::before { transform: translateX(100%); }
+
+.btn-primary {
+  background: var(--gradient-warm);
+  color: white;
+  width: 100%;
+  box-shadow: var(--shadow-md), 0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
+}
+
+.btn-primary:active { transform: translateY(0); }
+
+.btn-secondary {
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 2px solid var(--border);
+}
+
+.btn-secondary:hover { background: white; border-color: var(--primary); transform: translateY(-1px); }
+
+.btn-ghost { background: transparent; color: var(--text-soft); }
+.btn-ghost:hover { background: var(--bg-elevated); color: var(--text); }
+
+.btn-danger {
+  background: #fee;
+  color: #d33;
+  border: 1px solid #fcc;
+}
+.btn-danger:hover { background: #fdd; transform: translateY(-1px); }
+
+.btn-warning {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+.btn-warning:hover { background: #fde68a; }
+
+.auth-switch {
+  text-align: center;
+  margin-top: 22px;
+  font-size: 14px;
+  color: var(--text-soft);
+}
+
+.auth-switch a {
+  color: var(--primary);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  position: relative;
+}
+
+.auth-switch a::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--primary);
+  transform: scaleX(0);
+  transition: transform 0.2s var(--ease-out);
+}
+
+.auth-switch a:hover::after { transform: scaleX(1); }
+
+.forgot-link {
+  text-align: right;
+  margin-top: -10px;
+  margin-bottom: 18px;
+  font-size: 13px;
+}
+body.ltr .forgot-link { text-align: left; }
+
+.forgot-link a {
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.forgot-link a:hover { text-decoration: underline; }
+
+.lang-toggle {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  padding: 9px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-soft);
+  z-index: 100;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s var(--ease-out);
+}
+
+.lang-toggle:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.alert {
+  padding: 13px 16px;
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  font-size: 14px;
+  display: none;
+  font-weight: 600;
+}
+
+.alert.error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+.alert.success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+.alert.info { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+.alert.show { display: block; animation: slideDown 0.3s var(--ease-out); }
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* === Main App === */
+.app-wrap {
+  display: flex;
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar {
+  width: 270px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-left: 1px solid rgba(255, 255, 255, 0.7);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-sm);
+}
+
+body.ltr .sidebar { border-left: none; border-right: 1px solid rgba(255, 255, 255, 0.7); }
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 18px;
+}
+
+.sidebar-brand-icon {
+  width: 42px;
+  height: 42px;
+  background: var(--gradient-warm);
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  transform: rotate(-6deg);
+  box-shadow: var(--shadow-sm);
+  position: relative;
+}
+
+.sidebar-brand-icon::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: var(--gradient-warm);
+  border-radius: 15px;
+  z-index: -1;
+  filter: blur(10px);
+  opacity: 0.4;
+}
+
+.sidebar-brand {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 900;
+  font-size: 22px;
+  background: var(--gradient-warm);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  letter-spacing: -1px;
+}
+
+.nav-section {
+  margin-bottom: 22px;
+}
+
+.nav-section-title {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-muted);
+  padding: 0 8px 10px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-soft);
+  transition: all 0.2s var(--ease-out);
+  margin-bottom: 3px;
+  position: relative;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--text);
+  transform: translateX(-2px);
+}
+
+body.ltr .nav-item:hover { transform: translateX(2px); }
+
+.nav-item.active {
+  background: var(--gradient-warm);
+  color: white;
+  box-shadow: var(--shadow-md);
+}
+
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  right: -20px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 60%;
+  background: var(--primary);
+  border-radius: 4px 0 0 4px;
+}
+
+body.ltr .nav-item.active::before { right: auto; left: -20px; border-radius: 0 4px 4px 0; }
+
+.nav-icon { font-size: 18px; }
+
+.projects-list { max-height: 320px; overflow-y: auto; padding: 2px; }
+
+.project-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-soft);
+  margin-bottom: 3px;
+  transition: all 0.2s var(--ease-out);
+}
+
+.project-item:hover {
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--text);
+}
+
+.project-item.active {
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text);
+  box-shadow: var(--shadow-xs);
+}
+
+.project-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  background: var(--bg-elevated);
+  flex-shrink: 0;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--gradient-cool);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 800;
+  font-size: 14px;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-xs);
+}
+
+.user-info { flex: 1; min-width: 0; }
+.user-name { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-email { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* === Main Content === */
+.main-content {
+  flex: 1;
+  padding: 36px 44px;
+  max-width: calc(100vw - 270px);
+  overflow-x: hidden;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.page-title {
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  line-height: 1.1;
+}
+
+.page-subtitle {
+  color: var(--text-muted);
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* === Hero Card === */
+.hero-card {
+  background: var(--gradient-sunset);
+  background-size: 200% 200%;
+  border-radius: var(--radius-xl);
+  padding: 38px;
+  color: white;
+  margin-bottom: 30px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  animation: gradientShift 12s ease infinite;
+}
+
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.hero-card::before {
+  content: '';
+  position: absolute;
+  top: -80px;
+  right: -80px;
+  width: 240px;
+  height: 240px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  animation: floatSlow 15s ease-in-out infinite;
+}
+
+.hero-card::after {
+  content: '';
+  position: absolute;
+  bottom: -60px;
+  left: 25%;
+  width: 160px;
+  height: 160px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  animation: floatSlow 18s ease-in-out infinite reverse;
+}
+
+.hero-greeting {
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0.95;
+  margin-bottom: 6px;
+  position: relative;
+  z-index: 2;
+  letter-spacing: 0.3px;
+}
+
+.hero-name {
+  font-size: 32px;
+  font-weight: 900;
+  margin-bottom: 20px;
+  position: relative;
+  z-index: 2;
+  letter-spacing: -0.8px;
+}
+
+.hero-stats {
+  display: flex;
+  gap: 16px;
+  position: relative;
+  z-index: 2;
+  flex-wrap: wrap;
+}
+
+.hero-stat {
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(10px);
+  padding: 16px 22px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  transition: transform 0.2s var(--ease-out);
+}
+
+.hero-stat:hover { transform: translateY(-3px); background: rgba(255, 255, 255, 0.28); }
+
+.hero-stat-num { font-size: 28px; font-weight: 900; line-height: 1; }
+.hero-stat-label { font-size: 12px; opacity: 0.95; font-weight: 600; margin-top: 4px; }
+
+/* === Card Grid === */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 22px;
+  margin-bottom: 28px;
+}
+
+.proj-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  cursor: pointer;
+  transition: all 0.3s var(--ease-out);
+  position: relative;
+  overflow: hidden;
+}
+
+.proj-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--gradient-warm);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s var(--ease-out);
+}
+
+.proj-card:hover {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-lg);
+  border-color: transparent;
+}
+
+.proj-card:hover::before { transform: scaleX(1); }
+
+.proj-card-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  margin-bottom: 16px;
+  transition: transform 0.3s var(--ease-bounce);
+}
+
+.proj-card:hover .proj-card-icon { transform: rotate(-8deg) scale(1.1); }
+
+.proj-card-title {
+  font-size: 19px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  letter-spacing: -0.3px;
+}
+
+.proj-card-desc {
+  font-size: 13px;
+  color: var(--text-soft);
+  line-height: 1.6;
+  margin-bottom: 16px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 41px;
+}
+
+.proj-card-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* === Section Card === */
+.section-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 26px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-xs);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.section-title {
+  font-size: 21px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  letter-spacing: -0.3px;
+}
+
+.section-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+}
+
+/* === Project Tools Grid === */
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.tool-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s var(--ease-out);
+  position: relative;
+  overflow: hidden;
+}
+
+.tool-card:hover {
+  transform: translateY(-4px);
+  border-color: transparent;
+  box-shadow: var(--shadow-md);
+}
+
+.tool-card-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  margin: 0 auto 14px;
+  transition: transform 0.3s var(--ease-bounce);
+}
+
+.tool-card:hover .tool-card-icon { transform: rotate(-8deg) scale(1.08); }
+
+.tool-card-title { font-weight: 800; font-size: 15px; margin-bottom: 4px; letter-spacing: -0.2px; }
+.tool-card-count { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+
+/* === Todo Items === */
+.todo-list-block {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 16px;
+  border: 2px solid var(--border);
+}
+
+.todo-list-title {
+  font-size: 17px;
+  font-weight: 800;
+  margin-bottom: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  transition: all 0.15s;
+}
+
+.todo-item:hover { border-color: var(--primary); }
+
+.todo-checkbox {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--border-strong);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.todo-checkbox.checked {
+  background: var(--accent-green);
+  border-color: var(--accent-green);
+  color: white;
+}
+
+.todo-content { flex: 1; }
+.todo-title { font-weight: 600; font-size: 14px; }
+.todo-item.completed .todo-title { text-decoration: line-through; color: var(--text-muted); }
+.todo-meta { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+
+.priority-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+.priority-low { background: #e0f2fe; color: #0369a1; }
+.priority-normal { background: #f0fdf4; color: #166534; }
+.priority-high { background: #fef3c7; color: #92400e; }
+.priority-urgent { background: #fee2e2; color: #991b1b; }
+
+/* === Message items === */
+.message-card {
+  background: var(--bg-elevated);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.message-card:hover { border-color: var(--primary); }
+
+.message-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.message-title { font-weight: 800; font-size: 16px; }
+.message-content {
+  color: var(--text-soft);
+  font-size: 14px;
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.message-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* === Calendar === */
+.calendar-event {
+  display: flex;
+  gap: 14px;
+  padding: 14px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius);
+  border: 2px solid var(--border);
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.event-date-box {
+  background: var(--gradient-warm);
+  color: white;
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  text-align: center;
+  min-width: 64px;
+}
+
+.event-day { font-size: 22px; font-weight: 900; line-height: 1; }
+.event-month { font-size: 11px; text-transform: uppercase; font-weight: 700; }
+
+.event-info { flex: 1; }
+.event-title { font-weight: 700; font-size: 15px; }
+.event-time { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+/* === Members === */
+.members-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.member-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius);
+  border: 2px solid var(--border);
+}
+
+.member-info { flex: 1; min-width: 0; }
+.member-name { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-role { font-size: 11px; color: var(--text-muted); }
+
+.role-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--accent-yellow);
+  color: #92400e;
+}
+
+/* === Modal === */
+.modal-bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 22, 37, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-bg.show {
+  display: flex;
+  animation: fadeBackdrop 0.25s var(--ease-out);
+}
+
+@keyframes fadeBackdrop {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal {
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  padding: 34px;
+  width: 100%;
+  max-width: 540px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+  animation: modalEnter 0.35s var(--ease-bounce);
+}
+
+@keyframes modalEnter {
+  from { opacity: 0; transform: scale(0.92) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-title {
+  font-size: 23px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  letter-spacing: -0.3px;
+}
+
+.modal-subtitle {
+  color: var(--text-soft);
+  font-size: 14px;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 24px;
+  justify-content: flex-end;
+}
+
+textarea.form-input { min-height: 100px; resize: vertical; font-family: inherit; line-height: 1.5; }
+
+/* === Toast === */
+.toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  background: var(--text);
+  color: white;
+  padding: 13px 26px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 14px;
+  z-index: 2000;
+  opacity: 0;
+  transition: all 0.35s var(--ease-bounce);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* === Empty states === */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+}
+
+.empty-icon { font-size: 56px; margin-bottom: 14px; }
+.empty-title { font-size: 18px; font-weight: 700; color: var(--text-soft); margin-bottom: 6px; }
+.empty-text { font-size: 14px; }
+
+/* === Loading === */
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin: 40px auto;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.fade-in { animation: fadeIn 0.4s var(--ease-out); }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+.hidden { display: none !important; }
+
+/* === Mobile === */
+.mobile-menu-btn {
+  display: none;
+  background: var(--bg-glass);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  cursor: pointer;
+  font-size: 20px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s var(--ease-out);
+}
+
+.mobile-menu-btn:hover { border-color: var(--primary); }
+
+/* === Bulk Invite Tabs === */
+.invite-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  background: var(--bg-elevated);
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.invite-tab {
+  flex: 1;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 9px;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.2s var(--ease-out);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.invite-tab:hover { color: var(--text); }
+
+.invite-tab.active {
+  background: var(--bg-card);
+  color: var(--primary);
+  box-shadow: var(--shadow-xs);
+}
+
+.invite-tab-content { display: none; }
+.invite-tab-content.active { display: block; animation: fadeIn 0.25s var(--ease-out); }
+
+.email-chip-area {
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius);
+  padding: 14px;
+  min-height: 120px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-content: flex-start;
+  background: var(--bg-elevated);
+  transition: all 0.2s var(--ease-out);
+  cursor: text;
+}
+
+.email-chip-area:focus-within {
+  border-color: var(--primary);
+  background: white;
+  box-shadow: 0 0 0 4px rgba(255, 107, 53, 0.08);
+}
+
+.email-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 12px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  animation: chipIn 0.2s var(--ease-bounce);
+}
+
+@keyframes chipIn {
+  from { opacity: 0; transform: scale(0.7); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.email-chip.invalid {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.email-chip-remove {
+  background: var(--border);
+  border: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+.email-chip-remove:hover { background: var(--primary); color: white; }
+
+.email-chip-input {
+  flex: 1;
+  min-width: 140px;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 6px;
+}
+
+.file-drop-zone {
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius);
+  padding: 40px 20px;
+  text-align: center;
+  background: var(--bg-elevated);
+  cursor: pointer;
+  transition: all 0.25s var(--ease-out);
+}
+
+.file-drop-zone:hover, .file-drop-zone.dragover {
+  border-color: var(--primary);
+  background: white;
+  transform: translateY(-2px);
+}
+
+.file-drop-icon {
+  font-size: 42px;
+  margin-bottom: 10px;
+  opacity: 0.7;
+}
+
+.file-drop-text {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.file-drop-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* === Confirmation List === */
+.confirm-list {
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  padding: 8px;
+  margin-bottom: 16px;
+}
+
+.confirm-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: white;
+  margin-bottom: 4px;
+  border: 1px solid var(--border);
+}
+
+.confirm-item.invalid {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.confirm-item-icon { font-size: 16px; }
+.confirm-item-email { font-weight: 600; flex: 1; word-break: break-all; }
+.confirm-item-status { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 700; }
+
+.status-pending { background: #fef3c7; color: #92400e; }
+.status-success { background: #d1fae5; color: #065f46; }
+.status-error { background: #fee2e2; color: #991b1b; }
+.status-skip { background: #e5e7eb; color: #4b5563; }
+
+.invite-summary {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.invite-summary-stat {
+  flex: 1;
+  min-width: 80px;
+  background: var(--bg-elevated);
+  padding: 12px;
+  border-radius: var(--radius);
+  text-align: center;
+  border: 1px solid var(--border);
+}
+
+.invite-summary-num {
+  font-size: 22px;
+  font-weight: 900;
+  background: var(--gradient-warm);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.invite-summary-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .sidebar {
+    position: fixed;
+    right: -280px;
+    z-index: 200;
+    transition: right 0.3s;
+  }
+  body.ltr .sidebar { right: auto; left: -280px; transition: left 0.3s; }
+  .sidebar.open { right: 0; }
+  body.ltr .sidebar.open { left: 0; }
+  .main-content { max-width: 100vw; padding: 20px; }
+  .mobile-menu-btn { display: flex; align-items: center; justify-content: center; }
+  .page-title { font-size: 24px; }
+  .hero-card { padding: 24px; }
+  .hero-name { font-size: 22px; }
+}
+
+/* === Invite acceptance === */
+.invite-screen { text-align: center; padding: 40px 20px; }
+.invite-emoji { font-size: 80px; margin-bottom: 16px; }
+
+/* === Toast === */
+.toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 14px;
+  z-index: 2000;
+  opacity: 0;
+  transition: opacity 0.3s;
+  box-shadow: var(--shadow-lg);
+}
+
+.toast.show { opacity: 1; }
+
+/* === Super Admin & Member Management === */
+.super-admin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(135deg, #ffd93d 0%, #ff6b35 100%);
+  color: white;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
+}
+
+.muted-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fee;
+  color: #991b1b;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+.admin-banner {
+  background: linear-gradient(135deg, rgba(255, 217, 61, 0.15) 0%, rgba(255, 107, 53, 0.1) 100%);
+  border: 2px solid var(--accent-yellow);
+  border-radius: var(--radius-lg);
+  padding: 14px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.muted-warning {
+  background: #fee;
+  color: #991b1b;
+  border: 2px solid #fcc;
+  border-radius: var(--radius);
+  padding: 14px;
+  text-align: center;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+
+.member-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.member-card-actions button {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: white;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.member-card-actions button:hover { border-color: var(--primary); }
+.member-card-actions button.danger { color: #c33; border-color: #fcc; }
+.member-card-actions button.danger:hover { background: #fee; }
+.member-card-actions button.warning { color: #92400e; border-color: #fde68a; }
+.member-card-actions button.warning:hover { background: #fef3c7; }
+.member-card-actions button.success { color: #166534; border-color: #bbf7d0; }
+.member-card-actions button.success:hover { background: #dcfce7; }
+
+.member-card-full {
+  background: var(--bg-elevated);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+}
+
+.member-card-full.muted {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.member-row-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.perm-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.perm-toggle:hover { border-color: var(--primary); }
+
+.perm-toggle.enabled {
+  background: linear-gradient(135deg, rgba(6, 214, 160, 0.1) 0%, rgba(255, 217, 61, 0.05) 100%);
+  border-color: var(--accent-green);
+}
+
+.perm-name { font-weight: 600; font-size: 13px; }
+
+.perm-switch {
+  width: 36px;
+  height: 20px;
+  background: var(--border-strong);
+  border-radius: 999px;
+  position: relative;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.perm-switch::after {
+  content: '';
+  width: 14px;
+  height: 14px;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  transition: all 0.2s;
+}
+
+body.ltr .perm-switch::after { right: auto; left: 3px; }
+
+.perm-toggle.enabled .perm-switch {
+  background: var(--accent-green);
+}
+
+.perm-toggle.enabled .perm-switch::after {
+  right: 19px;
+}
+
+body.ltr .perm-toggle.enabled .perm-switch::after {
+  right: auto;
+  left: 19px;
+}
+
+.role-pill {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.role-pill.owner { background: #ede9fe; color: #5b21b6; }
+.role-pill.admin { background: #fef3c7; color: #92400e; }
+.role-pill.member { background: #f0fdf4; color: #166534; }
+
+/* Admin Panel */
+.admin-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.admin-stat {
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  text-align: center;
+}
+
+.admin-stat-num {
+  font-size: 30px;
+  font-weight: 900;
+  background: var(--gradient-warm);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.admin-stat-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+/* === Check-in === */
+.checkin-card {
+  background: linear-gradient(135deg, rgba(255, 217, 61, 0.15) 0%, rgba(255, 107, 53, 0.1) 100%);
+  border: 2px solid var(--accent-yellow);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.checkin-question {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+
+.checkin-response {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+}
+
+.response-author {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.response-text { font-size: 14px; line-height: 1.6; }
+
+</style>
+</head>
+<body>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<!-- Lang toggle -->
+<button class="lang-toggle" id="langToggle">🌐 EN</button>
+
+<!-- Auth Screen -->
+<div id="authScreen" class="auth-wrap">
+  <div class="auth-card">
+    <div class="brand-logo">
+      <div class="brand-icon">🏕️</div>
+      <div>
+        <div class="brand-name">D-Ploy Camp</div>
+      </div>
+    </div>
+    <div class="brand-tag" data-i18n="tagline">منصة إدارة المشاريع للطلاب الجامعيين</div>
+
+    <!-- Login form -->
+    <div id="loginForm">
+      <h2 class="auth-title" data-i18n="welcome">أهلاً بعودتك</h2>
+      <p class="auth-subtitle" data-i18n="loginSub">سجّل دخولك للمتابعة إلى مشاريعك</p>
+
+      <div class="alert" id="loginAlert"></div>
+
+      <div class="form-group">
+        <label data-i18n="email">البريد الإلكتروني</label>
+        <input type="email" class="form-input" id="loginEmail" placeholder="you@example.com">
+      </div>
+
+      <div class="form-group">
+        <label data-i18n="password">كلمة المرور</label>
+        <input type="password" class="form-input" id="loginPassword" placeholder="••••••••">
+      </div>
+
+      <div class="forgot-link">
+        <a onclick="showForgot()" data-i18n="forgotPassword">نسيت كلمة المرور؟</a>
+      </div>
+
+      <button class="btn btn-primary" onclick="handleLogin()" data-i18n="signIn">تسجيل الدخول</button>
+
+      <div class="auth-switch">
+        <span data-i18n="noAccount">ليس لديك حساب؟</span>
+        <a onclick="showSignup()" data-i18n="signUp">أنشئ حساباً</a>
+      </div>
+    </div>
+
+    <!-- Forgot Password form -->
+    <div id="forgotForm" class="hidden">
+      <h2 class="auth-title" data-i18n="forgotTitle">استعادة كلمة المرور</h2>
+      <p class="auth-subtitle" data-i18n="forgotSub">أدخل بريدك الإلكتروني وسنرسل لك رابط إعادة الضبط</p>
+
+      <div class="alert" id="forgotAlert"></div>
+
+      <div class="form-group">
+        <label data-i18n="email">البريد الإلكتروني</label>
+        <input type="email" class="form-input" id="forgotEmail" placeholder="you@example.com">
+      </div>
+
+      <button class="btn btn-primary" onclick="handleForgot()" data-i18n="sendResetLink">إرسال رابط الإعادة</button>
+
+      <div class="auth-switch">
+        <a onclick="showLogin()" data-i18n="backToLogin">← العودة لتسجيل الدخول</a>
+      </div>
+    </div>
+
+    <!-- Reset Password form (after clicking link) -->
+    <div id="resetForm" class="hidden">
+      <h2 class="auth-title" data-i18n="resetTitle">كلمة مرور جديدة</h2>
+      <p class="auth-subtitle" data-i18n="resetSub">أدخل كلمة المرور الجديدة</p>
+
+      <div class="alert" id="resetAlert"></div>
+
+      <div class="form-group">
+        <label data-i18n="newPassword">كلمة المرور الجديدة (6+ أحرف)</label>
+        <input type="password" class="form-input" id="resetPassword" placeholder="••••••••">
+      </div>
+
+      <div class="form-group">
+        <label data-i18n="confirmPassword">تأكيد كلمة المرور</label>
+        <input type="password" class="form-input" id="resetPassword2" placeholder="••••••••">
+      </div>
+
+      <button class="btn btn-primary" onclick="handleResetPassword()" data-i18n="updatePassword">تحديث كلمة المرور</button>
+    </div>
+
+    <!-- Signup form -->
+    <div id="signupForm" class="hidden">
+      <h2 class="auth-title" data-i18n="joinTitle">انضمّ إلى D-Ploy Camp</h2>
+      <p class="auth-subtitle" data-i18n="joinSub">أنشئ حسابك المجاني وابدأ التعاون</p>
+
+      <div class="alert" id="signupAlert"></div>
+
+      <div class="form-group">
+        <label data-i18n="fullName">الاسم الكامل</label>
+        <input type="text" class="form-input" id="signupName" placeholder="عاطف المعمدي">
+      </div>
+
+      <div class="form-group">
+        <label data-i18n="email">البريد الإلكتروني</label>
+        <input type="email" class="form-input" id="signupEmail" placeholder="you@example.com">
+      </div>
+
+      <div class="form-group">
+        <label data-i18n="password">كلمة المرور (6+ أحرف)</label>
+        <input type="password" class="form-input" id="signupPassword" placeholder="••••••••">
+      </div>
+
+      <button class="btn btn-primary" onclick="handleSignup()" data-i18n="createAccount">إنشاء الحساب</button>
+
+      <div class="auth-switch">
+        <span data-i18n="hasAccount">لديك حساب؟</span>
+        <a onclick="showLogin()" data-i18n="signIn">تسجيل الدخول</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Main App -->
+<div id="appScreen" class="app-wrap hidden">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-brand-icon">🏕️</div>
+      <div class="sidebar-brand">D-Ploy</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title" data-i18n="navigation">التنقّل</div>
+      <div class="nav-item active" data-page="home" onclick="showPage('home')">
+        <span class="nav-icon">🏠</span>
+        <span data-i18n="home">الرئيسية</span>
+      </div>
+      <div class="nav-item" data-page="myTasks" onclick="showPage('myTasks')">
+        <span class="nav-icon">✅</span>
+        <span data-i18n="myTasks">مهامي</span>
+      </div>
+      <div class="nav-item" data-page="newProject" onclick="showNewProjectModal()">
+        <span class="nav-icon">➕</span>
+        <span data-i18n="newProject">مشروع جديد</span>
+      </div>
+      <div class="nav-item hidden" id="adminPanelLink" data-page="adminPanel" onclick="showPage('adminPanel')">
+        <span class="nav-icon">👑</span>
+        <span data-i18n="adminPanel">لوحة الإدارة</span>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title" data-i18n="myProjects">مشاريعي</div>
+      <div class="projects-list" id="projectsList">
+        <div style="padding:10px; font-size:12px; color:var(--text-muted)" data-i18n="loadingProjects">جارٍ تحميل المشاريع...</div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-card">
+        <div class="avatar" id="userAvatar">؟</div>
+        <div class="user-info">
+          <div class="user-name" id="userName">—</div>
+          <div class="user-email" id="userEmail">—</div>
+        </div>
+      </div>
+      <button class="btn btn-ghost" style="width:100%; margin-top:10px" onclick="handleLogout()">
+        🚪 <span data-i18n="signOut">تسجيل الخروج</span>
+      </button>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <button class="mobile-menu-btn" onclick="toggleSidebar()" style="margin-bottom:16px">☰</button>
+
+    <!-- Home page -->
+    <div id="homePage" class="page-content">
+      <div class="hero-card">
+        <div class="hero-greeting" data-i18n="welcome2">أهلاً،</div>
+        <div class="hero-name" id="heroName">—</div>
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <div class="hero-stat-num" id="statProjects">0</div>
+            <div class="hero-stat-label" data-i18n="projects">مشاريع</div>
+          </div>
+          <div class="hero-stat">
+            <div class="hero-stat-num" id="statTodos">0</div>
+            <div class="hero-stat-label" data-i18n="openTodos">مهام مفتوحة</div>
+          </div>
+          <div class="hero-stat">
+            <div class="hero-stat-num" id="statCompleted">0</div>
+            <div class="hero-stat-label" data-i18n="completed">مكتملة</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="page-header">
+        <div>
+          <h2 class="page-title" data-i18n="yourProjects">مشاريعك</h2>
+          <div class="page-subtitle" data-i18n="yourProjectsSub">كل مشاريعك في مكان واحد</div>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-primary" onclick="showNewProjectModal()">
+            ➕ <span data-i18n="newProject">مشروع جديد</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="projectsGrid" class="card-grid"></div>
+    </div>
+
+    <!-- Project page -->
+    <div id="projectPage" class="page-content hidden">
+      <div class="page-header">
+        <div>
+          <h2 class="page-title" id="projTitle">—</h2>
+          <div class="page-subtitle" id="projDesc">—</div>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-secondary" onclick="showInviteModal()">
+            ✉️ <span data-i18n="invite">دعوة عضو</span>
+          </button>
+          <button class="btn btn-ghost" onclick="showPage('home')">
+            ← <span data-i18n="back">رجوع</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="tools-grid">
+        <div class="tool-card" onclick="showProjectTab('todos')">
+          <div class="tool-card-icon" style="background:#fef3c7">📋</div>
+          <div class="tool-card-title" data-i18n="todos">المهام</div>
+          <div class="tool-card-count" id="todosCount">0</div>
+        </div>
+        <div class="tool-card" onclick="showProjectTab('messages')">
+          <div class="tool-card-icon" style="background:#dbeafe">💬</div>
+          <div class="tool-card-title" data-i18n="messages">الرسائل</div>
+          <div class="tool-card-count" id="messagesCount">0</div>
+        </div>
+        <div class="tool-card" onclick="showProjectTab('schedule')">
+          <div class="tool-card-icon" style="background:#fce7f3">📅</div>
+          <div class="tool-card-title" data-i18n="schedule">الجدول</div>
+          <div class="tool-card-count" id="scheduleCount">0</div>
+        </div>
+        <div class="tool-card" onclick="showProjectTab('files')">
+          <div class="tool-card-icon" style="background:#dcfce7">📁</div>
+          <div class="tool-card-title" data-i18n="files">الملفات</div>
+          <div class="tool-card-count" id="filesCount">0</div>
+        </div>
+        <div class="tool-card" onclick="showProjectTab('checkins')">
+          <div class="tool-card-icon" style="background:#fef3c7">🎯</div>
+          <div class="tool-card-title" data-i18n="checkins">Check-ins</div>
+          <div class="tool-card-count" id="checkinsCount">0</div>
+        </div>
+        <div class="tool-card" onclick="showProjectTab('members')">
+          <div class="tool-card-icon" style="background:#ede9fe">👥</div>
+          <div class="tool-card-title" data-i18n="members">الأعضاء</div>
+          <div class="tool-card-count" id="membersCount">0</div>
+        </div>
+      </div>
+
+      <!-- Project tabs content -->
+      <div id="projectContent"></div>
+    </div>
+
+    <!-- My Tasks page -->
+    <div id="myTasksPage" class="page-content hidden">
+      <div class="page-header">
+        <div>
+          <h2 class="page-title" data-i18n="myTasks">مهامي</h2>
+          <div class="page-subtitle" data-i18n="myTasksSub">كل المهام المسندة إليك من كل المشاريع</div>
+        </div>
+      </div>
+      <div id="myTasksList"></div>
+    </div>
+
+    <!-- Admin Panel page (Super Admin only) -->
+    <div id="adminPanelPage" class="page-content hidden">
+      <div class="admin-banner">
+        <span style="font-size:24px">👑</span>
+        <span data-i18n="superAdminBadge">👑 مدير المنصة</span>
+      </div>
+
+      <div class="page-header">
+        <div>
+          <h2 class="page-title" data-i18n="adminPanel">لوحة الإدارة</h2>
+          <div class="page-subtitle" data-i18n="platformStats">إحصائيات المنصة</div>
+        </div>
+      </div>
+
+      <div class="admin-stat-grid" id="adminStats"></div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <h3 class="section-title">
+            <span class="section-icon" style="background:#ede9fe">📁</span>
+            <span data-i18n="allProjects">جميع المشاريع</span>
+          </h3>
+        </div>
+        <div id="allProjectsList"></div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <h3 class="section-title">
+            <span class="section-icon" style="background:#dbeafe">👥</span>
+            <span data-i18n="allUsers">جميع المستخدمين</span>
+          </h3>
+        </div>
+        <div id="allUsersList"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- New Project Modal -->
+<div class="modal-bg" id="newProjectModal">
+  <div class="modal">
+    <h3 class="modal-title" data-i18n="newProjectTitle">إنشاء مشروع جديد</h3>
+    <p class="modal-subtitle" data-i18n="newProjectSub">ابدأ مساحة جديدة للتعاون مع فريقك</p>
+
+    <div class="alert" id="newProjAlert"></div>
+
+    <div class="form-group">
+      <label data-i18n="projName">اسم المشروع</label>
+      <input type="text" class="form-input" id="newProjName" placeholder="مشروع التخرج">
+    </div>
+
+    <div class="form-group">
+      <label data-i18n="projDesc">الوصف</label>
+      <textarea class="form-input" id="newProjDesc" placeholder="..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label data-i18n="projIcon">الأيقونة</label>
+      <div style="display:flex; gap:8px; flex-wrap:wrap" id="iconPicker">
+        <button class="btn btn-secondary icon-btn" onclick="pickIcon('📚')">📚</button>
+        <button class="btn btn-secondary icon-btn" onclick="pickIcon('🎓')">🎓</button>
+        <button class="btn btn-secondary icon-btn" onclick="pickIcon('💼')">💼</button>
+        <button class="btn btn-secondary icon-btn" onclick="pickIcon('🚀')">🚀</button>
+        <button class="btn btn-secondary icon-btn" onclick="pickIcon('💡')">💡</button>
+        <button class="btn btn-secondary icon-btn" onclick="pickIcon('🎯')">🎯</button>
+        <button class="btn btn-secondary icon-btn" onclick="pickIcon('🔬')">🔬</button>
+        <button class="btn btn-secondary icon-btn" onclick="pickIcon('🎨')">🎨</button>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('newProjectModal')" data-i18n="cancel">إلغاء</button>
+      <button class="btn btn-primary" onclick="createProject()" data-i18n="create">إنشاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- Invite Modal (Advanced) -->
+<div class="modal-bg" id="inviteModal">
+  <div class="modal" style="max-width: 620px">
+    <h3 class="modal-title" data-i18n="inviteTitle">دعوة أعضاء إلى المشروع</h3>
+    <p class="modal-subtitle" data-i18n="inviteSub">أرسل دعوات بالإيميل (فردياً، متعدداً، أو من ملف Excel)</p>
+
+    <div class="alert" id="inviteAlert"></div>
+
+    <!-- Tabs -->
+    <div class="invite-tabs">
+      <button class="invite-tab active" data-tab="single" onclick="switchInviteTab('single')">
+        ✉️ <span data-i18n="single">فردي</span>
+      </button>
+      <button class="invite-tab" data-tab="multi" onclick="switchInviteTab('multi')">
+        📋 <span data-i18n="multi">متعدد</span>
+      </button>
+      <button class="invite-tab" data-tab="excel" onclick="switchInviteTab('excel')">
+        📊 <span data-i18n="excel">Excel/CSV</span>
+      </button>
+    </div>
+
+    <!-- Single email tab -->
+    <div class="invite-tab-content active" id="tabSingle">
+      <div class="form-group">
+        <label data-i18n="inviteEmail">البريد الإلكتروني للمدعو</label>
+        <input type="email" class="form-input" id="inviteEmail" placeholder="friend@example.com">
+      </div>
+    </div>
+
+    <!-- Multi paste tab -->
+    <div class="invite-tab-content" id="tabMulti">
+      <div class="form-group">
+        <label data-i18n="multiEmailsLabel">الصق الإيميلات (مفصولة بفاصلة، فاصلة منقوطة، أو سطر جديد)</label>
+        <div class="email-chip-area" id="chipArea" onclick="document.getElementById('chipInput').focus()">
+          <input type="text" class="email-chip-input" id="chipInput" placeholder="email1@example.com, email2@example.com..." onkeydown="handleChipKey(event)" onblur="processChipInput()" onpaste="setTimeout(processChipInput, 50)">
+        </div>
+        <div style="font-size:12px; color:var(--text-muted); margin-top:6px" data-i18n="multiHint">💡 اضغط Enter أو فاصلة بعد كل إيميل</div>
+      </div>
+    </div>
+
+    <!-- Excel tab -->
+    <div class="invite-tab-content" id="tabExcel">
+      <div class="form-group">
+        <label data-i18n="excelLabel">رفع ملف Excel أو CSV</label>
+        <div class="file-drop-zone" id="fileDropZone" onclick="document.getElementById('excelFile').click()">
+          <div class="file-drop-icon">📊</div>
+          <div class="file-drop-text" data-i18n="dropFile">انقر أو اسحب الملف هنا</div>
+          <div class="file-drop-hint" data-i18n="dropHint">.xlsx, .xls, .csv (الإيميلات في أول عمود أو عمود اسمه email)</div>
+        </div>
+        <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleExcelFile(event)">
+        <div id="excelStatus" style="margin-top:10px; font-size:13px"></div>
+      </div>
+    </div>
+
+    <div class="alert info show" style="font-size:13px">
+      <strong>💌</strong>
+      <span data-i18n="emailNote">سيتم إرسال إيميل دعوة احترافي بشعار المنصة. الإيميلات الموجودة كأعضاء سيتم تخطيها.</span>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('inviteModal')" data-i18n="cancel">إلغاء</button>
+      <button class="btn btn-primary" id="inviteBtn" onclick="prepareInviteConfirm()" data-i18n="reviewAndSend">مراجعة وإرسال</button>
+    </div>
+  </div>
+</div>
+
+<!-- Invite Confirmation Modal -->
+<div class="modal-bg" id="inviteConfirmModal">
+  <div class="modal" style="max-width: 620px">
+    <h3 class="modal-title" data-i18n="confirmInvitesTitle">تأكيد إرسال الدعوات</h3>
+    <p class="modal-subtitle" data-i18n="confirmInvitesSub">راجع القائمة قبل الإرسال</p>
+
+    <div class="invite-summary" id="inviteSummary"></div>
+
+    <div class="confirm-list" id="confirmList"></div>
+
+    <div class="alert info show" style="font-size:13px">
+      <span data-i18n="confirmInvitesNote">⏱️ قد يستغرق الإرسال بضع ثواني للقوائم الكبيرة. لا تغلق النافذة.</span>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('inviteConfirmModal'); openModal('inviteModal')" data-i18n="back">رجوع</button>
+      <button class="btn btn-primary" id="confirmSendBtn" onclick="executeBulkInvite()" data-i18n="confirmSend">✅ تأكيد الإرسال</button>
+    </div>
+  </div>
+</div>
+
+<!-- Invite Results Modal -->
+<div class="modal-bg" id="inviteResultsModal">
+  <div class="modal" style="max-width: 620px">
+    <h3 class="modal-title" data-i18n="inviteResultsTitle">نتائج الإرسال</h3>
+
+    <div class="invite-summary" id="resultsSummary"></div>
+
+    <div class="confirm-list" id="resultsList"></div>
+
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="closeModal('inviteResultsModal')" data-i18n="done">تم</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Todo List Modal -->
+<div class="modal-bg" id="newTodoListModal">
+  <div class="modal">
+    <h3 class="modal-title" data-i18n="newListTitle">قائمة مهام جديدة</h3>
+    <div class="form-group">
+      <label data-i18n="listName">اسم القائمة</label>
+      <input type="text" class="form-input" id="newListName" placeholder="مهام الأسبوع">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('newTodoListModal')" data-i18n="cancel">إلغاء</button>
+      <button class="btn btn-primary" onclick="createTodoList()" data-i18n="create">إنشاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Todo Modal -->
+<div class="modal-bg" id="newTodoModal">
+  <div class="modal">
+    <h3 class="modal-title" data-i18n="newTodoTitle">مهمة جديدة</h3>
+    <input type="hidden" id="todoListId">
+    <div class="form-group">
+      <label data-i18n="todoTitle">عنوان المهمة</label>
+      <input type="text" class="form-input" id="newTodoTitle">
+    </div>
+    <div class="form-group">
+      <label data-i18n="dueDate">تاريخ الاستحقاق (اختياري)</label>
+      <input type="date" class="form-input" id="newTodoDue">
+    </div>
+    <div class="form-group">
+      <label data-i18n="priority">الأولوية</label>
+      <select class="form-input" id="newTodoPriority">
+        <option value="low" data-i18n="low">منخفضة</option>
+        <option value="normal" selected data-i18n="normal">عادية</option>
+        <option value="high" data-i18n="high">عالية</option>
+        <option value="urgent" data-i18n="urgent">عاجلة</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('newTodoModal')" data-i18n="cancel">إلغاء</button>
+      <button class="btn btn-primary" onclick="createTodo()" data-i18n="create">إنشاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Message Modal -->
+<div class="modal-bg" id="newMessageModal">
+  <div class="modal">
+    <h3 class="modal-title" data-i18n="newMessageTitle">رسالة جديدة</h3>
+    <div class="form-group">
+      <label data-i18n="msgTitle">العنوان</label>
+      <input type="text" class="form-input" id="newMsgTitle">
+    </div>
+    <div class="form-group">
+      <label data-i18n="msgContent">المحتوى</label>
+      <textarea class="form-input" id="newMsgContent" style="min-height:140px"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('newMessageModal')" data-i18n="cancel">إلغاء</button>
+      <button class="btn btn-primary" onclick="createMessage()" data-i18n="post">نشر</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Event Modal -->
+<div class="modal-bg" id="newEventModal">
+  <div class="modal">
+    <h3 class="modal-title" data-i18n="newEventTitle">حدث جديد</h3>
+    <div class="form-group">
+      <label data-i18n="eventTitle">العنوان</label>
+      <input type="text" class="form-input" id="newEventTitle">
+    </div>
+    <div class="form-group">
+      <label data-i18n="eventDate">التاريخ</label>
+      <input type="date" class="form-input" id="newEventDate">
+    </div>
+    <div class="form-group">
+      <label data-i18n="eventTime">الوقت (اختياري)</label>
+      <input type="time" class="form-input" id="newEventTime">
+    </div>
+    <div class="form-group">
+      <label data-i18n="eventDesc">الوصف</label>
+      <textarea class="form-input" id="newEventDesc"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('newEventModal')" data-i18n="cancel">إلغاء</button>
+      <button class="btn btn-primary" onclick="createEvent()" data-i18n="create">إنشاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Check-in Modal -->
+<div class="modal-bg" id="newCheckinModal">
+  <div class="modal">
+    <h3 class="modal-title" data-i18n="newCheckinTitle">سؤال Check-in جديد</h3>
+    <p class="modal-subtitle" data-i18n="newCheckinSub">سيظهر للأعضاء بشكل دوري ليجاوبوا عليه</p>
+    <div class="form-group">
+      <label data-i18n="question">السؤال</label>
+      <input type="text" class="form-input" id="newCheckinQ" placeholder="مثلاً: ما الذي عملت عليه هذا الأسبوع؟">
+    </div>
+    <div class="form-group">
+      <label data-i18n="frequency">التكرار</label>
+      <select class="form-input" id="newCheckinFreq">
+        <option value="daily" data-i18n="daily">يومياً</option>
+        <option value="weekly" selected data-i18n="weekly">أسبوعياً</option>
+        <option value="monthly" data-i18n="monthly">شهرياً</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('newCheckinModal')" data-i18n="cancel">إلغاء</button>
+      <button class="btn btn-primary" onclick="createCheckin()" data-i18n="create">إنشاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- Respond to Check-in Modal -->
+<div class="modal-bg" id="respondCheckinModal">
+  <div class="modal">
+    <h3 class="modal-title" data-i18n="yourResponse">إجابتك</h3>
+    <input type="hidden" id="respondQuestionId">
+    <p id="respondQText" class="modal-subtitle"></p>
+    <div class="form-group">
+      <textarea class="form-input" id="respondText" style="min-height:120px"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('respondCheckinModal')" data-i18n="cancel">إلغاء</button>
+      <button class="btn btn-primary" onclick="submitCheckinResponse()" data-i18n="submit">إرسال</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manage Member Modal -->
+<div class="modal-bg" id="manageMemberModal">
+  <div class="modal">
+    <h3 class="modal-title" data-i18n="manageMember">إدارة العضو</h3>
+    <input type="hidden" id="manageMemberId">
+
+    <div id="manageMemberInfo" style="margin-bottom:20px"></div>
+
+    <div class="form-group">
+      <label data-i18n="role">الدور</label>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <button class="btn btn-secondary role-btn" data-role="member" onclick="setMemberRole('member')" data-i18n="demoteToMember">إنزال إلى عضو</button>
+        <button class="btn btn-secondary role-btn" data-role="admin" onclick="setMemberRole('admin')" data-i18n="promoteToAdmin">ترقية إلى مشرف</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label data-i18n="customPerms">صلاحيات مخصصة</label>
+      <div id="permsList"></div>
+      <button class="btn btn-secondary" style="width:100%; margin-top:8px" onclick="grantAllPerms()" data-i18n="quickAdmin">منح كل الصلاحيات (مشرف كامل)</button>
+    </div>
+
+    <div class="modal-actions" style="justify-content:space-between; flex-wrap:wrap; gap:8px">
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <button class="btn btn-danger" id="muteBtn" onclick="toggleMute()">🔇 <span id="muteBtnText">كتم</span></button>
+        <button class="btn btn-danger" onclick="removeMember()">🗑️ <span data-i18n="removeMember">إزالة من المشروع</span></button>
+      </div>
+      <div style="display:flex; gap:8px">
+        <button class="btn btn-ghost" onclick="closeModal('manageMemberModal')" data-i18n="cancel">إلغاء</button>
+        <button class="btn btn-primary" onclick="savePermissions()" data-i18n="save">حفظ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Invite Acceptance Screen -->
+<div id="inviteAcceptScreen" class="auth-wrap hidden">
+  <div class="auth-card">
+    <div class="invite-screen">
+      <div class="invite-emoji">✉️</div>
+      <h2 class="auth-title" data-i18n="inviteReceived">تلقّيت دعوة!</h2>
+      <p class="auth-subtitle" id="inviteInfoText">جارٍ التحقق...</p>
+      <div id="inviteActions" style="margin-top:24px"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================
+// CONFIG
+// ============================================
+const SUPABASE_URL = 'https://liwpqggtvstqwxobhsfs.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_PwL_jLvBp9MX9n3rxz-38A_o1RcO_2b';
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+let currentProfile = null;
+let currentProjects = [];
+let activeProject = null;
+let activeTab = 'todos';
+let currentLang = 'ar';
+
+// ============================================
+// i18n
+// ============================================
+const translations = {
+  ar: {
+    tagline: 'منصة إدارة المشاريع للطلاب الجامعيين',
+    welcome: 'أهلاً بعودتك',
+    welcome2: 'أهلاً،',
+    loginSub: 'سجّل دخولك للمتابعة إلى مشاريعك',
+    email: 'البريد الإلكتروني',
+    password: 'كلمة المرور',
+    signIn: 'تسجيل الدخول',
+    noAccount: 'ليس لديك حساب؟',
+    signUp: 'أنشئ حساباً',
+    joinTitle: 'انضمّ إلى D-Ploy Camp',
+    joinSub: 'أنشئ حسابك المجاني وابدأ التعاون',
+    fullName: 'الاسم الكامل',
+    createAccount: 'إنشاء الحساب',
+    hasAccount: 'لديك حساب؟',
+    signOut: 'تسجيل الخروج',
+    navigation: 'التنقّل',
+    home: 'الرئيسية',
+    myTasks: 'مهامي',
+    newProject: 'مشروع جديد',
+    myProjects: 'مشاريعي',
+    loadingProjects: 'جارٍ تحميل المشاريع...',
+    projects: 'مشاريع',
+    openTodos: 'مهام مفتوحة',
+    completed: 'مكتملة',
+    yourProjects: 'مشاريعك',
+    yourProjectsSub: 'كل مشاريعك في مكان واحد',
+    todos: 'المهام',
+    messages: 'الرسائل',
+    schedule: 'الجدول',
+    files: 'الملفات',
+    checkins: 'Check-ins',
+    members: 'الأعضاء',
+    invite: 'دعوة عضو',
+    back: 'رجوع',
+    newProjectTitle: 'إنشاء مشروع جديد',
+    newProjectSub: 'ابدأ مساحة جديدة للتعاون مع فريقك',
+    projName: 'اسم المشروع',
+    projDesc: 'الوصف',
+    projIcon: 'الأيقونة',
+    cancel: 'إلغاء',
+    create: 'إنشاء',
+    inviteTitle: 'دعوة عضو إلى المشروع',
+    inviteSub: 'أرسل دعوة بالبريد الإلكتروني',
+    inviteEmail: 'البريد الإلكتروني للمدعو',
+    inviteNote: 'ملاحظة:',
+    inviteNoteText: ' سيتم إنشاء رابط دعوة. انسخه وأرسله للشخص عبر أي وسيلة (واتساب، ايميل، الخ).',
+    sendInvite: 'إنشاء رابط دعوة',
+    myTasksSub: 'كل المهام المسندة إليك من كل المشاريع',
+    newListTitle: 'قائمة مهام جديدة',
+    listName: 'اسم القائمة',
+    newTodoTitle: 'مهمة جديدة',
+    todoTitle: 'عنوان المهمة',
+    dueDate: 'تاريخ الاستحقاق (اختياري)',
+    priority: 'الأولوية',
+    low: 'منخفضة',
+    normal: 'عادية',
+    high: 'عالية',
+    urgent: 'عاجلة',
+    newMessageTitle: 'رسالة جديدة',
+    msgTitle: 'العنوان',
+    msgContent: 'المحتوى',
+    post: 'نشر',
+    newEventTitle: 'حدث جديد',
+    eventTitle: 'العنوان',
+    eventDate: 'التاريخ',
+    eventTime: 'الوقت (اختياري)',
+    eventDesc: 'الوصف',
+    newCheckinTitle: 'سؤال Check-in جديد',
+    newCheckinSub: 'سيظهر للأعضاء بشكل دوري ليجاوبوا عليه',
+    question: 'السؤال',
+    frequency: 'التكرار',
+    daily: 'يومياً',
+    weekly: 'أسبوعياً',
+    monthly: 'شهرياً',
+    yourResponse: 'إجابتك',
+    submit: 'إرسال',
+    inviteReceived: 'تلقّيت دعوة!',
+    addList: 'إضافة قائمة',
+    addTodo: 'إضافة مهمة',
+    addMessage: 'إضافة رسالة',
+    addEvent: 'إضافة حدث',
+    addCheckin: 'سؤال جديد',
+    noProjects: 'لا توجد مشاريع بعد',
+    createFirst: 'أنشئ مشروعك الأول للبدء',
+    noTodos: 'لا توجد مهام بعد',
+    noMessages: 'لا توجد رسائل بعد',
+    noEvents: 'لا توجد أحداث',
+    noFiles: 'لا توجد ملفات بعد',
+    noCheckins: 'لا توجد Check-ins',
+    membersCount: 'عضو',
+    respond: 'الإجابة',
+    invitationLink: 'رابط الدعوة:',
+    copyLink: 'نسخ الرابط',
+    linkCopied: 'تم نسخ الرابط!',
+    accept: 'قبول الدعوة',
+    decline: 'رفض',
+    mustLogin: 'يجب تسجيل الدخول أولاً لقبول الدعوة',
+    inviteAccepted: 'تم قبول الدعوة بنجاح!',
+    inviteExpired: 'انتهت صلاحية الدعوة',
+    inviteInvalid: 'الدعوة غير صحيحة',
+    youInvitedTo: 'تمت دعوتك للمشروع:',
+    pleaseLogin: 'سجّل دخولك أو أنشئ حساباً لقبول الدعوة',
+    goLogin: 'تسجيل الدخول',
+    superAdmin: 'مدير المنصة',
+    adminPanel: 'لوحة الإدارة',
+    allProjects: 'جميع المشاريع',
+    allUsers: 'جميع المستخدمين',
+    platformStats: 'إحصائيات المنصة',
+    manageMember: 'إدارة العضو',
+    permissions: 'الصلاحيات',
+    role: 'الدور',
+    owner: 'مالك',
+    admin: 'مشرف',
+    member: 'عضو',
+    promoteToAdmin: 'ترقية إلى مشرف',
+    demoteToMember: 'إنزال إلى عضو',
+    removeMember: 'إزالة من المشروع',
+    muteMember: 'كتم',
+    unmuteMember: 'فك الكتم',
+    confirmRemove: 'هل أنت متأكد من إزالة هذا العضو؟',
+    confirmMute: 'سيتم منع هذا العضو من النشر والتعليق. متابعة؟',
+    permRemoveMembers: 'حذف الأعضاء',
+    permMuteMembers: 'كتم الأعضاء',
+    permInviteMembers: 'دعوة أعضاء',
+    permManageAdmins: 'إدارة المشرفين',
+    permDeleteContent: 'حذف المحتوى',
+    permEditProject: 'تعديل المشروع',
+    youAreMuted: '🔇 أنت مكتوم في هذا المشروع، لا يمكنك النشر',
+    mutedBadge: '🔇 مكتوم',
+    save: 'حفظ',
+    cannotRemoveOwner: 'لا يمكن إزالة مالك المشروع',
+    cannotRemoveSelf: 'لمغادرة المشروع استخدم زر "مغادرة"',
+    leaveProject: 'مغادرة المشروع',
+    confirmLeave: 'هل تريد مغادرة هذا المشروع؟',
+    deleteProject: 'حذف المشروع',
+    confirmDeleteProject: '⚠️ سيتم حذف المشروع وكل بياناته نهائياً. متابعة؟',
+    projectDeleted: 'تم حذف المشروع',
+    memberRemoved: 'تمت إزالة العضو',
+    memberMuted: 'تم كتم العضو',
+    memberUnmuted: 'تم فك الكتم',
+    permissionsUpdated: 'تم تحديث الصلاحيات',
+    promotedToAdmin: 'تم ترقية العضو إلى مشرف',
+    demotedToMember: 'تم إنزال المشرف إلى عضو',
+    superAdminBadge: '👑 مدير المنصة',
+    platformAdmin: 'مدير المنصة',
+    totalProjects: 'إجمالي المشاريع',
+    totalUsers: 'إجمالي المستخدمين',
+    totalTodos: 'إجمالي المهام',
+    forceDelete: 'حذف (مدير المنصة)',
+    customPerms: 'صلاحيات مخصصة',
+    quickAdmin: 'منح كل الصلاحيات (مشرف كامل)',
+    noPermsYet: 'لا توجد صلاحيات إضافية',
+    forgotPassword: 'نسيت كلمة المرور؟',
+    forgotTitle: 'استعادة كلمة المرور',
+    forgotSub: 'أدخل بريدك الإلكتروني وسنرسل لك رابط إعادة الضبط',
+    sendResetLink: 'إرسال رابط الإعادة',
+    backToLogin: '← العودة لتسجيل الدخول',
+    resetTitle: 'كلمة مرور جديدة',
+    resetSub: 'أدخل كلمة المرور الجديدة',
+    newPassword: 'كلمة المرور الجديدة (6+ أحرف)',
+    confirmPassword: 'تأكيد كلمة المرور',
+    updatePassword: 'تحديث كلمة المرور',
+    resetLinkSent: 'تم إرسال رابط الإعادة! تحقق من بريدك',
+    passwordsDontMatch: 'كلمتا المرور غير متطابقتين',
+    passwordTooShort: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل',
+    passwordUpdated: 'تم تحديث كلمة المرور!',
+    single: 'فردي',
+    multi: 'متعدد',
+    excel: 'Excel/CSV',
+    multiEmailsLabel: 'الصق الإيميلات (مفصولة بفاصلة، فاصلة منقوطة، أو سطر جديد)',
+    multiHint: '💡 اضغط Enter أو فاصلة بعد كل إيميل',
+    excelLabel: 'رفع ملف Excel أو CSV',
+    dropFile: 'انقر أو اسحب الملف هنا',
+    dropHint: '.xlsx, .xls, .csv (الإيميلات في أول عمود أو عمود اسمه email)',
+    emailNote: 'سيتم إرسال إيميل دعوة احترافي بشعار المنصة. الإيميلات الموجودة كأعضاء سيتم تخطيها.',
+    reviewAndSend: 'مراجعة وإرسال',
+    confirmInvitesTitle: 'تأكيد إرسال الدعوات',
+    confirmInvitesSub: 'راجع القائمة قبل الإرسال',
+    confirmInvitesNote: '⏱️ قد يستغرق الإرسال بضع ثواني للقوائم الكبيرة. لا تغلق النافذة.',
+    confirmSend: '✅ تأكيد الإرسال',
+    inviteResultsTitle: 'نتائج الإرسال',
+    done: 'تم',
+    validEmails: 'إيميلات صحيحة',
+    invalidEmails: 'إيميلات غير صحيحة',
+    duplicates: 'مكررة',
+    total: 'الإجمالي',
+    sent: 'تم الإرسال',
+    failed: 'فشل',
+    skipped: 'تم التخطي',
+    alreadyMember: 'عضو بالفعل',
+    sending: 'جارٍ الإرسال...',
+    fileLoaded: 'تم تحميل',
+    fileEmails: 'إيميل من الملف',
+    fileError: 'خطأ في قراءة الملف',
+    noEmailsFound: 'لا توجد إيميلات في الملف',
+    you: 'أنت'
+  },
+  en: {
+    tagline: 'Project management for university students',
+    welcome: 'Welcome back',
+    welcome2: 'Hi,',
+    loginSub: 'Sign in to continue to your projects',
+    email: 'Email',
+    password: 'Password',
+    signIn: 'Sign in',
+    noAccount: "Don't have an account?",
+    signUp: 'Sign up',
+    joinTitle: 'Join D-Ploy Camp',
+    joinSub: 'Create your free account and start collaborating',
+    fullName: 'Full name',
+    createAccount: 'Create account',
+    hasAccount: 'Have an account?',
+    signOut: 'Sign out',
+    navigation: 'Navigation',
+    home: 'Home',
+    myTasks: 'My Tasks',
+    newProject: 'New Project',
+    myProjects: 'My Projects',
+    loadingProjects: 'Loading projects...',
+    projects: 'Projects',
+    openTodos: 'Open Todos',
+    completed: 'Completed',
+    yourProjects: 'Your Projects',
+    yourProjectsSub: 'All your projects in one place',
+    todos: 'To-dos',
+    messages: 'Messages',
+    schedule: 'Schedule',
+    files: 'Files',
+    checkins: 'Check-ins',
+    members: 'Members',
+    invite: 'Invite member',
+    back: 'Back',
+    newProjectTitle: 'Create new project',
+    newProjectSub: 'Start a new space to collaborate with your team',
+    projName: 'Project name',
+    projDesc: 'Description',
+    projIcon: 'Icon',
+    cancel: 'Cancel',
+    create: 'Create',
+    inviteTitle: 'Invite member to project',
+    inviteSub: 'Send an email invitation',
+    inviteEmail: "Invitee's email",
+    inviteNote: 'Note:',
+    inviteNoteText: ' An invitation link will be generated. Copy and send it via any method (WhatsApp, email, etc.).',
+    sendInvite: 'Create invitation link',
+    myTasksSub: 'All tasks assigned to you across projects',
+    newListTitle: 'New todo list',
+    listName: 'List name',
+    newTodoTitle: 'New task',
+    todoTitle: 'Task title',
+    dueDate: 'Due date (optional)',
+    priority: 'Priority',
+    low: 'Low',
+    normal: 'Normal',
+    high: 'High',
+    urgent: 'Urgent',
+    newMessageTitle: 'New message',
+    msgTitle: 'Title',
+    msgContent: 'Content',
+    post: 'Post',
+    newEventTitle: 'New event',
+    eventTitle: 'Title',
+    eventDate: 'Date',
+    eventTime: 'Time (optional)',
+    eventDesc: 'Description',
+    newCheckinTitle: 'New check-in question',
+    newCheckinSub: 'Will appear to members periodically for response',
+    question: 'Question',
+    frequency: 'Frequency',
+    daily: 'Daily',
+    weekly: 'Weekly',
+    monthly: 'Monthly',
+    yourResponse: 'Your response',
+    submit: 'Submit',
+    inviteReceived: 'You got an invitation!',
+    addList: 'Add list',
+    addTodo: 'Add task',
+    addMessage: 'New message',
+    addEvent: 'Add event',
+    addCheckin: 'New question',
+    noProjects: 'No projects yet',
+    createFirst: 'Create your first project to get started',
+    noTodos: 'No tasks yet',
+    noMessages: 'No messages yet',
+    noEvents: 'No events',
+    noFiles: 'No files yet',
+    noCheckins: 'No check-ins',
+    membersCount: 'members',
+    respond: 'Respond',
+    invitationLink: 'Invitation link:',
+    copyLink: 'Copy link',
+    linkCopied: 'Link copied!',
+    accept: 'Accept invitation',
+    decline: 'Decline',
+    mustLogin: 'You must log in first to accept the invitation',
+    inviteAccepted: 'Invitation accepted!',
+    inviteExpired: 'Invitation expired',
+    inviteInvalid: 'Invalid invitation',
+    youInvitedTo: 'You have been invited to:',
+    pleaseLogin: 'Log in or create an account to accept the invitation',
+    goLogin: 'Sign in',
+    superAdmin: 'Platform Admin',
+    adminPanel: 'Admin Panel',
+    allProjects: 'All Projects',
+    allUsers: 'All Users',
+    platformStats: 'Platform Stats',
+    manageMember: 'Manage Member',
+    permissions: 'Permissions',
+    role: 'Role',
+    owner: 'Owner',
+    admin: 'Admin',
+    member: 'Member',
+    promoteToAdmin: 'Promote to Admin',
+    demoteToMember: 'Demote to Member',
+    removeMember: 'Remove from project',
+    muteMember: 'Mute',
+    unmuteMember: 'Unmute',
+    confirmRemove: 'Are you sure you want to remove this member?',
+    confirmMute: 'This member will be blocked from posting and commenting. Continue?',
+    permRemoveMembers: 'Remove members',
+    permMuteMembers: 'Mute members',
+    permInviteMembers: 'Invite members',
+    permManageAdmins: 'Manage admins',
+    permDeleteContent: 'Delete content',
+    permEditProject: 'Edit project',
+    youAreMuted: '🔇 You are muted in this project, you cannot post',
+    mutedBadge: '🔇 Muted',
+    save: 'Save',
+    cannotRemoveOwner: 'Cannot remove the project owner',
+    cannotRemoveSelf: 'To leave the project, use the "Leave" button',
+    leaveProject: 'Leave project',
+    confirmLeave: 'Leave this project?',
+    deleteProject: 'Delete project',
+    confirmDeleteProject: '⚠️ The project and all its data will be permanently deleted. Continue?',
+    projectDeleted: 'Project deleted',
+    memberRemoved: 'Member removed',
+    memberMuted: 'Member muted',
+    memberUnmuted: 'Member unmuted',
+    permissionsUpdated: 'Permissions updated',
+    promotedToAdmin: 'Promoted to admin',
+    demotedToMember: 'Demoted to member',
+    superAdminBadge: '👑 Platform Admin',
+    platformAdmin: 'Platform Admin',
+    totalProjects: 'Total Projects',
+    totalUsers: 'Total Users',
+    totalTodos: 'Total Tasks',
+    forceDelete: 'Delete (Platform Admin)',
+    customPerms: 'Custom Permissions',
+    quickAdmin: 'Grant all permissions (Full Admin)',
+    noPermsYet: 'No additional permissions yet',
+    forgotPassword: 'Forgot password?',
+    forgotTitle: 'Reset Password',
+    forgotSub: 'Enter your email and we will send you a reset link',
+    sendResetLink: 'Send reset link',
+    backToLogin: '← Back to sign in',
+    resetTitle: 'New Password',
+    resetSub: 'Enter your new password',
+    newPassword: 'New password (6+ chars)',
+    confirmPassword: 'Confirm password',
+    updatePassword: 'Update password',
+    resetLinkSent: 'Reset link sent! Check your email',
+    passwordsDontMatch: 'Passwords do not match',
+    passwordTooShort: 'Password must be at least 6 characters',
+    passwordUpdated: 'Password updated!',
+    single: 'Single',
+    multi: 'Multiple',
+    excel: 'Excel/CSV',
+    multiEmailsLabel: 'Paste emails (separated by comma, semicolon, or new line)',
+    multiHint: '💡 Press Enter or comma after each email',
+    excelLabel: 'Upload Excel or CSV file',
+    dropFile: 'Click or drag file here',
+    dropHint: '.xlsx, .xls, .csv (emails in first column or column named email)',
+    emailNote: 'A professional invitation email with platform branding will be sent. Existing members will be skipped.',
+    reviewAndSend: 'Review & Send',
+    confirmInvitesTitle: 'Confirm Sending Invitations',
+    confirmInvitesSub: 'Review the list before sending',
+    confirmInvitesNote: '⏱️ This may take a few seconds for large lists. Do not close the window.',
+    confirmSend: '✅ Confirm & Send',
+    inviteResultsTitle: 'Sending Results',
+    done: 'Done',
+    validEmails: 'Valid emails',
+    invalidEmails: 'Invalid emails',
+    duplicates: 'Duplicates',
+    total: 'Total',
+    sent: 'Sent',
+    failed: 'Failed',
+    skipped: 'Skipped',
+    alreadyMember: 'Already a member',
+    sending: 'Sending...',
+    fileLoaded: 'Loaded',
+    fileEmails: 'emails from file',
+    fileError: 'Error reading file',
+    noEmailsFound: 'No emails found in file',
+    you: 'You'
+  }
+};
+
+function t(key) {
+  return translations[currentLang][key] || key;
+}
+
+function applyTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.dataset.i18n;
+    if (translations[currentLang][key]) {
+      el.textContent = translations[currentLang][key];
+    }
+  });
+  document.body.classList.toggle('ltr', currentLang === 'en');
+  document.documentElement.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
+  document.documentElement.lang = currentLang;
+  document.getElementById('langToggle').textContent = currentLang === 'ar' ? '🌐 EN' : '🌐 AR';
+}
+
+document.getElementById('langToggle').onclick = () => {
+  currentLang = currentLang === 'ar' ? 'en' : 'ar';
+  localStorage.setItem('dploy_lang', currentLang);
+  applyTranslations();
+  if (currentUser) loadHome();
+  if (activeProject) loadProjectTab(activeTab);
+};
+
+// Initial language load
+currentLang = localStorage.getItem('dploy_lang') || 'ar';
+applyTranslations();
+
+// ============================================
+// HELPERS
+// ============================================
+function showAlert(id, msg, type = 'error') {
+  const el = document.getElementById(id);
+  el.className = `alert ${type} show`;
+  el.textContent = msg;
+  if (type === 'success') setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+}
+
+function openModal(id) {
+  document.getElementById(id).classList.add('show');
+}
+
+function escapeHTML(s) {
+  if (!s) return '';
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function timeAgo(dateStr) {
+  const date = new Date(dateStr);
+  const sec = Math.floor((Date.now() - date) / 1000);
+  if (sec < 60) return currentLang === 'ar' ? 'الآن' : 'just now';
+  if (sec < 3600) return currentLang === 'ar' ? `منذ ${Math.floor(sec/60)} د` : `${Math.floor(sec/60)}m ago`;
+  if (sec < 86400) return currentLang === 'ar' ? `منذ ${Math.floor(sec/3600)} س` : `${Math.floor(sec/3600)}h ago`;
+  return currentLang === 'ar' ? `منذ ${Math.floor(sec/86400)} يوم` : `${Math.floor(sec/86400)}d ago`;
+}
+
+function formatDate(dateStr) {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString(currentLang === 'ar' ? 'ar-SA' : 'en-US', { day: '2-digit', month: 'short' });
+}
+
+function initials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length-1].charAt(0)).toUpperCase();
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+// ============================================
+// AUTH
+// ============================================
+function showSignup() {
+  document.getElementById('loginForm').classList.add('hidden');
+  document.getElementById('forgotForm').classList.add('hidden');
+  document.getElementById('resetForm').classList.add('hidden');
+  document.getElementById('signupForm').classList.remove('hidden');
+}
+
+function showLogin() {
+  document.getElementById('signupForm').classList.add('hidden');
+  document.getElementById('forgotForm').classList.add('hidden');
+  document.getElementById('resetForm').classList.add('hidden');
+  document.getElementById('loginForm').classList.remove('hidden');
+}
+
+function showForgot() {
+  document.getElementById('signupForm').classList.add('hidden');
+  document.getElementById('loginForm').classList.add('hidden');
+  document.getElementById('resetForm').classList.add('hidden');
+  document.getElementById('forgotForm').classList.remove('hidden');
+}
+
+function showReset() {
+  document.getElementById('signupForm').classList.add('hidden');
+  document.getElementById('loginForm').classList.add('hidden');
+  document.getElementById('forgotForm').classList.add('hidden');
+  document.getElementById('resetForm').classList.remove('hidden');
+}
+
+async function handleForgot() {
+  const email = document.getElementById('forgotEmail').value.trim();
+  if (!email) {
+    showAlert('forgotAlert', currentLang === 'ar' ? 'الرجاء إدخال البريد الإلكتروني' : 'Please enter your email');
+    return;
+  }
+  const redirectUrl = window.location.origin + window.location.pathname + '#reset=true';
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl });
+  if (error) {
+    showAlert('forgotAlert', error.message);
+    return;
+  }
+  showAlert('forgotAlert', t('resetLinkSent'), 'success');
+  setTimeout(() => showLogin(), 3500);
+}
+
+async function handleResetPassword() {
+  const p1 = document.getElementById('resetPassword').value;
+  const p2 = document.getElementById('resetPassword2').value;
+  if (p1.length < 6) {
+    showAlert('resetAlert', t('passwordTooShort'));
+    return;
+  }
+  if (p1 !== p2) {
+    showAlert('resetAlert', t('passwordsDontMatch'));
+    return;
+  }
+  const { error } = await sb.auth.updateUser({ password: p1 });
+  if (error) {
+    showAlert('resetAlert', error.message);
+    return;
+  }
+  showAlert('resetAlert', t('passwordUpdated'), 'success');
+  // Clean URL
+  history.replaceState({}, '', window.location.pathname);
+  setTimeout(async () => {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) await onAuthSuccess(session.user);
+  }, 1500);
+}
+
+async function handleLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  if (!email || !password) {
+    showAlert('loginAlert', currentLang === 'ar' ? 'الرجاء إدخال البريد وكلمة المرور' : 'Please enter email and password');
+    return;
+  }
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) { showAlert('loginAlert', error.message); return; }
+  await onAuthSuccess(data.user);
+}
+
+async function handleSignup() {
+  const name = document.getElementById('signupName').value.trim();
+  const email = document.getElementById('signupEmail').value.trim();
+  const password = document.getElementById('signupPassword').value;
+  if (!name || !email || !password) {
+    showAlert('signupAlert', currentLang === 'ar' ? 'الرجاء تعبئة جميع الحقول' : 'Please fill all fields');
+    return;
+  }
+  if (password.length < 6) {
+    showAlert('signupAlert', currentLang === 'ar' ? 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' : 'Password must be at least 6 characters');
+    return;
+  }
+  const { data, error } = await sb.auth.signUp({
+    email, password,
+    options: { data: { full_name: name } }
+  });
+  if (error) { showAlert('signupAlert', error.message); return; }
+  if (data.user && !data.session) {
+    showAlert('signupAlert', currentLang === 'ar' ? 'تم إنشاء الحساب. تحقق من بريدك لتأكيد الحساب ثم سجّل الدخول.' : 'Account created. Check your email to verify, then sign in.', 'success');
+    setTimeout(() => showLogin(), 2500);
+    return;
+  }
+  if (data.user) await onAuthSuccess(data.user);
+}
+
+async function handleLogout() {
+  await sb.auth.signOut();
+  currentUser = null;
+  currentProfile = null;
+  location.reload();
+}
+
+async function onAuthSuccess(user) {
+  currentUser = user;
+  // Load profile
+  const { data: profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
+  currentProfile = profile || { id: user.id, email: user.email, full_name: user.email.split('@')[0] };
+
+  // Update UI
+  document.getElementById('userName').textContent = currentProfile.full_name || currentProfile.email;
+  document.getElementById('userEmail').textContent = currentProfile.email;
+  document.getElementById('userAvatar').textContent = initials(currentProfile.full_name || currentProfile.email);
+  document.getElementById('heroName').textContent = currentProfile.full_name || currentProfile.email;
+
+  // Show admin panel link if super admin
+  if (currentProfile.is_super_admin) {
+    document.getElementById('adminPanelLink').classList.remove('hidden');
+    // Add super admin badge to user card
+    const userNameEl = document.getElementById('userName');
+    if (!userNameEl.querySelector('.super-admin-badge')) {
+      const badge = document.createElement('div');
+      badge.className = 'super-admin-badge';
+      badge.style.marginTop = '4px';
+      badge.innerHTML = '👑 ' + t('platformAdmin');
+      userNameEl.parentElement.appendChild(badge);
+    }
+  }
+
+  document.getElementById('authScreen').classList.add('hidden');
+  document.getElementById('appScreen').classList.remove('hidden');
+
+  // Check for pending invitation token
+  const params = new URLSearchParams(window.location.hash.substring(1) || window.location.search);
+  const token = params.get('invite') || localStorage.getItem('pending_invite');
+  if (token) {
+    localStorage.removeItem('pending_invite');
+    await acceptInvitationToken(token);
+  }
+
+  await loadProjects();
+  await loadHome();
+}
+
+// ============================================
+// PROJECTS
+// ============================================
+async function loadProjects() {
+  let projects = [];
+
+  if (currentProfile?.is_super_admin) {
+    // Super admin sees all projects
+    const { data, error } = await sb.from('projects').select('*').eq('archived', false).order('created_at', { ascending: false });
+    if (!error) projects = data || [];
+  } else {
+    // Regular user: get projects where they are member
+    const { data: memberships, error: e1 } = await sb
+      .from('project_members')
+      .select('project_id, projects(*)')
+      .eq('user_id', currentUser.id);
+    if (e1) { console.error(e1); return; }
+    projects = (memberships || []).map(m => m.projects).filter(p => p && !p.archived);
+  }
+
+  currentProjects = projects;
+
+  // Render sidebar
+  const listEl = document.getElementById('projectsList');
+  if (currentProjects.length === 0) {
+    listEl.innerHTML = `<div style="padding:10px; font-size:12px; color:var(--text-muted)">${t('noProjects')}</div>`;
+  } else {
+    listEl.innerHTML = currentProjects.map(p => `
+      <div class="project-item" onclick="openProject('${p.id}')">
+        <div class="project-icon" style="background:${p.color}22">${p.icon}</div>
+        <span>${escapeHTML(p.name)}</span>
+      </div>
+    `).join('');
+  }
+
+  // Update stats
+  document.getElementById('statProjects').textContent = currentProjects.length;
+  await loadStats();
+}
+
+async function loadStats() {
+  if (!currentUser) return;
+  const { count: openCount } = await sb
+    .from('todos').select('*', { count: 'exact', head: true })
+    .eq('assigned_to', currentUser.id)
+    .eq('completed', false);
+  const { count: doneCount } = await sb
+    .from('todos').select('*', { count: 'exact', head: true })
+    .eq('assigned_to', currentUser.id)
+    .eq('completed', true);
+  document.getElementById('statTodos').textContent = openCount || 0;
+  document.getElementById('statCompleted').textContent = doneCount || 0;
+}
+
+async function loadHome() {
+  const grid = document.getElementById('projectsGrid');
+  if (currentProjects.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state" style="grid-column: 1/-1">
+        <div class="empty-icon">🚀</div>
+        <div class="empty-title">${t('noProjects')}</div>
+        <div class="empty-text">${t('createFirst')}</div>
+        <button class="btn btn-primary" style="margin-top:20px; width:auto" onclick="showNewProjectModal()">
+          ➕ ${t('newProject')}
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  // Get member counts
+  const counts = {};
+  for (const p of currentProjects) {
+    const { count } = await sb.from('project_members').select('*', { count: 'exact', head: true }).eq('project_id', p.id);
+    counts[p.id] = count || 0;
+  }
+
+  grid.innerHTML = currentProjects.map(p => `
+    <div class="proj-card" onclick="openProject('${p.id}')">
+      <div class="proj-card-icon" style="background:${p.color}22; color:${p.color}">${p.icon}</div>
+      <div class="proj-card-title">${escapeHTML(p.name)}</div>
+      <div class="proj-card-desc">${escapeHTML(p.description || '')}</div>
+      <div class="proj-card-meta">
+        <span>👥 ${counts[p.id]} ${t('membersCount')}</span>
+        <span>${timeAgo(p.created_at)}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+let selectedIcon = '📚';
+function pickIcon(icon) {
+  selectedIcon = icon;
+  document.querySelectorAll('.icon-btn').forEach(b => b.style.borderColor = '');
+  event.target.style.borderColor = 'var(--primary)';
+}
+
+function showNewProjectModal() {
+  document.getElementById('newProjName').value = '';
+  document.getElementById('newProjDesc').value = '';
+  selectedIcon = '📚';
+  openModal('newProjectModal');
+}
+
+async function createProject() {
+  const name = document.getElementById('newProjName').value.trim();
+  const desc = document.getElementById('newProjDesc').value.trim();
+  if (!name) {
+    showAlert('newProjAlert', currentLang === 'ar' ? 'اسم المشروع مطلوب' : 'Project name required');
+    return;
+  }
+  const colors = ['#ff6b35', '#f7468a', '#6c4ef5', '#06d6a0', '#00b4d8', '#ffd93d'];
+  const randomColor = colors[Math.floor(Math.random() * colors.length)];
+
+  const { data, error } = await sb.from('projects').insert({
+    name, description: desc, icon: selectedIcon, color: randomColor,
+    created_by: currentUser.id
+  }).select().single();
+
+  if (error) { showAlert('newProjAlert', error.message); return; }
+
+  // Add creator as owner
+  await sb.from('project_members').insert({
+    project_id: data.id, user_id: currentUser.id, role: 'owner'
+  });
+
+  closeModal('newProjectModal');
+  toast(currentLang === 'ar' ? 'تم إنشاء المشروع!' : 'Project created!');
+  await loadProjects();
+  await loadHome();
+  await openProject(data.id);
+}
+
+let currentMembership = null; // current user's membership in active project
+
+async function openProject(id) {
+  activeProject = currentProjects.find(p => p.id === id);
+  if (!activeProject) {
+    // Super admin can open any project
+    if (currentProfile.is_super_admin) {
+      const { data } = await sb.from('projects').select('*').eq('id', id).single();
+      if (data) activeProject = data;
+    }
+    if (!activeProject) {
+      // Refresh
+      await loadProjects();
+      activeProject = currentProjects.find(p => p.id === id);
+      if (!activeProject) return;
+    }
+  }
+  // Load current user's membership
+  const { data: mem } = await sb.from('project_members')
+    .select('*').eq('project_id', id).eq('user_id', currentUser.id).maybeSingle();
+  currentMembership = mem;
+
+  document.getElementById('projTitle').textContent = activeProject.name;
+  document.getElementById('projDesc').textContent = activeProject.description || '';
+  showPage('project');
+  activeTab = 'todos';
+  await loadProjectCounts();
+  await loadProjectTab('todos');
+}
+
+// Check if current user can perform action
+function can(perm) {
+  if (currentProfile?.is_super_admin) return true;
+  if (!currentMembership) return false;
+  if (currentMembership.role === 'owner') return true;
+  return currentMembership[perm] === true;
+}
+
+function amIMuted() {
+  if (currentProfile?.is_super_admin) return false;
+  return currentMembership?.is_muted === true;
+}
+
+async function loadProjectCounts() {
+  const pid = activeProject.id;
+  const [t1, t2, t3, t4, t5, t6] = await Promise.all([
+    sb.from('todos').select('*', { count: 'exact', head: true }).eq('project_id', pid).eq('completed', false),
+    sb.from('messages').select('*', { count: 'exact', head: true }).eq('project_id', pid),
+    sb.from('schedule_events').select('*', { count: 'exact', head: true }).eq('project_id', pid),
+    sb.from('project_files').select('*', { count: 'exact', head: true }).eq('project_id', pid),
+    sb.from('checkin_questions').select('*', { count: 'exact', head: true }).eq('project_id', pid).eq('active', true),
+    sb.from('project_members').select('*', { count: 'exact', head: true }).eq('project_id', pid)
+  ]);
+  document.getElementById('todosCount').textContent = (t1.count || 0) + (currentLang === 'ar' ? ' مفتوحة' : ' open');
+  document.getElementById('messagesCount').textContent = (t2.count || 0) + (currentLang === 'ar' ? ' رسالة' : '');
+  document.getElementById('scheduleCount').textContent = (t3.count || 0) + (currentLang === 'ar' ? ' حدث' : '');
+  document.getElementById('filesCount').textContent = (t4.count || 0) + (currentLang === 'ar' ? ' ملف' : '');
+  document.getElementById('checkinsCount').textContent = (t5.count || 0) + (currentLang === 'ar' ? ' سؤال' : '');
+  document.getElementById('membersCount').textContent = (t6.count || 0) + (currentLang === 'ar' ? ' عضو' : ' members');
+}
+
+function showProjectTab(tab) {
+  activeTab = tab;
+  loadProjectTab(tab);
+}
+
+async function loadProjectTab(tab) {
+  const container = document.getElementById('projectContent');
+  container.innerHTML = '<div class="spinner"></div>';
+
+  if (tab === 'todos') await renderTodos(container);
+  else if (tab === 'messages') await renderMessages(container);
+  else if (tab === 'schedule') await renderSchedule(container);
+  else if (tab === 'files') await renderFiles(container);
+  else if (tab === 'checkins') await renderCheckins(container);
+  else if (tab === 'members') await renderMembers(container);
+}
+
+// ============================================
+// TODOS
+// ============================================
+async function renderTodos(container) {
+  const { data: lists } = await sb.from('todo_lists').select('*').eq('project_id', activeProject.id).order('created_at');
+  const { data: todos } = await sb.from('todos').select('*, assigned_profile:assigned_to(full_name)').eq('project_id', activeProject.id).order('created_at');
+
+  let html = `
+    <div class="section-card">
+      <div class="section-header">
+        <h3 class="section-title"><span class="section-icon" style="background:#fef3c7">📋</span> ${t('todos')}</h3>
+        <button class="btn btn-primary" onclick="showNewTodoListModal()">➕ ${t('addList')}</button>
+      </div>
+  `;
+
+  if (!lists || lists.length === 0) {
+    html += `<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">${t('noTodos')}</div></div>`;
+  } else {
+    for (const list of lists) {
+      const listTodos = (todos || []).filter(t => t.list_id === list.id);
+      html += `
+        <div class="todo-list-block">
+          <div class="todo-list-title">
+            <span>${escapeHTML(list.title)}</span>
+            <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px" onclick="showNewTodoModal('${list.id}')">➕ ${t('addTodo')}</button>
+          </div>
+          ${listTodos.length === 0 ? `<div style="padding:12px; color:var(--text-muted); font-size:13px">${t('noTodos')}</div>` :
+          listTodos.map(td => `
+            <div class="todo-item ${td.completed ? 'completed' : ''}">
+              <div class="todo-checkbox ${td.completed ? 'checked' : ''}" onclick="toggleTodo('${td.id}', ${!td.completed})">${td.completed ? '✓' : ''}</div>
+              <div class="todo-content">
+                <div class="todo-title">${escapeHTML(td.title)}</div>
+                <div class="todo-meta">
+                  ${td.due_date ? '📅 ' + formatDate(td.due_date) + ' • ' : ''}
+                  ${td.assigned_profile ? '👤 ' + escapeHTML(td.assigned_profile.full_name) + ' • ' : ''}
+                  <span class="priority-badge priority-${td.priority}">${t(td.priority)}</span>
+                </div>
+              </div>
+              <button class="btn btn-ghost" style="padding:6px" onclick="deleteTodo('${td.id}')">🗑️</button>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+  }
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+function showNewTodoListModal() {
+  document.getElementById('newListName').value = '';
+  openModal('newTodoListModal');
+}
+
+async function createTodoList() {
+  const title = document.getElementById('newListName').value.trim();
+  if (!title) return;
+  await sb.from('todo_lists').insert({ project_id: activeProject.id, title, created_by: currentUser.id });
+  closeModal('newTodoListModal');
+  toast(currentLang === 'ar' ? 'تم إنشاء القائمة' : 'List created');
+  await loadProjectTab('todos');
+  await loadProjectCounts();
+}
+
+function showNewTodoModal(listId) {
+  document.getElementById('todoListId').value = listId;
+  document.getElementById('newTodoTitle').value = '';
+  document.getElementById('newTodoDue').value = '';
+  document.getElementById('newTodoPriority').value = 'normal';
+  openModal('newTodoModal');
+}
+
+async function createTodo() {
+  const listId = document.getElementById('todoListId').value;
+  const title = document.getElementById('newTodoTitle').value.trim();
+  const due = document.getElementById('newTodoDue').value;
+  const priority = document.getElementById('newTodoPriority').value;
+  if (!title) return;
+  await sb.from('todos').insert({
+    list_id: listId, project_id: activeProject.id, title,
+    due_date: due || null, priority, created_by: currentUser.id, assigned_to: currentUser.id
+  });
+  closeModal('newTodoModal');
+  toast(currentLang === 'ar' ? 'تمت الإضافة' : 'Added');
+  await loadProjectTab('todos');
+  await loadProjectCounts();
+  await loadStats();
+}
+
+async function toggleTodo(id, completed) {
+  await sb.from('todos').update({
+    completed,
+    completed_at: completed ? new Date().toISOString() : null,
+    completed_by: completed ? currentUser.id : null
+  }).eq('id', id);
+  await loadProjectTab('todos');
+  await loadProjectCounts();
+  await loadStats();
+}
+
+async function deleteTodo(id) {
+  if (!confirm(currentLang === 'ar' ? 'حذف المهمة؟' : 'Delete task?')) return;
+  await sb.from('todos').delete().eq('id', id);
+  await loadProjectTab('todos');
+  await loadProjectCounts();
+}
+
+// ============================================
+// MESSAGES
+// ============================================
+async function renderMessages(container) {
+  const { data: messages } = await sb
+    .from('messages')
+    .select('*, author:created_by(full_name)')
+    .eq('project_id', activeProject.id)
+    .order('created_at', { ascending: false });
+
+  const muted = amIMuted();
+  let html = `
+    <div class="section-card">
+      <div class="section-header">
+        <h3 class="section-title"><span class="section-icon" style="background:#dbeafe">💬</span> ${t('messages')}</h3>
+        ${muted ? '' : `<button class="btn btn-primary" onclick="openModal('newMessageModal')">➕ ${t('addMessage')}</button>`}
+      </div>
+      ${muted ? `<div class="muted-warning">${t('youAreMuted')}</div>` : ''}
+  `;
+
+  if (!messages || messages.length === 0) {
+    html += `<div class="empty-state"><div class="empty-icon">💬</div><div class="empty-title">${t('noMessages')}</div></div>`;
+  } else {
+    html += messages.map(m => {
+      const canDelete = m.created_by === currentUser.id || can('perm_delete_content');
+      return `
+      <div class="message-card">
+        <div class="message-header">
+          <div class="avatar" style="width:32px; height:32px; font-size:12px">${initials(m.author?.full_name || '?')}</div>
+          <div style="flex:1">
+            <div class="message-title">${escapeHTML(m.title)}</div>
+            <div style="font-size:11px; color:var(--text-muted)">${escapeHTML(m.author?.full_name || '')} • ${timeAgo(m.created_at)}</div>
+          </div>
+          ${canDelete ? `<button class="btn btn-ghost" onclick="deleteMessage('${m.id}')" style="padding:6px">🗑️</button>` : ''}
+        </div>
+        <div class="message-content">${escapeHTML(m.content)}</div>
+      </div>
+    `;}).join('');
+  }
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+async function deleteMessage(id) {
+  if (!confirm(currentLang === 'ar' ? 'حذف الرسالة؟' : 'Delete message?')) return;
+  const { error } = await sb.from('messages').delete().eq('id', id);
+  if (error) { toast(error.message); return; }
+  toast(currentLang === 'ar' ? 'تم الحذف' : 'Deleted');
+  await loadProjectTab('messages');
+  await loadProjectCounts();
+}
+
+async function createMessage() {
+  const title = document.getElementById('newMsgTitle').value.trim();
+  const content = document.getElementById('newMsgContent').value.trim();
+  if (!title || !content) return;
+  await sb.from('messages').insert({
+    project_id: activeProject.id, title, content, created_by: currentUser.id
+  });
+  document.getElementById('newMsgTitle').value = '';
+  document.getElementById('newMsgContent').value = '';
+  closeModal('newMessageModal');
+  toast(currentLang === 'ar' ? 'تم النشر' : 'Posted');
+  await loadProjectTab('messages');
+  await loadProjectCounts();
+}
+
+// ============================================
+// SCHEDULE
+// ============================================
+async function renderSchedule(container) {
+  const { data: events } = await sb
+    .from('schedule_events').select('*')
+    .eq('project_id', activeProject.id)
+    .order('event_date');
+
+  let html = `
+    <div class="section-card">
+      <div class="section-header">
+        <h3 class="section-title"><span class="section-icon" style="background:#fce7f3">📅</span> ${t('schedule')}</h3>
+        <button class="btn btn-primary" onclick="openModal('newEventModal')">➕ ${t('addEvent')}</button>
+      </div>
+  `;
+
+  if (!events || events.length === 0) {
+    html += `<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">${t('noEvents')}</div></div>`;
+  } else {
+    html += events.map(e => {
+      const d = new Date(e.event_date);
+      const day = d.getDate();
+      const month = d.toLocaleDateString(currentLang === 'ar' ? 'ar-SA' : 'en-US', { month: 'short' });
+      return `
+        <div class="calendar-event">
+          <div class="event-date-box">
+            <div class="event-day">${day}</div>
+            <div class="event-month">${month}</div>
+          </div>
+          <div class="event-info">
+            <div class="event-title">${escapeHTML(e.title)}</div>
+            <div class="event-time">${e.event_time ? '🕐 ' + e.event_time.substring(0,5) : ''} ${escapeHTML(e.description || '')}</div>
+          </div>
+          <button class="btn btn-ghost" onclick="deleteEvent('${e.id}')">🗑️</button>
+        </div>
+      `;
+    }).join('');
+  }
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+async function createEvent() {
+  const title = document.getElementById('newEventTitle').value.trim();
+  const date = document.getElementById('newEventDate').value;
+  const time = document.getElementById('newEventTime').value;
+  const desc = document.getElementById('newEventDesc').value.trim();
+  if (!title || !date) return;
+  await sb.from('schedule_events').insert({
+    project_id: activeProject.id, title, event_date: date, event_time: time || null,
+    description: desc, created_by: currentUser.id
+  });
+  document.getElementById('newEventTitle').value = '';
+  document.getElementById('newEventDate').value = '';
+  document.getElementById('newEventTime').value = '';
+  document.getElementById('newEventDesc').value = '';
+  closeModal('newEventModal');
+  toast(currentLang === 'ar' ? 'تمت الإضافة' : 'Added');
+  await loadProjectTab('schedule');
+  await loadProjectCounts();
+}
+
+async function deleteEvent(id) {
+  if (!confirm(currentLang === 'ar' ? 'حذف الحدث؟' : 'Delete event?')) return;
+  await sb.from('schedule_events').delete().eq('id', id);
+  await loadProjectTab('schedule');
+  await loadProjectCounts();
+}
+
+// ============================================
+// FILES (metadata only, files via URL)
+// ============================================
+async function renderFiles(container) {
+  const { data: files } = await sb
+    .from('project_files').select('*, uploader:uploaded_by(full_name)')
+    .eq('project_id', activeProject.id)
+    .order('created_at', { ascending: false });
+
+  let html = `
+    <div class="section-card">
+      <div class="section-header">
+        <h3 class="section-title"><span class="section-icon" style="background:#dcfce7">📁</span> ${t('files')}</h3>
+        <button class="btn btn-primary" onclick="addFileLink()">➕ ${currentLang === 'ar' ? 'إضافة ملف/رابط' : 'Add file/link'}</button>
+      </div>
+      <div class="alert info show" style="font-size:13px; margin-bottom:14px">
+        ${currentLang === 'ar' ? '💡 لرفع الملفات: ارفع الملف على Google Drive/Dropbox والصق الرابط هنا.' : '💡 Upload to Google Drive/Dropbox and paste the link here.'}
+      </div>
+  `;
+
+  if (!files || files.length === 0) {
+    html += `<div class="empty-state"><div class="empty-icon">📁</div><div class="empty-title">${t('noFiles')}</div></div>`;
+  } else {
+    html += files.map(f => `
+      <div class="todo-item">
+        <div style="font-size:24px">📄</div>
+        <div class="todo-content">
+          <div class="todo-title"><a href="${escapeHTML(f.file_path)}" target="_blank" style="color:var(--primary); text-decoration:none">${escapeHTML(f.file_name)}</a></div>
+          <div class="todo-meta">${escapeHTML(f.uploader?.full_name || '')} • ${timeAgo(f.created_at)}</div>
+        </div>
+        <button class="btn btn-ghost" onclick="deleteFile('${f.id}')">🗑️</button>
+      </div>
+    `).join('');
+  }
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+async function addFileLink() {
+  const name = prompt(currentLang === 'ar' ? 'اسم الملف:' : 'File name:');
+  if (!name) return;
+  const url = prompt(currentLang === 'ar' ? 'الرابط (Google Drive، إلخ):' : 'URL (Google Drive, etc.):');
+  if (!url) return;
+  await sb.from('project_files').insert({
+    project_id: activeProject.id, file_name: name, file_path: url, uploaded_by: currentUser.id
+  });
+  toast(currentLang === 'ar' ? 'تمت الإضافة' : 'Added');
+  await loadProjectTab('files');
+  await loadProjectCounts();
+}
+
+async function deleteFile(id) {
+  if (!confirm(currentLang === 'ar' ? 'حذف الملف؟' : 'Delete?')) return;
+  await sb.from('project_files').delete().eq('id', id);
+  await loadProjectTab('files');
+  await loadProjectCounts();
+}
+
+// ============================================
+// CHECK-INS
+// ============================================
+async function renderCheckins(container) {
+  const { data: questions } = await sb
+    .from('checkin_questions').select('*')
+    .eq('project_id', activeProject.id)
+    .eq('active', true)
+    .order('created_at', { ascending: false });
+
+  const { data: responses } = await sb
+    .from('checkin_responses').select('*, user:user_id(full_name)')
+    .eq('project_id', activeProject.id)
+    .order('created_at', { ascending: false });
+
+  let html = `
+    <div class="section-card">
+      <div class="section-header">
+        <h3 class="section-title"><span class="section-icon" style="background:#fef3c7">🎯</span> ${t('checkins')}</h3>
+        <button class="btn btn-primary" onclick="openModal('newCheckinModal')">➕ ${t('addCheckin')}</button>
+      </div>
+  `;
+
+  if (!questions || questions.length === 0) {
+    html += `<div class="empty-state"><div class="empty-icon">🎯</div><div class="empty-title">${t('noCheckins')}</div></div>`;
+  } else {
+    html += questions.map(q => {
+      const qResponses = (responses || []).filter(r => r.question_id === q.id);
+      const freqText = currentLang === 'ar' ? 
+        { daily: 'يومي', weekly: 'أسبوعي', monthly: 'شهري' }[q.frequency] :
+        q.frequency;
+      return `
+        <div class="checkin-card">
+          <div class="checkin-question">❓ ${escapeHTML(q.question)}</div>
+          <div style="font-size:12px; color:var(--text-soft); margin-bottom:10px">⏰ ${freqText}</div>
+          <button class="btn btn-secondary" style="padding:8px 16px; font-size:13px" onclick="showRespondModal('${q.id}', '${escapeHTML(q.question).replace(/'/g, "\\'")}')">💭 ${t('respond')}</button>
+          ${qResponses.length > 0 ? '<div style="margin-top:14px">' + qResponses.map(r => `
+            <div class="checkin-response">
+              <div class="response-author">
+                <div class="avatar" style="width:24px; height:24px; font-size:10px">${initials(r.user?.full_name || '?')}</div>
+                <strong>${escapeHTML(r.user?.full_name || '')}</strong>
+                <span>• ${timeAgo(r.created_at)}</span>
+              </div>
+              <div class="response-text">${escapeHTML(r.response)}</div>
+            </div>
+          `).join('') + '</div>' : ''}
+        </div>
+      `;
+    }).join('');
+  }
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+async function createCheckin() {
+  const question = document.getElementById('newCheckinQ').value.trim();
+  const freq = document.getElementById('newCheckinFreq').value;
+  if (!question) return;
+  await sb.from('checkin_questions').insert({
+    project_id: activeProject.id, question, frequency: freq, created_by: currentUser.id
+  });
+  document.getElementById('newCheckinQ').value = '';
+  closeModal('newCheckinModal');
+  toast(currentLang === 'ar' ? 'تم الإنشاء' : 'Created');
+  await loadProjectTab('checkins');
+  await loadProjectCounts();
+}
+
+function showRespondModal(qid, qtext) {
+  document.getElementById('respondQuestionId').value = qid;
+  document.getElementById('respondQText').textContent = qtext;
+  document.getElementById('respondText').value = '';
+  openModal('respondCheckinModal');
+}
+
+async function submitCheckinResponse() {
+  const qid = document.getElementById('respondQuestionId').value;
+  const text = document.getElementById('respondText').value.trim();
+  if (!text) return;
+  await sb.from('checkin_responses').insert({
+    question_id: qid, project_id: activeProject.id, user_id: currentUser.id, response: text
+  });
+  closeModal('respondCheckinModal');
+  toast(currentLang === 'ar' ? 'تم الإرسال' : 'Submitted');
+  await loadProjectTab('checkins');
+}
+
+// ============================================
+// MEMBERS & INVITES
+// ============================================
+async function renderMembers(container) {
+  const { data: members } = await sb
+    .from('project_members').select('*, profile:user_id(*)')
+    .eq('project_id', activeProject.id);
+
+  const { data: invites } = await sb
+    .from('invitations').select('*')
+    .eq('project_id', activeProject.id)
+    .eq('status', 'pending');
+
+  const canInvite = can('perm_invite_members');
+  const canRemove = can('perm_remove_members');
+  const canMute = can('perm_mute_members');
+  const canManageAdmins = can('perm_manage_admins');
+  const isOwner = currentMembership?.role === 'owner';
+
+  let html = `
+    <div class="section-card">
+      <div class="section-header">
+        <h3 class="section-title"><span class="section-icon" style="background:#ede9fe">👥</span> ${t('members')}</h3>
+        <div style="display:flex; gap:8px; flex-wrap:wrap">
+          ${canInvite ? `<button class="btn btn-primary" onclick="showInviteModal()">✉️ ${t('invite')}</button>` : ''}
+          ${!isOwner && currentMembership ? `<button class="btn btn-secondary" onclick="leaveProject()">🚪 ${t('leaveProject')}</button>` : ''}
+          ${(isOwner || currentProfile?.is_super_admin) ? `<button class="btn btn-danger" onclick="deleteProject()">🗑️ ${t('deleteProject')}</button>` : ''}
+        </div>
+      </div>
+  `;
+
+  html += (members || []).map(m => {
+    const isMe = m.user_id === currentUser.id;
+    const isOwnerMember = m.role === 'owner';
+    const isSuperAdminMember = m.profile?.is_super_admin;
+    const canManageThis = !isMe && !isOwnerMember && !isSuperAdminMember && (canRemove || canMute || canManageAdmins);
+
+    let badges = `<span class="role-pill ${m.role}">${t(m.role)}</span>`;
+    if (isSuperAdminMember) badges += ` <span class="super-admin-badge">👑 ${t('platformAdmin')}</span>`;
+    if (m.is_muted) badges += ` <span class="muted-badge">${t('mutedBadge')}</span>`;
+
+    return `
+      <div class="member-card-full ${m.is_muted ? 'muted' : ''}">
+        <div class="member-row-top">
+          <div class="avatar">${initials(m.profile?.full_name || '?')}</div>
+          <div style="flex:1; min-width:0">
+            <div class="member-name">${escapeHTML(m.profile?.full_name || '')} ${isMe ? '<span style="color:var(--text-muted); font-size:11px">(' + (currentLang === 'ar' ? 'أنت' : 'you') + ')</span>' : ''}</div>
+            <div class="member-role">${escapeHTML(m.profile?.email || '')}</div>
+            <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap">${badges}</div>
+          </div>
+          ${canManageThis ? `<button class="btn btn-secondary" onclick='openManageMember(${JSON.stringify(m).replace(/'/g, "&apos;")})'>⚙️ ${t('manageMember')}</button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  if (invites && invites.length > 0) {
+    html += `
+      <div style="margin-top:24px">
+        <h4 style="font-weight:800; margin-bottom:12px">${currentLang === 'ar' ? 'دعوات معلّقة:' : 'Pending invites:'}</h4>
+        ${invites.map(i => `
+          <div class="todo-item">
+            <div>✉️</div>
+            <div class="todo-content">
+              <div class="todo-title">${escapeHTML(i.email)}</div>
+              <div class="todo-meta">${currentLang === 'ar' ? 'انشئت' : 'sent'} ${timeAgo(i.created_at)}</div>
+            </div>
+            <button class="btn btn-ghost" onclick="copyInviteLink('${i.token}')">📋 ${t('copyLink')}</button>
+            ${canInvite ? `<button class="btn btn-ghost" onclick="cancelInvite('${i.id}')">🗑️</button>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+// ============================================
+// MEMBER MANAGEMENT
+// ============================================
+let editingMember = null;
+
+function openManageMember(member) {
+  editingMember = member;
+  document.getElementById('manageMemberId').value = member.id;
+
+  // Show member info
+  document.getElementById('manageMemberInfo').innerHTML = `
+    <div class="member-card-full">
+      <div class="member-row-top">
+        <div class="avatar">${initials(member.profile?.full_name || '?')}</div>
+        <div>
+          <div class="member-name">${escapeHTML(member.profile?.full_name || '')}</div>
+          <div class="member-role">${escapeHTML(member.profile?.email || '')}</div>
+          <div style="margin-top:6px"><span class="role-pill ${member.role}">${t(member.role)}</span></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Update mute button
+  const muteBtn = document.getElementById('muteBtn');
+  const muteText = document.getElementById('muteBtnText');
+  if (member.is_muted) {
+    muteText.textContent = t('unmuteMember');
+    muteBtn.classList.remove('btn-danger');
+    muteBtn.classList.add('btn-secondary');
+  } else {
+    muteText.textContent = t('muteMember');
+    muteBtn.classList.add('btn-danger');
+    muteBtn.classList.remove('btn-secondary');
+  }
+
+  // Highlight active role button
+  document.querySelectorAll('.role-btn').forEach(b => {
+    b.classList.remove('btn-primary');
+    b.classList.add('btn-secondary');
+    if (b.dataset.role === member.role) {
+      b.classList.add('btn-primary');
+      b.classList.remove('btn-secondary');
+    }
+  });
+
+  // Render permission toggles
+  const perms = [
+    { key: 'perm_remove_members', label: t('permRemoveMembers'), icon: '🗑️' },
+    { key: 'perm_mute_members', label: t('permMuteMembers'), icon: '🔇' },
+    { key: 'perm_invite_members', label: t('permInviteMembers'), icon: '✉️' },
+    { key: 'perm_manage_admins', label: t('permManageAdmins'), icon: '👑' },
+    { key: 'perm_delete_content', label: t('permDeleteContent'), icon: '🗂️' },
+    { key: 'perm_edit_project', label: t('permEditProject'), icon: '✏️' }
+  ];
+
+  document.getElementById('permsList').innerHTML = perms.map(p => `
+    <div class="perm-toggle ${member[p.key] ? 'enabled' : ''}" onclick="togglePerm('${p.key}')" id="toggle_${p.key}">
+      <div class="perm-name">${p.icon} ${p.label}</div>
+      <div class="perm-switch"></div>
+    </div>
+  `).join('');
+
+  openModal('manageMemberModal');
+}
+
+function togglePerm(key) {
+  editingMember[key] = !editingMember[key];
+  const el = document.getElementById('toggle_' + key);
+  el.classList.toggle('enabled', editingMember[key]);
+}
+
+function setMemberRole(role) {
+  editingMember.role = role;
+  document.querySelectorAll('.role-btn').forEach(b => {
+    b.classList.remove('btn-primary');
+    b.classList.add('btn-secondary');
+    if (b.dataset.role === role) {
+      b.classList.add('btn-primary');
+      b.classList.remove('btn-secondary');
+    }
+  });
+}
+
+function grantAllPerms() {
+  const allPerms = ['perm_remove_members', 'perm_mute_members', 'perm_invite_members', 'perm_manage_admins', 'perm_delete_content', 'perm_edit_project'];
+  allPerms.forEach(p => {
+    editingMember[p] = true;
+    const el = document.getElementById('toggle_' + p);
+    if (el) el.classList.add('enabled');
+  });
+  editingMember.role = 'admin';
+  document.querySelectorAll('.role-btn').forEach(b => {
+    b.classList.remove('btn-primary');
+    b.classList.add('btn-secondary');
+    if (b.dataset.role === 'admin') {
+      b.classList.add('btn-primary');
+      b.classList.remove('btn-secondary');
+    }
+  });
+}
+
+async function savePermissions() {
+  const { error } = await sb.from('project_members').update({
+    role: editingMember.role,
+    perm_remove_members: editingMember.perm_remove_members,
+    perm_mute_members: editingMember.perm_mute_members,
+    perm_invite_members: editingMember.perm_invite_members,
+    perm_manage_admins: editingMember.perm_manage_admins,
+    perm_delete_content: editingMember.perm_delete_content,
+    perm_edit_project: editingMember.perm_edit_project
+  }).eq('id', editingMember.id);
+
+  if (error) { toast(error.message); return; }
+  toast(t('permissionsUpdated'));
+  closeModal('manageMemberModal');
+  await loadProjectTab('members');
+}
+
+async function toggleMute() {
+  const newMuted = !editingMember.is_muted;
+  if (newMuted && !confirm(t('confirmMute'))) return;
+
+  const { error } = await sb.from('project_members').update({
+    is_muted: newMuted,
+    muted_at: newMuted ? new Date().toISOString() : null,
+    muted_by: newMuted ? currentUser.id : null
+  }).eq('id', editingMember.id);
+
+  if (error) { toast(error.message); return; }
+  toast(newMuted ? t('memberMuted') : t('memberUnmuted'));
+  editingMember.is_muted = newMuted;
+  closeModal('manageMemberModal');
+  await loadProjectTab('members');
+}
+
+async function removeMember() {
+  if (!confirm(t('confirmRemove'))) return;
+  if (editingMember.role === 'owner') {
+    toast(t('cannotRemoveOwner'));
+    return;
+  }
+  const { error } = await sb.from('project_members').delete().eq('id', editingMember.id);
+  if (error) { toast(error.message); return; }
+  toast(t('memberRemoved'));
+  closeModal('manageMemberModal');
+  await loadProjectTab('members');
+  await loadProjectCounts();
+}
+
+async function leaveProject() {
+  if (!confirm(t('confirmLeave'))) return;
+  const { error } = await sb.from('project_members').delete()
+    .eq('project_id', activeProject.id).eq('user_id', currentUser.id);
+  if (error) { toast(error.message); return; }
+  toast(currentLang === 'ar' ? 'غادرت المشروع' : 'Left project');
+  await loadProjects();
+  showPage('home');
+}
+
+async function deleteProject() {
+  if (!confirm(t('confirmDeleteProject'))) return;
+  const { error } = await sb.from('projects').delete().eq('id', activeProject.id);
+  if (error) { toast(error.message); return; }
+  toast(t('projectDeleted'));
+  activeProject = null;
+  await loadProjects();
+  showPage('home');
+}
+
+// ============================================
+// BULK INVITE SYSTEM
+// ============================================
+let pendingInviteEmails = [];
+
+function showInviteModal() {
+  document.getElementById('inviteEmail').value = '';
+  document.getElementById('chipArea').querySelectorAll('.email-chip').forEach(c => c.remove());
+  document.getElementById('chipInput').value = '';
+  document.getElementById('excelStatus').innerHTML = '';
+  pendingInviteEmails = [];
+  switchInviteTab('single');
+  openModal('inviteModal');
+}
+
+function switchInviteTab(tab) {
+  document.querySelectorAll('.invite-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.invite-tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+// Chip area handlers
+function handleChipKey(event) {
+  if (event.key === 'Enter' || event.key === ',' || event.key === ';' || event.key === ' ') {
+    event.preventDefault();
+    processChipInput();
+  } else if (event.key === 'Backspace' && event.target.value === '') {
+    // Remove last chip
+    const chips = document.querySelectorAll('#chipArea .email-chip');
+    if (chips.length > 0) chips[chips.length - 1].remove();
+  }
+}
+
+function processChipInput() {
+  const input = document.getElementById('chipInput');
+  const raw = input.value;
+  if (!raw.trim()) return;
+  // Split on common separators
+  const parts = raw.split(/[,;\s\n\r\t]+/).filter(p => p.trim());
+  parts.forEach(p => addChip(p.trim()));
+  input.value = '';
+}
+
+function addChip(email) {
+  if (!email) return;
+  const area = document.getElementById('chipArea');
+  // Skip duplicates
+  const existing = Array.from(area.querySelectorAll('.email-chip')).map(c => c.dataset.email);
+  if (existing.includes(email.toLowerCase())) return;
+
+  const chip = document.createElement('div');
+  chip.className = 'email-chip' + (isValidEmail(email) ? '' : ' invalid');
+  chip.dataset.email = email.toLowerCase();
+  chip.innerHTML = `
+    <span>${escapeHTML(email)}</span>
+    <button class="email-chip-remove" onclick="this.parentElement.remove()">×</button>
+  `;
+  const input = document.getElementById('chipInput');
+  area.insertBefore(chip, input);
+}
+
+// Excel/CSV file handler
+function handleExcelFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('excelStatus');
+  statusEl.innerHTML = `<div class="spinner" style="margin:10px auto; width:24px; height:24px"></div>`;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+
+      // Find email column - either first col or column named 'email' / 'Email' / etc
+      const emails = [];
+      let emailColIdx = 0;
+      if (rows.length > 0) {
+        const headerRow = rows[0];
+        for (let i = 0; i < headerRow.length; i++) {
+          if (typeof headerRow[i] === 'string' && /e-?mail|البريد|الايميل/i.test(headerRow[i])) {
+            emailColIdx = i;
+            break;
+          }
+        }
+      }
+
+      // Determine if first row is header
+      const firstVal = rows[0]?.[emailColIdx];
+      const startIdx = (typeof firstVal === 'string' && !isValidEmail(firstVal.trim())) ? 1 : 0;
+
+      for (let i = startIdx; i < rows.length; i++) {
+        const val = rows[i][emailColIdx];
+        if (val && typeof val === 'string') {
+          const email = val.trim().toLowerCase();
+          if (email && !emails.includes(email)) emails.push(email);
+        }
+      }
+
+      if (emails.length === 0) {
+        statusEl.innerHTML = `<div class="alert error show">${t('noEmailsFound')}</div>`;
+        return;
+      }
+
+      // Store in chip area for review
+      const area = document.getElementById('chipArea');
+      area.querySelectorAll('.email-chip').forEach(c => c.remove());
+      emails.forEach(addChip);
+      statusEl.innerHTML = `<div class="alert success show">✅ ${t('fileLoaded')} <strong>${emails.length}</strong> ${t('fileEmails')}</div>`;
+      // Switch to multi tab to show the chips
+      switchInviteTab('multi');
+    } catch (err) {
+      console.error(err);
+      statusEl.innerHTML = `<div class="alert error show">${t('fileError')}: ${err.message}</div>`;
+    }
+  };
+  reader.onerror = () => {
+    statusEl.innerHTML = `<div class="alert error show">${t('fileError')}</div>`;
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// Drag & drop on file zone
+document.addEventListener('DOMContentLoaded', () => {
+  const dz = document.getElementById('fileDropZone');
+  if (dz) {
+    ['dragenter', 'dragover'].forEach(ev => {
+      dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('dragover'); });
+    });
+    ['dragleave', 'drop'].forEach(ev => {
+      dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove('dragover'); });
+    });
+    dz.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const file = e.dataTransfer.files[0];
+      if (file) {
+        document.getElementById('excelFile').files = e.dataTransfer.files;
+        handleExcelFile({ target: { files: [file] } });
+      }
+    });
+  }
+});
+
+// Prepare confirmation screen
+function prepareInviteConfirm() {
+  // Collect emails from current tab
+  const activeTab = document.querySelector('.invite-tab.active').dataset.tab;
+  let emails = [];
+
+  if (activeTab === 'single') {
+    const email = document.getElementById('inviteEmail').value.trim().toLowerCase();
+    if (email) emails = [email];
+  } else {
+    // Multi tab or Excel (both use chip area)
+    processChipInput(); // Process any pending input
+    emails = Array.from(document.querySelectorAll('#chipArea .email-chip')).map(c => c.dataset.email);
+  }
+
+  if (emails.length === 0) {
+    showAlert('inviteAlert', currentLang === 'ar' ? 'أضف إيميلاً واحداً على الأقل' : 'Add at least one email');
+    return;
+  }
+
+  // Deduplicate
+  emails = [...new Set(emails)];
+
+  // Categorize
+  const valid = emails.filter(isValidEmail);
+  const invalid = emails.filter(e => !isValidEmail(e));
+
+  pendingInviteEmails = valid;
+
+  // Build summary
+  document.getElementById('inviteSummary').innerHTML = `
+    <div class="invite-summary-stat">
+      <div class="invite-summary-num">${emails.length}</div>
+      <div class="invite-summary-label">${t('total')}</div>
+    </div>
+    <div class="invite-summary-stat">
+      <div class="invite-summary-num" style="background:linear-gradient(135deg, #06d6a0 0%, #00b4d8 100%); -webkit-background-clip:text; background-clip:text;">${valid.length}</div>
+      <div class="invite-summary-label">${t('validEmails')}</div>
+    </div>
+    ${invalid.length > 0 ? `
+      <div class="invite-summary-stat">
+        <div class="invite-summary-num" style="background:linear-gradient(135deg, #ef4444 0%, #f7468a 100%); -webkit-background-clip:text; background-clip:text;">${invalid.length}</div>
+        <div class="invite-summary-label">${t('invalidEmails')}</div>
+      </div>
+    ` : ''}
+  `;
+
+  // Build list
+  let listHtml = '';
+  valid.forEach(e => {
+    listHtml += `
+      <div class="confirm-item">
+        <div class="confirm-item-icon">✅</div>
+        <div class="confirm-item-email">${escapeHTML(e)}</div>
+        <div class="confirm-item-status status-pending">${t('pending') || 'pending'}</div>
+      </div>
+    `;
+  });
+  invalid.forEach(e => {
+    listHtml += `
+      <div class="confirm-item invalid">
+        <div class="confirm-item-icon">⚠️</div>
+        <div class="confirm-item-email">${escapeHTML(e)}</div>
+        <div class="confirm-item-status status-error">${t('invalidEmails')}</div>
+      </div>
+    `;
+  });
+  document.getElementById('confirmList').innerHTML = listHtml;
+
+  closeModal('inviteModal');
+  openModal('inviteConfirmModal');
+}
+
+// Execute the bulk invite via Edge Function
+async function executeBulkInvite() {
+  if (pendingInviteEmails.length === 0) return;
+  const btn = document.getElementById('confirmSendBtn');
+  btn.disabled = true;
+  btn.innerHTML = `<div class="spinner" style="width:18px; height:18px; margin:0; border-width:2px"></div> ${t('sending')}`;
+
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const appUrl = window.location.origin + window.location.pathname;
+
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/send-invitation`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        emails: pendingInviteEmails,
+        projectId: activeProject.id,
+        appUrl: appUrl
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      toast(result.error || 'Failed');
+      btn.disabled = false;
+      btn.innerHTML = `✅ ${t('confirmSend')}`;
+      return;
+    }
+
+    // Display results
+    showInviteResults(result.results || []);
+  } catch (err) {
+    console.error(err);
+    toast(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `✅ ${t('confirmSend')}`;
+  }
+}
+
+function showInviteResults(results) {
+  const sent = results.filter(r => r.status === 'sent').length;
+  const failed = results.filter(r => r.status === 'error' || r.status === 'invalid').length;
+  const skipped = results.filter(r => r.status === 'already_member').length;
+  const partial = results.filter(r => r.status === 'partial').length;
+
+  document.getElementById('resultsSummary').innerHTML = `
+    <div class="invite-summary-stat">
+      <div class="invite-summary-num">${results.length}</div>
+      <div class="invite-summary-label">${t('total')}</div>
+    </div>
+    <div class="invite-summary-stat">
+      <div class="invite-summary-num" style="background:linear-gradient(135deg, #06d6a0 0%, #00b4d8 100%); -webkit-background-clip:text; background-clip:text;">${sent + partial}</div>
+      <div class="invite-summary-label">${t('sent')}</div>
+    </div>
+    ${skipped > 0 ? `<div class="invite-summary-stat">
+      <div class="invite-summary-num" style="background:linear-gradient(135deg, #6c4ef5 0%, #00b4d8 100%); -webkit-background-clip:text; background-clip:text;">${skipped}</div>
+      <div class="invite-summary-label">${t('skipped')}</div>
+    </div>` : ''}
+    ${failed > 0 ? `<div class="invite-summary-stat">
+      <div class="invite-summary-num" style="background:linear-gradient(135deg, #ef4444 0%, #f7468a 100%); -webkit-background-clip:text; background-clip:text;">${failed}</div>
+      <div class="invite-summary-label">${t('failed')}</div>
+    </div>` : ''}
+  `;
+
+  document.getElementById('resultsList').innerHTML = results.map(r => {
+    let icon, status, statusClass, extra = '';
+    if (r.status === 'sent') { icon = '✅'; status = t('sent'); statusClass = 'status-success'; }
+    else if (r.status === 'partial') { 
+      icon = '⚠️'; status = currentLang === 'ar' ? 'دعوة فقط (انسخ الرابط)' : 'Link only (copy)'; 
+      statusClass = 'status-pending';
+      if (r.link) extra = `<button class="btn btn-secondary" style="padding:4px 10px; font-size:11px" onclick="copyText('${r.link}')">📋</button>`;
+    }
+    else if (r.status === 'already_member') { icon = '👥'; status = t('alreadyMember'); statusClass = 'status-skip'; }
+    else if (r.status === 'invalid') { icon = '⚠️'; status = t('invalidEmails'); statusClass = 'status-error'; }
+    else { icon = '❌'; status = t('failed'); statusClass = 'status-error'; }
+    return `
+      <div class="confirm-item ${r.status === 'invalid' || r.status === 'error' ? 'invalid' : ''}">
+        <div class="confirm-item-icon">${icon}</div>
+        <div class="confirm-item-email">${escapeHTML(r.email)}</div>
+        ${extra}
+        <div class="confirm-item-status ${statusClass}">${status}</div>
+      </div>
+    `;
+  }).join('');
+
+  closeModal('inviteConfirmModal');
+  openModal('inviteResultsModal');
+
+  // Refresh members
+  if (activeTab === 'members') loadProjectTab('members');
+}
+
+// Keep old sendInvite as fallback (manual link generation)
+async function sendInvite() {
+  prepareInviteConfirm();
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text);
+  toast(t('linkCopied'));
+}
+
+async function copyInviteLink(token) {
+  const link = `${window.location.origin}${window.location.pathname}#invite=${token}`;
+  navigator.clipboard.writeText(link);
+  toast(t('linkCopied'));
+}
+
+async function cancelInvite(id) {
+  if (!confirm(currentLang === 'ar' ? 'حذف الدعوة؟' : 'Cancel invite?')) return;
+  await sb.from('invitations').delete().eq('id', id);
+  await loadProjectTab('members');
+}
+
+async function acceptInvitationToken(token) {
+  const { data: invite, error } = await sb
+    .from('invitations').select('*, project:project_id(name)')
+    .eq('token', token).eq('status', 'pending').single();
+  if (error || !invite) {
+    toast(t('inviteInvalid'));
+    return;
+  }
+  if (new Date(invite.expires_at) < new Date()) {
+    toast(t('inviteExpired'));
+    return;
+  }
+  // Add as member
+  const { error: e2 } = await sb.from('project_members').insert({
+    project_id: invite.project_id, user_id: currentUser.id, role: 'member'
+  });
+  if (e2 && !e2.message.includes('duplicate')) {
+    toast(e2.message);
+    return;
+  }
+  // Mark as accepted
+  await sb.from('invitations').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', invite.id);
+  toast(`✅ ${t('inviteAccepted')} - ${invite.project?.name}`);
+  // Clear hash
+  history.replaceState({}, '', window.location.pathname);
+  await loadProjects();
+  await loadHome();
+}
+
+// ============================================
+// PAGES
+// ============================================
+function showPage(page) {
+  document.querySelectorAll('.page-content').forEach(p => p.classList.add('hidden'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (page === 'home') {
+    document.getElementById('homePage').classList.remove('hidden');
+    document.querySelector('[data-page="home"]').classList.add('active');
+    loadHome();
+  } else if (page === 'project') {
+    document.getElementById('projectPage').classList.remove('hidden');
+  } else if (page === 'myTasks') {
+    document.getElementById('myTasksPage').classList.remove('hidden');
+    document.querySelector('[data-page="myTasks"]').classList.add('active');
+    loadMyTasks();
+  } else if (page === 'adminPanel') {
+    if (!currentProfile?.is_super_admin) {
+      toast(currentLang === 'ar' ? 'صلاحيات غير كافية' : 'Insufficient permissions');
+      return;
+    }
+    document.getElementById('adminPanelPage').classList.remove('hidden');
+    document.querySelector('[data-page="adminPanel"]')?.classList.add('active');
+    loadAdminPanel();
+  }
+  document.getElementById('sidebar').classList.remove('open');
+}
+
+// ============================================
+// ADMIN PANEL
+// ============================================
+async function loadAdminPanel() {
+  if (!currentProfile?.is_super_admin) return;
+
+  // Load stats
+  const [pCount, uCount, tCount, mCount] = await Promise.all([
+    sb.from('projects').select('*', { count: 'exact', head: true }),
+    sb.from('profiles').select('*', { count: 'exact', head: true }),
+    sb.from('todos').select('*', { count: 'exact', head: true }),
+    sb.from('messages').select('*', { count: 'exact', head: true })
+  ]);
+
+  document.getElementById('adminStats').innerHTML = `
+    <div class="admin-stat">
+      <div class="admin-stat-num">${pCount.count || 0}</div>
+      <div class="admin-stat-label">${t('totalProjects')}</div>
+    </div>
+    <div class="admin-stat">
+      <div class="admin-stat-num">${uCount.count || 0}</div>
+      <div class="admin-stat-label">${t('totalUsers')}</div>
+    </div>
+    <div class="admin-stat">
+      <div class="admin-stat-num">${tCount.count || 0}</div>
+      <div class="admin-stat-label">${t('totalTodos')}</div>
+    </div>
+    <div class="admin-stat">
+      <div class="admin-stat-num">${mCount.count || 0}</div>
+      <div class="admin-stat-label">${t('messages')}</div>
+    </div>
+  `;
+
+  // Load all projects
+  const { data: allProjects } = await sb.from('projects').select('*, creator:created_by(full_name, email)').order('created_at', { ascending: false });
+  document.getElementById('allProjectsList').innerHTML = (allProjects || []).map(p => `
+    <div class="todo-item">
+      <div class="project-icon" style="background:${p.color}22">${p.icon}</div>
+      <div class="todo-content" onclick="openProject('${p.id}')" style="cursor:pointer">
+        <div class="todo-title">${escapeHTML(p.name)}</div>
+        <div class="todo-meta">${currentLang === 'ar' ? 'بواسطة' : 'by'} ${escapeHTML(p.creator?.full_name || '?')} • ${timeAgo(p.created_at)}</div>
+      </div>
+      <button class="btn btn-secondary" onclick="openProject('${p.id}')">👁️</button>
+      <button class="btn btn-danger" onclick="adminDeleteProject('${p.id}', '${escapeHTML(p.name).replace(/'/g, "&apos;")}')">🗑️</button>
+    </div>
+  `).join('') || `<div class="empty-state"><div class="empty-icon">📁</div><div class="empty-text">${t('noProjects')}</div></div>`;
+
+  // Load all users
+  const { data: allUsers } = await sb.from('profiles').select('*').order('created_at', { ascending: false });
+  document.getElementById('allUsersList').innerHTML = (allUsers || []).map(u => `
+    <div class="todo-item">
+      <div class="avatar">${initials(u.full_name || u.email)}</div>
+      <div class="todo-content">
+        <div class="todo-title">
+          ${escapeHTML(u.full_name || '')}
+          ${u.is_super_admin ? '<span class="super-admin-badge" style="margin-right:6px">👑</span>' : ''}
+          ${u.is_muted ? '<span class="muted-badge" style="margin-right:6px">🔇</span>' : ''}
+        </div>
+        <div class="todo-meta">${escapeHTML(u.email)} • ${timeAgo(u.created_at)}</div>
+      </div>
+      ${u.id !== currentUser.id ? `
+        <button class="btn btn-secondary" onclick="toggleGlobalMute('${u.id}', ${!u.is_muted})">
+          ${u.is_muted ? '🔊' : '🔇'}
+        </button>
+        ${!u.is_super_admin ? `
+          <button class="btn btn-secondary" onclick="toggleSuperAdmin('${u.id}', true)" title="${t('promoteToAdmin')}">👑</button>
+        ` : `
+          <button class="btn btn-warning" onclick="toggleSuperAdmin('${u.id}', false)" title="${t('demoteToMember')}">👤</button>
+        `}
+      ` : `<span class="role-pill admin">${t('you') || 'You'}</span>`}
+    </div>
+  `).join('') || `<div class="empty-state"><div class="empty-icon">👥</div></div>`;
+}
+
+async function adminDeleteProject(id, name) {
+  if (!confirm((currentLang === 'ar' ? '⚠️ حذف مشروع "' : '⚠️ Delete project "') + name + (currentLang === 'ar' ? '" نهائياً؟' : '" permanently?'))) return;
+  const { error } = await sb.from('projects').delete().eq('id', id);
+  if (error) { toast(error.message); return; }
+  toast(t('projectDeleted'));
+  await loadAdminPanel();
+}
+
+async function toggleGlobalMute(userId, mute) {
+  if (mute && !confirm(currentLang === 'ar' ? 'كتم هذا المستخدم على مستوى المنصة كلها؟' : 'Mute this user platform-wide?')) return;
+  const { error } = await sb.from('profiles').update({
+    is_muted: mute,
+    muted_at: mute ? new Date().toISOString() : null,
+    muted_by: mute ? currentUser.id : null
+  }).eq('id', userId);
+  if (error) { toast(error.message); return; }
+  toast(mute ? t('memberMuted') : t('memberUnmuted'));
+  await loadAdminPanel();
+}
+
+async function toggleSuperAdmin(userId, promote) {
+  const confirmMsg = promote
+    ? (currentLang === 'ar' ? '⚠️ ترقية إلى Super Admin؟ سيحصل على كامل صلاحيات المنصة.' : '⚠️ Promote to Super Admin? They will get full platform access.')
+    : (currentLang === 'ar' ? 'إنزال هذا الـ Super Admin إلى مستخدم عادي؟' : 'Demote this Super Admin to a regular user?');
+  if (!confirm(confirmMsg)) return;
+
+  const { error } = await sb.from('profiles').update({ is_super_admin: promote }).eq('id', userId);
+  if (error) { toast(error.message); return; }
+  toast(promote ? t('promotedToAdmin') : t('demotedToMember'));
+  await loadAdminPanel();
+}
+
+async function loadMyTasks() {
+  const { data: todos } = await sb
+    .from('todos').select('*, project:project_id(name, icon, color)')
+    .eq('assigned_to', currentUser.id)
+    .order('completed')
+    .order('due_date', { nullsFirst: false });
+
+  const list = document.getElementById('myTasksList');
+  if (!todos || todos.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">${t('noTodos')}</div></div>`;
+    return;
+  }
+  list.innerHTML = `<div class="section-card">${todos.map(td => `
+    <div class="todo-item ${td.completed ? 'completed' : ''}">
+      <div class="todo-checkbox ${td.completed ? 'checked' : ''}" onclick="toggleTodo('${td.id}', ${!td.completed})">${td.completed ? '✓' : ''}</div>
+      <div class="todo-content">
+        <div class="todo-title">${escapeHTML(td.title)}</div>
+        <div class="todo-meta">
+          ${td.project ? `<span style="background:${td.project.color}22; padding:2px 8px; border-radius:999px">${td.project.icon} ${escapeHTML(td.project.name)}</span> ` : ''}
+          ${td.due_date ? '📅 ' + formatDate(td.due_date) + ' • ' : ''}
+          <span class="priority-badge priority-${td.priority}">${t(td.priority)}</span>
+        </div>
+      </div>
+    </div>
+  `).join('')}</div>`;
+}
+
+// ============================================
+// INIT
+// ============================================
+async function init() {
+  // Check for password reset flow
+  const hashParams = new URLSearchParams(window.location.hash.substring(1));
+  const isReset = hashParams.get('reset') === 'true' || hashParams.get('type') === 'recovery';
+  const inviteToken = hashParams.get('invite');
+
+  // Listen for auth state changes (e.g., recovery flow)
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      document.getElementById('authScreen').classList.remove('hidden');
+      document.getElementById('appScreen').classList.add('hidden');
+      showReset();
+    }
+  });
+
+  // Check session
+  const { data: { session } } = await sb.auth.getSession();
+
+  if (isReset) {
+    // Show reset password form
+    showReset();
+    return;
+  }
+
+  if (session) {
+    if (inviteToken) {
+      localStorage.setItem('pending_invite', inviteToken);
+    }
+    await onAuthSuccess(session.user);
+  } else if (inviteToken) {
+    localStorage.setItem('pending_invite', inviteToken);
+    showAlert('loginAlert', t('pleaseLogin'), 'info');
+  }
+}
+
+init();
+</script>
+</body>
+</html>
