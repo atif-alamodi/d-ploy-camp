@@ -2143,6 +2143,18 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
         <div id="adminPendingInvites" style="margin-top:16px"></div>
       </div>
 
+      <!-- Pending Signup Requests -->
+      <div class="section-card" id="pendingSignupsCard" style="display:none">
+        <div class="section-header">
+          <h3 class="section-title">
+            <span class="section-icon" style="background:#fef3c7">⏳</span>
+            <span>طلبات تسجيل بانتظار الموافقة</span>
+            <span id="pendingSignupsCount" style="background:#f59e0b;color:white;padding:2px 8px;border-radius:12px;font-size:12px;margin-right:8px"></span>
+          </h3>
+        </div>
+        <div id="pendingSignupsList"></div>
+      </div>
+
       <div class="section-card">
         <div class="section-header">
           <h3 class="section-title">
@@ -3299,15 +3311,23 @@ async function handleSignup() {
       if (btn) { btn.disabled = false; btn.textContent = signupLabel; }
       return;
     }
-    if (data.user && !data.session) {
-      showAlert('signupAlert', currentLang === 'ar' ? '✅ تم إنشاء الحساب! تحقق من بريدك لتأكيد الحساب ثم سجّل الدخول.' : '✅ Account created! Check your email to verify, then sign in.', 'success');
-      setTimeout(() => showLogin(), 3000);
-      return;
+    // Always show approval pending message for external signups
+    showAlert('signupAlert', '✅ تم إرسال طلب التسجيل بنجاح!\n\n⏳ حسابك بانتظار موافقة مدير المنصة. ستصلك رسالة بريد إلكتروني عند الموافقة.', 'success');
+    if (btn) { btn.disabled = true; btn.textContent = '✅ تم الإرسال'; }
+    
+    // Sign out user immediately - they cannot use the platform until approved
+    if (data.session) {
+      await sb.auth.signOut();
     }
-    if (data.user) {
-      if (btn) { btn.textContent = '✅'; }
-      await onAuthSuccess(data.user);
-    }
+    
+    setTimeout(() => {
+      showLogin();
+      // Clear signup form
+      document.getElementById('signupName').value = '';
+      document.getElementById('signupEmail').value = '';
+      document.getElementById('signupPassword').value = '';
+    }, 4000);
+    return;
   } catch(e) {
     console.error('Signup error:', e);
     showAlert('signupAlert', currentLang === 'ar' ? '❌ خطأ. حاول مرة أخرى.' : '❌ Error. Please try again.');
@@ -3399,6 +3419,23 @@ async function onAuthSuccess(user) {
   
   // Load profile
   const { data: profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
+  
+  // Check if user is pending approval or rejected
+  if (profile?.status === 'pending_approval') {
+    await sb.auth.signOut();
+    document.getElementById('appScreen').classList.add('hidden');
+    document.getElementById('authScreen').classList.remove('hidden');
+    showAlert('loginAlert', '⏳ حسابك بانتظار موافقة مدير المنصة. ستصلك رسالة بريد إلكتروني عند الموافقة.', 'info');
+    return;
+  }
+  if (profile?.status === 'rejected') {
+    await sb.auth.signOut();
+    document.getElementById('appScreen').classList.add('hidden');
+    document.getElementById('authScreen').classList.remove('hidden');
+    showAlert('loginAlert', '❌ تم رفض طلب التسجيل الخاص بك.', 'error');
+    return;
+  }
+  
   currentProfile = profile || { id: user.id, email: user.email, full_name: user.email.split('@')[0] };
 
   // Update UI
@@ -5047,6 +5084,7 @@ async function loadAdminPanel() {
 
   // Load admin pending invites
   loadAdminPendingInvites();
+  loadPendingSignups();
 
   // Load all users
   const { data: allUsers } = await sb.from('profiles').select('*').order('created_at', { ascending: false });
@@ -5491,6 +5529,109 @@ async function sendAdminInvites() {
     btn.disabled = false;
     btn.innerHTML = '✉️ إرسال الدعوات';
   }
+}
+
+async function loadPendingSignups() {
+  const { data: pending } = await sb.from('profiles')
+    .select('*')
+    .eq('status', 'pending_approval')
+    .order('created_at', { ascending: false });
+  
+  const card = document.getElementById('pendingSignupsCard');
+  const list = document.getElementById('pendingSignupsList');
+  const countEl = document.getElementById('pendingSignupsCount');
+  
+  if (!pending || pending.length === 0) {
+    if (card) card.style.display = 'none';
+    return;
+  }
+  
+  if (card) card.style.display = 'block';
+  if (countEl) countEl.textContent = pending.length;
+  
+  list.innerHTML = pending.map(u => `
+    <div class="todo-item" style="background:#fffbeb;border:1px solid #fde68a">
+      <div class="avatar" style="background:#f59e0b">${(u.full_name || u.email).charAt(0).toUpperCase()}</div>
+      <div class="todo-content">
+        <div class="todo-title">${escapeHTML(u.full_name || 'بدون اسم')}</div>
+        <div class="todo-meta">
+          📧 ${escapeHTML(u.email)} • 
+          ⏰ ${timeAgo(u.created_at)}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-primary" style="padding:6px 12px;font-size:12px;background:#22c55e" onclick="approveSignup('${u.id}','${escapeHTML(u.email)}','${escapeHTML(u.full_name || '')}')">
+          ✅ موافقة
+        </button>
+        <button class="btn btn-danger" style="padding:6px 12px;font-size:12px" onclick="rejectSignup('${u.id}','${escapeHTML(u.email)}')">
+          ❌ رفض
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function approveSignup(userId, email, name) {
+  if (!confirm(`الموافقة على تسجيل: ${name || email}؟`)) return;
+  
+  try {
+    // 1. Update status to active
+    const { error: e1 } = await sb.from('profiles')
+      .update({ status: 'active', source: 'approved' })
+      .eq('id', userId);
+    if (e1) { toast('خطأ: ' + e1.message); return; }
+    
+    // 2. Add to all projects
+    const { data: projects } = await sb.from('projects').select('id');
+    if (projects && projects.length > 0) {
+      const members = projects.map(p => ({ project_id: p.id, user_id: userId, role: 'member' }));
+      await sb.from('project_members').insert(members);
+    }
+    
+    // 3. Send approval email
+    sendApprovalEmail(email, name, true);
+    
+    toast('✅ تمت الموافقة على ' + (name || email));
+    await loadPendingSignups();
+    await loadAdminPanel();
+  } catch(e) {
+    toast('خطأ: ' + e.message);
+  }
+}
+
+async function rejectSignup(userId, email) {
+  if (!confirm(`⚠️ رفض تسجيل ${email}؟ لن يتمكن من الدخول.`)) return;
+  
+  try {
+    const { error } = await sb.from('profiles')
+      .update({ status: 'rejected' })
+      .eq('id', userId);
+    if (error) { toast('خطأ: ' + error.message); return; }
+    
+    // Send rejection email
+    sendApprovalEmail(email, '', false);
+    
+    toast('❌ تم رفض ' + email);
+    await loadPendingSignups();
+  } catch(e) {
+    toast('خطأ: ' + e.message);
+  }
+}
+
+async function sendApprovalEmail(email, name, approved) {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    await fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: approved ? 'signup_approved' : 'signup_rejected',
+        targetEmail: email,
+        senderName: currentProfile?.full_name || 'مدير المنصة',
+        content: name
+      })
+    });
+  } catch(e) {}
 }
 
 async function loadAdminPendingInvites() {
