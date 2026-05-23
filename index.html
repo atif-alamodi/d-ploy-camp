@@ -1869,6 +1869,10 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
         <span class="nav-icon">➕</span>
         <span data-i18n="newProject">مشروع جديد</span>
       </div>
+      <div class="nav-item" id="campfireNavLink" style="display:none" onclick="showProjectCampfire()">
+        <span class="nav-icon">🔥</span>
+        <span>Campfire</span>
+      </div>
       <div class="nav-item hidden" id="adminPanelLink" data-page="adminPanel" onclick="showPage('adminPanel')">
         <span class="nav-icon">👑</span>
         <span data-i18n="adminPanel">لوحة الإدارة</span>
@@ -1946,8 +1950,10 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
           <div class="page-subtitle" id="projDesc">—</div>
         </div>
         <div class="header-actions">
-          <button class="btn btn-secondary" onclick="showInviteModal()">
-            ✉️ <span data-i18n="invite">دعوة عضو</span>
+          <button class="btn btn-secondary" onclick="showProjectTab('campfire')" title="Campfire - دردشة المشروع" style="padding:8px 14px; font-size:18px">🔥</button>
+          <button class="btn btn-secondary" onclick="showProjectTab('activity')" title="سجل النشاط" style="padding:8px 14px; font-size:18px">📊</button>
+          <button class="btn btn-secondary" onclick="showInviteModal()" title="دعوة عضو">
+            ✉️
           </button>
           <button class="btn btn-ghost" onclick="showPage('home')">
             ← <span data-i18n="back">رجوع</span>
@@ -3382,6 +3388,7 @@ async function createProject() {
 let currentMembership = null; // current user's membership in active project
 
 async function openProject(id) {
+  document.getElementById('campfireNavLink').style.display = 'flex';
   activeProject = currentProjects.find(p => p.id === id);
   if (!activeProject) {
     // Super admin can open any project
@@ -3581,8 +3588,13 @@ async function toggleTodo(id, completed) {
 }
 
 async function deleteTodo(id) {
-  if (!confirm(currentLang === 'ar' ? 'حذف المهمة؟' : 'Delete task?')) return;
-  await sb.from('todos').delete().eq('id', id);
+  if (!confirm(currentLang === 'ar' ? 'حذف المهمة نهائياً؟' : 'Delete task permanently?')) return;
+  const { error } = await sb.from('todos').delete().eq('id', id);
+  if (error) { 
+    toast((currentLang === 'ar' ? 'خطأ في الحذف: ' : 'Delete error: ') + error.message); 
+    return; 
+  }
+  toast(currentLang === 'ar' ? '🗑️ تم حذف المهمة' : '🗑️ Task deleted');
   await loadProjectTab('todos');
   await loadProjectCounts();
 }
@@ -4109,10 +4121,27 @@ async function leaveProject() {
 }
 
 async function deleteProject() {
-  if (!confirm(t('confirmDeleteProject'))) return;
-  const { error } = await sb.from('projects').delete().eq('id', activeProject.id);
-  if (error) { toast(error.message); return; }
-  toast(t('projectDeleted'));
+  const projName = activeProject?.name || '';
+  const msg = currentLang === 'ar' 
+    ? `⚠️ حذف مشروع "${projName}" نهائياً؟ لا يمكن التراجع عن هذه العملية!`
+    : `⚠️ Delete project "${projName}" permanently? This cannot be undone!`;
+  if (!confirm(msg)) return;
+
+  // Delete related data first
+  const pid = activeProject.id;
+  await sb.from('todo_lists').delete().eq('project_id', pid);
+  await sb.from('todos').delete().eq('project_id', pid);
+  await sb.from('messages').delete().eq('project_id', pid);
+  await sb.from('project_members').delete().eq('project_id', pid);
+  await sb.from('campfire_messages').delete().eq('project_id', pid);
+  await sb.from('activity_log').delete().eq('project_id', pid);
+
+  const { error } = await sb.from('projects').delete().eq('id', pid);
+  if (error) { 
+    toast((currentLang === 'ar' ? 'خطأ في الحذف: ' : 'Delete error: ') + error.message); 
+    return; 
+  }
+  toast(currentLang === 'ar' ? '🗑️ تم حذف المشروع' : '🗑️ Project deleted');
   activeProject = null;
   await loadProjects();
   showPage('home');
@@ -4122,6 +4151,12 @@ async function deleteProject() {
 // BULK INVITE SYSTEM
 // ============================================
 let pendingInviteEmails = [];
+
+function showProjectCampfire() {
+  if (!activeProject) { toast(currentLang === 'ar' ? 'اختر مشروعاً أولاً' : 'Select a project first'); return; }
+  showPage('project');
+  showProjectTab('campfire');
+}
 
 function showInviteModal() {
   document.getElementById('inviteEmail').value = '';
