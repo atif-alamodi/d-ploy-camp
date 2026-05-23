@@ -3682,13 +3682,15 @@ async function createMessage() {
   const title = document.getElementById('newMsgTitle').value.trim();
   const content = document.getElementById('newMsgContent').value.trim();
   if (!title || !content) return;
-  await sb.from('messages').insert({
+  const { error: msgErr } = await sb.from('messages').insert({
     project_id: activeProject.id, title, content, created_by: currentUser.id
   });
+  if (msgErr) { toast('خطأ: ' + msgErr.message); return; }
   document.getElementById('newMsgTitle').value = '';
   document.getElementById('newMsgContent').value = '';
   closeModal('newMessageModal');
-  toast(currentLang === 'ar' ? 'تم النشر' : 'Posted');
+  toast(currentLang === 'ar' ? '✅ تم النشر' : '✅ Posted');
+  logActivity('نشر رسالة', 'message', title);
   await loadProjectTab('messages');
   await loadProjectCounts();
 }
@@ -3742,16 +3744,18 @@ async function createEvent() {
   const time = document.getElementById('newEventTime').value;
   const desc = document.getElementById('newEventDesc').value.trim();
   if (!title || !date) return;
-  await sb.from('schedule_events').insert({
+  const { error: evtErr } = await sb.from('schedule_events').insert({
     project_id: activeProject.id, title, event_date: date, event_time: time || null,
     description: desc, created_by: currentUser.id
   });
+  if (evtErr) { toast('خطأ: ' + evtErr.message); return; }
   document.getElementById('newEventTitle').value = '';
   document.getElementById('newEventDate').value = '';
   document.getElementById('newEventTime').value = '';
   document.getElementById('newEventDesc').value = '';
   closeModal('newEventModal');
-  toast(currentLang === 'ar' ? 'تمت الإضافة' : 'Added');
+  toast(currentLang === 'ar' ? '✅ تمت الإضافة' : '✅ Added');
+  logActivity('أضاف حدثاً', 'schedule', title);
   await loadProjectTab('schedule');
   await loadProjectCounts();
 }
@@ -3981,12 +3985,13 @@ async function createCheckin() {
   const question = document.getElementById('newCheckinQ').value.trim();
   const freq = document.getElementById('newCheckinFreq').value;
   if (!question) return;
-  await sb.from('checkin_questions').insert({
+  const { error: ciErr } = await sb.from('checkin_questions').insert({
     project_id: activeProject.id, question, frequency: freq, created_by: currentUser.id
   });
+  if (ciErr) { toast('خطأ: ' + ciErr.message); return; }
   document.getElementById('newCheckinQ').value = '';
   closeModal('newCheckinModal');
-  toast(currentLang === 'ar' ? 'تم الإنشاء' : 'Created');
+  toast(currentLang === 'ar' ? '✅ تم الإنشاء' : '✅ Created');
   await loadProjectTab('checkins');
   await loadProjectCounts();
 }
@@ -4002,11 +4007,12 @@ async function submitCheckinResponse() {
   const qid = document.getElementById('respondQuestionId').value;
   const text = document.getElementById('respondText').value.trim();
   if (!text) return;
-  await sb.from('checkin_responses').insert({
+  const { error: crErr } = await sb.from('checkin_responses').insert({
     question_id: qid, project_id: activeProject.id, user_id: currentUser.id, response: text
   });
+  if (crErr) { toast('خطأ: ' + crErr.message); return; }
   closeModal('respondCheckinModal');
-  toast(currentLang === 'ar' ? 'تم الإرسال' : 'Submitted');
+  toast(currentLang === 'ar' ? '✅ تم الإرسال' : '✅ Submitted');
   await loadProjectTab('checkins');
 }
 
@@ -5395,11 +5401,13 @@ function subscribeCampfire() {
 // ============================================
 async function logActivity(action, entityType, entityName) {
   if (!activeProject?.id || !currentUser?.id) return;
-  await sb.from('activity_log').insert({
-    project_id: activeProject.id,
-    user_id: currentUser.id,
-    action, entity_type: entityType, entity_name: entityName
-  }).then(() => {}).catch(() => {});
+  try {
+    await sb.from('activity_log').insert({
+      project_id: activeProject.id,
+      user_id: currentUser.id,
+      action, entity_type: entityType, entity_name: entityName
+    });
+  } catch(e) {} // Silent fail
 }
 
 async function renderActivity(container) {
