@@ -2197,6 +2197,24 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
         <div id="pendingSignupsList"></div>
       </div>
 
+      <!-- Teams Management -->
+      <div class="section-card">
+        <div class="section-header">
+          <h3 class="section-title">
+            <span class="section-icon" style="background:#ede9fe">⭐</span>
+            <span>الفرق وقادة الفرق</span>
+            <span id="teamsCount" style="background:#6c4ef5;color:white;padding:2px 8px;border-radius:12px;font-size:12px;margin-right:8px">0</span>
+          </h3>
+          <button class="btn btn-primary" onclick="openModal('newTeamModal')">➕ فريق جديد</button>
+        </div>
+        <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:12px;margin-bottom:14px;font-size:13px;line-height:1.7">
+          <strong>💡 كيف تعمل الفرق:</strong><br>
+          أنشئ فريقاً، عيّن له قائداً وأعضاءً. القائد يستطيع كتم أعضاء فريقه فقط (لا غيرهم).
+          مدير النظام (أنت) يستطيع كتم الجميع. الكتم يمنع العضو من نشر رسائل وتعليقات في كل المنصة.
+        </div>
+        <div id="teamsList"></div>
+      </div>
+
       <div class="section-card">
         <div class="section-header">
           <h3 class="section-title">
@@ -2573,6 +2591,97 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('newLayerModal')">إلغاء</button>
       <button class="btn btn-primary" onclick="createLayer()">إنشاء الطبقة</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Team Modal -->
+<div class="modal-bg" id="newTeamModal">
+  <div class="modal" style="max-width:520px">
+    <h3 class="modal-title">⭐ إنشاء فريق جديد</h3>
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">
+      أنشئ فريقاً وعيّن قائداً له. القائد سيتمكن من كتم أعضاء فريقه فقط.
+    </p>
+    <div class="form-group">
+      <label>اسم الفريق <span style="color:red">*</span></label>
+      <input type="text" class="form-input" id="teamName" placeholder="مثال: فريق التطوير، فريق التسويق..."
+        onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('teamLeader').focus();}">
+    </div>
+    <div class="form-group">
+      <label>قائد الفريق <span style="color:red">*</span></label>
+      <select class="form-input" id="teamLeader">
+        <option value="">— اختر قائد الفريق —</option>
+      </select>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">سيتم رفع صلاحياته تلقائياً إلى "قائد فريق"</div>
+    </div>
+    <div class="form-group">
+      <label>الوصف (اختياري)</label>
+      <textarea class="form-input" id="teamDesc" rows="2" placeholder="ما طبيعة عمل هذا الفريق؟"></textarea>
+    </div>
+    <div class="form-group">
+      <label>الأيقونة</label>
+      <select class="form-input" id="teamIcon">
+        <option value="👥">👥 عام</option>
+        <option value="💻">💻 تطوير</option>
+        <option value="🎨">🎨 تصميم</option>
+        <option value="📊">📊 تسويق</option>
+        <option value="📝">📝 محتوى</option>
+        <option value="🔬">🔬 بحث</option>
+        <option value="📚">📚 تعليم</option>
+        <option value="⚙️">⚙️ عمليات</option>
+        <option value="💼">💼 إدارة</option>
+        <option value="🎯">🎯 استراتيجية</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('newTeamModal')">إلغاء</button>
+      <button class="btn btn-primary" onclick="createTeam()">إنشاء الفريق</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manage Team Members Modal -->
+<div class="modal-bg" id="manageTeamModal">
+  <div class="modal" style="max-width:560px;max-height:90vh;overflow-y:auto">
+    <h3 class="modal-title" id="manageTeamTitle">إدارة أعضاء الفريق</h3>
+    <input type="hidden" id="currentTeamId">
+    
+    <div style="background:var(--bg-elevated);padding:12px;border-radius:10px;margin-bottom:14px;font-size:13px">
+      <strong>القائد:</strong> <span id="manageTeamLeaderName"></span>
+    </div>
+    
+    <div class="form-group">
+      <label>➕ إضافة عضو للفريق</label>
+      <div style="display:flex;gap:6px">
+        <select class="form-input" id="addTeamMemberSelect" style="flex:1">
+          <option value="">— اختر عضواً —</option>
+        </select>
+        <button class="btn btn-primary" style="padding:8px 14px" onclick="addTeamMember()">إضافة</button>
+      </div>
+    </div>
+    
+    <div style="font-weight:700;margin:14px 0 8px;font-size:14px">الأعضاء الحاليون:</div>
+    <div id="currentTeamMembersList"></div>
+    
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn btn-ghost" onclick="closeModal('manageTeamModal')">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mute Reason Modal -->
+<div class="modal-bg" id="muteReasonModal">
+  <div class="modal" style="max-width:440px">
+    <h3 class="modal-title">🔇 كتم المستخدم</h3>
+    <p id="muteReasonText" style="color:var(--text-muted);font-size:13px;margin-bottom:12px"></p>
+    <input type="hidden" id="muteTargetUserId">
+    <div class="form-group">
+      <label>سبب الكتم (اختياري)</label>
+      <textarea class="form-input" id="muteReason" rows="2" placeholder="سبب الكتم سيُحفظ مع السجل..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('muteReasonModal')">إلغاء</button>
+      <button class="btn btn-danger" onclick="confirmMute()">🔇 كتم</button>
     </div>
   </div>
 </div>
@@ -5216,6 +5325,8 @@ async function loadAdminPanel() {
   // Load admin pending invites
   loadAdminPendingInvites();
   loadPendingSignups();
+  loadTeams();
+  populateTeamLeaderDropdown();
 
   // Load all users
   const { data: allUsers } = await sb.from('profiles').select('*').order('created_at', { ascending: false });
@@ -5242,7 +5353,7 @@ async function loadAdminPanel() {
             <option value="team_leader" ${role === 'team_leader' ? 'selected' : ''}>⭐ قائد فريق</option>
             <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>👑 مدير نظام</option>
           </select>
-          <button class="btn btn-secondary" style="padding:8px 10px" title="${u.is_muted ? 'إلغاء الكتم' : 'كتم المستخدم'}" onclick="toggleGlobalMute('${u.id}', ${!u.is_muted})">
+          <button class="btn btn-secondary" style="padding:8px 10px" title="${u.is_muted ? 'إلغاء الكتم' : 'كتم المستخدم'}" onclick="toggleGlobalMute('${u.id}', ${!u.is_muted}, '${escapeHTML(u.full_name || u.email)}')">
             ${u.is_muted ? '🔊' : '🔇'}
           </button>
           <button class="btn btn-danger" style="padding:8px 10px" title="حذف المستخدم من المنصة" onclick="deleteUserFromPlatform('${u.id}', '${escapeHTML(u.full_name || u.email)}')">🗑️</button>
@@ -5564,6 +5675,233 @@ async function deleteLayer(layerId, name) {
 // ============================================
 // TEAM LEADER MANAGEMENT
 // ============================================
+// ============================================
+// TEAMS MANAGEMENT
+// ============================================
+async function loadTeams() {
+  const { data: teams } = await sb.from('teams')
+    .select('*, leader:leader_id(full_name, email), members:team_members(user_id, profile:user_id(full_name, email, is_muted))')
+    .eq('archived', false)
+    .order('created_at', { ascending: false });
+  
+  const countEl = document.getElementById('teamsCount');
+  if (countEl) countEl.textContent = (teams?.length || 0);
+  
+  const list = document.getElementById('teamsList');
+  if (!list) return;
+  
+  if (!teams || teams.length === 0) {
+    list.innerHTML = `
+      <div style="text-align:center;padding:24px;color:var(--text-muted)">
+        <div style="font-size:36px;margin-bottom:8px">⭐</div>
+        <p style="font-size:13px">لا توجد فرق بعد. ابدأ بإنشاء فريق جديد.</p>
+      </div>`;
+    return;
+  }
+  
+  list.innerHTML = teams.map(team => {
+    const memberCount = (team.members || []).length;
+    const mutedCount = (team.members || []).filter(m => m.profile?.is_muted).length;
+    return `
+      <div style="background:white;border:2px solid #ddd6fe;border-radius:14px;padding:14px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">
+            <div style="font-size:32px">${team.icon || '👥'}</div>
+            <div style="min-width:0">
+              <div style="font-weight:800;font-size:15px">${escapeHTML(team.name)}</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
+                ⭐ القائد: <strong style="color:#6c4ef5">${escapeHTML(team.leader?.full_name || team.leader?.email || 'غير معيّن')}</strong>
+                • 👥 ${memberCount} أعضاء
+                ${mutedCount > 0 ? ` • 🔇 ${mutedCount} مكتومين` : ''}
+              </div>
+              ${team.description ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px">${escapeHTML(team.description)}</div>` : ''}
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px" onclick="openManageTeam('${team.id}', '${escapeHTML(team.name)}', '${escapeHTML(team.leader?.full_name || team.leader?.email || 'غير معيّن')}')">⚙️ إدارة الأعضاء</button>
+            <button class="btn btn-secondary" style="padding:6px 10px;font-size:12px" onclick="changeTeamLeader('${team.id}', '${escapeHTML(team.name)}')" title="تغيير القائد">🔄</button>
+            <button class="btn btn-danger" style="padding:6px 10px;font-size:12px" onclick="deleteTeam('${team.id}', '${escapeHTML(team.name)}')">🗑️</button>
+          </div>
+        </div>
+        ${memberCount > 0 ? `
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;padding-top:8px;border-top:1px solid #ddd6fe">
+            ${team.members.map(m => `
+              <span style="background:${m.profile?.is_muted ? '#fee2e2' : 'var(--bg-elevated)'};padding:3px 10px;border-radius:12px;font-size:11px">
+                ${m.profile?.is_muted ? '🔇 ' : ''}${escapeHTML(m.profile?.full_name || m.profile?.email || '')}
+              </span>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+async function createTeam() {
+  const name = document.getElementById('teamName').value.trim();
+  const leaderId = document.getElementById('teamLeader').value;
+  const desc = document.getElementById('teamDesc').value.trim();
+  const icon = document.getElementById('teamIcon').value;
+  
+  if (!name) { toast('⚠️ أدخل اسم الفريق'); return; }
+  if (!leaderId) { toast('⚠️ اختر قائد الفريق'); return; }
+  
+  // Create team
+  const { data: team, error } = await sb.from('teams').insert({
+    name, description: desc || null, icon, leader_id: leaderId,
+    created_by: currentUser.id
+  }).select().single();
+  
+  if (error) { toast('❌ ' + error.message); return; }
+  
+  // Auto-add leader as member of their team
+  await sb.from('team_members').insert({
+    team_id: team.id, user_id: leaderId, added_by: currentUser.id
+  });
+  
+  closeModal('newTeamModal');
+  document.getElementById('teamName').value = '';
+  document.getElementById('teamDesc').value = '';
+  toast('✅ تم إنشاء الفريق وتعيين القائد');
+  await loadAdminPanel();
+}
+
+async function openManageTeam(teamId, teamName, leaderName) {
+  document.getElementById('currentTeamId').value = teamId;
+  document.getElementById('manageTeamTitle').textContent = '⚙️ إدارة فريق: ' + teamName;
+  document.getElementById('manageTeamLeaderName').textContent = leaderName;
+  
+  // Load all profiles for dropdown (excluding team leaders/members)
+  const { data: allUsers } = await sb.from('profiles').select('*').order('full_name');
+  const { data: currentMembers } = await sb.from('team_members')
+    .select('user_id, profile:user_id(full_name, email, is_muted, platform_role)')
+    .eq('team_id', teamId);
+  
+  const memberIds = new Set((currentMembers || []).map(m => m.user_id));
+  
+  // Populate dropdown with users NOT in this team
+  const dd = document.getElementById('addTeamMemberSelect');
+  const candidates = (allUsers || []).filter(u => !memberIds.has(u.id) && u.id !== currentUser.id);
+  dd.innerHTML = '<option value="">— اختر عضواً —</option>' + 
+    candidates.map(u => `<option value="${u.id}">${escapeHTML(u.full_name || u.email)}</option>`).join('');
+  
+  // Show current members
+  const listDiv = document.getElementById('currentTeamMembersList');
+  if (!currentMembers || currentMembers.length === 0) {
+    listDiv.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:12px;text-align:center">لا يوجد أعضاء بعد</div>';
+  } else {
+    listDiv.innerHTML = currentMembers.map(m => {
+      const isLeader = m.profile?.platform_role === 'team_leader';
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:10px;margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0">
+            <div class="avatar" style="width:32px;height:32px;font-size:12px">${(m.profile?.full_name || '?').charAt(0)}</div>
+            <div style="min-width:0">
+              <div style="font-weight:600;font-size:13px">
+                ${escapeHTML(m.profile?.full_name || m.profile?.email || '')}
+                ${isLeader ? '<span style="color:#6c4ef5;font-size:10px">⭐ قائد</span>' : ''}
+                ${m.profile?.is_muted ? '<span style="color:#ef4444;font-size:10px">🔇 مكتوم</span>' : ''}
+              </div>
+              <div style="font-size:11px;color:var(--text-muted)">${escapeHTML(m.profile?.email || '')}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-secondary" style="padding:4px 8px;font-size:11px" onclick="toggleGlobalMute('${m.user_id}', ${!m.profile?.is_muted}, '${escapeHTML(m.profile?.full_name || m.profile?.email)}')">
+              ${m.profile?.is_muted ? '🔊' : '🔇'}
+            </button>
+            <button class="btn btn-danger" style="padding:4px 8px;font-size:11px" onclick="removeFromTeam('${teamId}', '${m.user_id}', '${escapeHTML(m.profile?.full_name || '')}')">
+              ❌
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+  
+  openModal('manageTeamModal');
+}
+
+async function addTeamMember() {
+  const teamId = document.getElementById('currentTeamId').value;
+  const userId = document.getElementById('addTeamMemberSelect').value;
+  
+  if (!userId) { toast('⚠️ اختر عضواً'); return; }
+  
+  const { error } = await sb.from('team_members').insert({
+    team_id: teamId, user_id: userId, added_by: currentUser.id
+  });
+  
+  if (error) { toast('❌ ' + error.message); return; }
+  toast('✅ تمت إضافة العضو');
+  
+  // Reload modal
+  const teamName = document.getElementById('manageTeamTitle').textContent.replace('⚙️ إدارة فريق: ', '');
+  const leaderName = document.getElementById('manageTeamLeaderName').textContent;
+  await openManageTeam(teamId, teamName, leaderName);
+  await loadTeams();
+}
+
+async function removeFromTeam(teamId, userId, userName) {
+  if (!confirm(`إزالة ${userName} من الفريق؟`)) return;
+  const { error } = await sb.from('team_members').delete()
+    .eq('team_id', teamId).eq('user_id', userId);
+  if (error) { toast('❌ ' + error.message); return; }
+  toast('✅ تمت إزالة العضو');
+  
+  const teamName = document.getElementById('manageTeamTitle').textContent.replace('⚙️ إدارة فريق: ', '');
+  const leaderName = document.getElementById('manageTeamLeaderName').textContent;
+  await openManageTeam(teamId, teamName, leaderName);
+  await loadTeams();
+}
+
+async function changeTeamLeader(teamId, teamName) {
+  const { data: users } = await sb.from('profiles')
+    .select('id, full_name, email')
+    .neq('status', 'pending_approval')
+    .order('full_name');
+  
+  let options = (users || []).map(u => `${u.full_name || u.email} (${u.email})`).join('\n');
+  const choice = prompt(`اختر القائد الجديد لـ "${teamName}":\n\n${options}\n\nاكتب البريد الإلكتروني الكامل للقائد الجديد:`);
+  if (!choice) return;
+  
+  const newLeader = (users || []).find(u => u.email.toLowerCase() === choice.trim().toLowerCase());
+  if (!newLeader) { toast('❌ المستخدم غير موجود'); return; }
+  
+  const { error } = await sb.from('teams').update({ leader_id: newLeader.id }).eq('id', teamId);
+  if (error) { toast('❌ ' + error.message); return; }
+  
+  // Ensure new leader is also a team member
+  await sb.from('team_members').insert({
+    team_id: teamId, user_id: newLeader.id, added_by: currentUser.id
+  }).then(() => {}).catch(() => {});
+  
+  toast('✅ تم تغيير قائد الفريق');
+  await loadAdminPanel();
+}
+
+async function deleteTeam(teamId, teamName) {
+  if (!confirm(`⚠️ حذف الفريق "${teamName}" نهائياً؟\nملاحظة: الأعضاء لن يُحذفوا من المنصة، فقط الفريق.`)) return;
+  const { error } = await sb.from('teams').delete().eq('id', teamId);
+  if (error) { toast('❌ ' + error.message); return; }
+  toast('🗑️ تم حذف الفريق');
+  await loadAdminPanel();
+}
+
+async function populateTeamLeaderDropdown() {
+  const { data: users } = await sb.from('profiles')
+    .select('id, full_name, email, platform_role')
+    .eq('status', 'active')
+    .order('full_name');
+  
+  const dd = document.getElementById('teamLeader');
+  if (!dd) return;
+  dd.innerHTML = '<option value="">— اختر قائد الفريق —</option>' +
+    (users || []).map(u => {
+      const label = (u.full_name || u.email) + (u.platform_role === 'team_leader' ? ' ⭐' : '') + (u.platform_role === 'super_admin' ? ' 👑' : '');
+      return `<option value="${u.id}">${escapeHTML(label)}</option>`;
+    }).join('');
+}
+
 async function setUserRole(userId, newRole, userName) {
   const roleNames = {
     'super_admin': 'مدير النظام',
@@ -6127,15 +6465,39 @@ async function deleteUserFromPlatform(userId, userName) {
   }
 }
 
-async function toggleGlobalMute(userId, mute) {
-  if (mute && !confirm(currentLang === 'ar' ? 'كتم هذا المستخدم على مستوى المنصة كلها؟' : 'Mute this user platform-wide?')) return;
-  const { error } = await sb.from('profiles').update({
-    is_muted: mute,
-    muted_at: mute ? new Date().toISOString() : null,
-    muted_by: mute ? currentUser.id : null
-  }).eq('id', userId);
-  if (error) { toast(error.message); return; }
-  toast(mute ? t('memberMuted') : t('memberUnmuted'));
+async function toggleGlobalMute(userId, mute, userName) {
+  if (mute) {
+    // Open mute reason modal
+    document.getElementById('muteTargetUserId').value = userId;
+    document.getElementById('muteReason').value = '';
+    document.getElementById('muteReasonText').textContent = `كتم ${userName || 'المستخدم'}؟ سيمنعه من النشر في المنصة كلها.`;
+    openModal('muteReasonModal');
+    return;
+  }
+  
+  // Unmute - direct
+  const { data, error } = await sb.rpc('mute_user', { 
+    target_user_id: userId, 
+    do_mute: false 
+  });
+  if (error) { toast('❌ ' + error.message); return; }
+  toast('🔊 تم إلغاء كتم ' + (userName || 'المستخدم'));
+  await loadAdminPanel();
+}
+
+async function confirmMute() {
+  const userId = document.getElementById('muteTargetUserId').value;
+  const reason = document.getElementById('muteReason').value.trim();
+  
+  const { data, error } = await sb.rpc('mute_user', {
+    target_user_id: userId,
+    do_mute: true,
+    reason: reason || null
+  });
+  
+  if (error) { toast('❌ ' + error.message); return; }
+  closeModal('muteReasonModal');
+  toast('🔇 تم كتم المستخدم');
   await loadAdminPanel();
 }
 
