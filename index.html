@@ -3518,7 +3518,10 @@ async function renderTodos(container) {
           </div>
           ${listTodos.length === 0 ? `<div style="padding:12px; color:var(--text-muted); font-size:13px">${t('noTodos')}</div>` :
           listTodos.map(td => `
-            <div class="todo-item ${td.completed ? 'completed' : ''}">
+            <div class="todo-item ${td.completed ? 'completed' : ''}" 
+              ondragover="event.preventDefault();this.style.borderColor='var(--primary)';this.style.background='var(--primary-light)'"
+              ondragleave="this.style.borderColor='';this.style.background=''"
+              ondrop="handleTodoFileDrop(event,'${td.id}')">
               <div class="todo-checkbox ${td.completed ? 'checked' : ''}" onclick="toggleTodo('${td.id}', ${!td.completed})">${td.completed ? '✓' : ''}</div>
               <div class="todo-content">
                 <div class="todo-title">${escapeHTML(td.title)}</div>
@@ -5153,6 +5156,82 @@ async function loadMyTasks() {
 }
 
 
+
+// ============================================
+// TODO FILE ATTACHMENTS (Drag & Drop)
+// ============================================
+async function handleTodoFileDrop(event, todoId) {
+  event.preventDefault();
+  const zone = document.getElementById('todoDropZone_' + todoId);
+  if (zone) { zone.style.borderColor = ''; zone.style.background = ''; }
+  const el = event.currentTarget;
+  if (el) { el.style.borderColor = ''; el.style.background = ''; }
+  const files = Array.from(event.dataTransfer?.files || []);
+  if (!files.length) return;
+  await uploadTodoFiles(files, todoId);
+}
+
+async function handleTodoFileInput(event, todoId) {
+  const files = Array.from(event.target.files || []);
+  if (!files.length) return;
+  await uploadTodoFiles(files, todoId);
+  event.target.value = '';
+}
+
+async function uploadTodoFiles(files, todoId) {
+  const zone = document.getElementById('todoDropZone_' + todoId);
+  if (zone) zone.textContent = '⏳ جارٍ الرفع...';
+
+  const uploaded = [];
+  for (const file of files) {
+    try {
+      const path = `todos/${todoId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const { error } = await sb.storage.from('project-files').upload(path, file, { upsert: false });
+      if (error) { toast('❌ ' + file.name + ': ' + error.message); continue; }
+      const { data: urlData } = sb.storage.from('project-files').getPublicUrl(path);
+      uploaded.push({ name: file.name, url: urlData.publicUrl, path, size: file.size, type: file.type });
+    } catch (e) { toast('❌ ' + file.name + ': ' + e.message); }
+  }
+
+  if (uploaded.length > 0) {
+    // Get current attachments
+    const { data: todo } = await sb.from('todos').select('attachments').eq('id', todoId).single();
+    const current = todo?.attachments || [];
+    const updated = [...current, ...uploaded];
+    await sb.from('todos').update({ attachments: updated }).eq('id', todoId);
+    
+    // Update UI
+    renderTodoAttachments(todoId, updated);
+    toast('✅ تم رفع ' + uploaded.length + ' ملف');
+  }
+
+  if (zone) {
+    zone.innerHTML = '📎 اسحب ملفاً هنا أو اضغط للرفع<input type="file" id="todoFileInput_' + todoId + '" multiple accept="*/*" style="display:none" onchange="handleTodoFileInput(event,'' + todoId + '')">';
+  }
+}
+
+function renderTodoAttachments(todoId, attachments) {
+  const box = document.getElementById('todoAttachments_' + todoId);
+  if (!box || !attachments?.length) return;
+  box.innerHTML = attachments.map((a, i) => `
+    <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg-elevated);border-radius:8px;font-size:12px;border:1px solid var(--border)">
+      <span>${getFileIcon(a.type, a.name)}</span>
+      <a href="${escapeHTML(a.url)}" target="_blank" style="color:var(--primary);text-decoration:none;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(a.name)}</a>
+      <button onclick="deleteTodoAttachment('${todoId}',${i})" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px;padding:0 2px">×</button>
+    </div>
+  `).join('');
+}
+
+async function deleteTodoAttachment(todoId, index) {
+  const { data: todo } = await sb.from('todos').select('attachments').eq('id', todoId).single();
+  const attachments = [...(todo?.attachments || [])];
+  const removed = attachments.splice(index, 1)[0];
+  if (removed?.path) await sb.storage.from('project-files').remove([removed.path]);
+  await sb.from('todos').update({ attachments }).eq('id', todoId);
+  renderTodoAttachments(todoId, attachments);
+  toast('🗑️ تم حذف المرفق');
+}
+
 // ============================================
 // CAMPFIRE (Real-time Chat)
 // ============================================
@@ -5222,16 +5301,45 @@ function renderCampfireMsg(m) {
 async function sendCampfireMsg() {
   const input = document.getElementById('campfireInput');
   if (!input) return;
-  const content = input.value.trim();
-  if (!content) return;
+  const msgContent = input.value.trim();
+  if (!msgContent) return;
   input.value = '';
+  input.focus();
+
+  // Optimistically show message immediately
+  const box = document.getElementById('campfireMessages');
+  if (box) {
+    const name = currentProfile?.full_name || currentProfile?.email || 'أنا';
+    const initial = name.charAt(0).toUpperCase();
+    const tempId = 'temp-' + Date.now();
+    const tempDiv = document.createElement('div');
+    tempDiv.id = tempId;
+    tempDiv.className = 'campfire-msg mine';
+    tempDiv.innerHTML = `
+      <div class="avatar" style="font-size:14px">${initial}</div>
+      <div class="campfire-bubble">
+        <div class="campfire-bubble-text">${escapeHTML(msgContent)}</div>
+        <div class="campfire-bubble-time" style="opacity:0.6">⏳ جارٍ الإرسال...</div>
+      </div>
+    `;
+    if (box.querySelector('.campfire-empty')) box.innerHTML = '';
+    box.appendChild(tempDiv);
+    box.scrollTop = box.scrollHeight;
+  }
+
   const { error } = await sb.from('campfire_messages').insert({
     project_id: activeProject.id,
     user_id: currentUser.id,
-    content
+    content: msgContent
   });
-  if (error) { toast('خطأ في الإرسال'); input.value = content; return; }
-  await logActivity('أرسل رسالة في Campfire', 'campfire', 'رسالة جديدة');
+
+  if (error) {
+    // Remove temp message
+    document.getElementById('temp-' + (Date.now() - 1))?.remove();
+    toast('خطأ في الإرسال: ' + error.message);
+    input.value = msgContent;
+    return;
+  }
 }
 
 function subscribeCampfire() {
@@ -5245,6 +5353,13 @@ function subscribeCampfire() {
     }, async (payload) => {
       const box = document.getElementById('campfireMessages');
       if (!box) return;
+
+      // Remove optimistic temp messages from current user
+      if (payload.new.user_id === currentUser.id) {
+        const temps = box.querySelectorAll('[id^="temp-"]');
+        temps.forEach(t => t.remove());
+      }
+
       // Fetch user profile for new message
       const { data: profile } = await sb.from('profiles').select('full_name').eq('id', payload.new.user_id).single();
       const msg = { ...payload.new, profile };
@@ -5445,6 +5560,9 @@ async function showTodoDetail(todoId) {
   const priorityColors = { low: '#6ee7b7', normal: '#93c5fd', high: '#fcd34d', urgent: '#fca5a5' };
   const priorityLabels = { low: 'منخفضة', normal: 'عادية', high: 'عالية', urgent: 'عاجلة' };
 
+  // Load attachments
+  const todoAttachments = todo.attachments || [];
+  
   const modal = document.createElement('div');
   modal.className = 'modal-bg show';
   modal.id = 'todoDetailModal';
@@ -5483,6 +5601,17 @@ async function showTodoDetail(todoId) {
             </div>
           `).join('')}
       </div>
+      <!-- File drop zone -->
+      <div id="todoDropZone_${todoId}" 
+        style="border:2px dashed var(--border);border-radius:var(--radius);padding:16px;text-align:center;font-size:13px;color:var(--text-muted);margin-bottom:10px;cursor:pointer;transition:all 0.2s"
+        ondragover="event.preventDefault();this.style.borderColor='var(--primary)';this.style.background='var(--primary-light)'"
+        ondragleave="this.style.borderColor='var(--border)';this.style.background='transparent'"
+        ondrop="handleTodoFileDrop(event,'${todoId}')"
+        onclick="document.getElementById('todoFileInput_${todoId}').click()">
+        📎 اسحب ملفاً هنا أو اضغط للرفع
+        <input type="file" id="todoFileInput_${todoId}" multiple accept="*/*" style="display:none" onchange="handleTodoFileInput(event,'${todoId}')">
+      </div>
+      <div id="todoAttachments_${todoId}" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
       <div class="todo-comment-input-row">
         <input class="todo-comment-input" id="todoCommentInput" placeholder="أضف تعليقاً..." 
           onkeydown="if(event.key==='Enter'){submitTodoComment('${todoId}','${activeProject.id}')}">
@@ -5492,7 +5621,11 @@ async function showTodoDetail(todoId) {
   `;
   document.body.appendChild(modal);
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-  setTimeout(() => document.getElementById('todoCommentInput')?.focus(), 100);
+  setTimeout(() => {
+    document.getElementById('todoCommentInput')?.focus();
+    // Render existing attachments
+    if (todoAttachments.length > 0) renderTodoAttachments(todoId, todoAttachments);
+  }, 100);
 }
 
 async function submitTodoComment(todoId, projectId) {
