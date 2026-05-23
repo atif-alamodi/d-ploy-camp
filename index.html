@@ -5332,22 +5332,56 @@ async function sendNotification(userId, type, title, body, projectId) {
 function toggleNotifDropdown() {
   let dd = document.getElementById('notifDropdown');
   if (dd) { dd.remove(); return; }
+
+  const bell = document.querySelector('.notif-bell');
+  const rect = bell ? bell.getBoundingClientRect() : { bottom: 60, right: 20 };
+
   dd = document.createElement('div');
   dd.id = 'notifDropdown';
-  dd.className = 'notif-dropdown';
-  dd.innerHTML = '<div style="padding:12px 16px; font-weight:700; border-bottom:1px solid var(--border); display:flex; justify-content:space-between"><span>🔔 الإشعارات</span><button onclick="markAllNotificationsRead()" style="background:none;border:none;font-size:12px;color:var(--primary);cursor:pointer">تحديد كمقروء</button></div><div id="notifList" style="max-height:300px;overflow-y:auto"><div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">جارٍ التحميل...</div></div>';
-  const bell = document.querySelector('.notif-bell');
-  if (bell) {
-    bell.style.position = 'relative';
-    bell.appendChild(dd);
-  }
+  dd.style.cssText = [
+    'position:fixed',
+    'top:' + (rect.bottom + 8) + 'px',
+    'right:' + (window.innerWidth - rect.right) + 'px',
+    'width:340px',
+    'max-height:440px',
+    'background:white',
+    'border-radius:16px',
+    'box-shadow:0 20px 60px rgba(0,0,0,0.18)',
+    'border:1px solid #e8e0ff',
+    'z-index:99999',
+    'overflow:hidden',
+    'display:flex',
+    'flex-direction:column',
+  ].join(';');
+
+  const title = currentLang === 'ar' ? 'الإشعارات' : 'Notifications';
+  const markRead = currentLang === 'ar' ? 'تحديد كمقروء' : 'Mark all read';
+  dd.innerHTML = `
+    <div style="padding:14px 16px;font-weight:700;border-bottom:1px solid #f0e8ff;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+      <span>🔔 ${title}</span>
+      <button onclick="markAllNotificationsRead()" style="background:none;border:none;font-size:12px;color:#6c4ef5;cursor:pointer;padding:4px 8px;border-radius:6px">
+        ${markRead}
+      </button>
+    </div>
+    <div id="notifList" style="overflow-y:auto;flex:1">
+      <div style="padding:24px;text-align:center;color:#9b96a8;font-size:13px">⏳ جارٍ التحميل...</div>
+    </div>
+  `;
+
+  document.body.appendChild(dd);
   loadNotifList();
-  setTimeout(() => document.addEventListener('click', function closeDD(e) {
-    if (!dd.contains(e.target) && !document.querySelector('.notif-bell')?.contains(e.target)) {
-      dd.remove(); document.removeEventListener('click', closeDD);
-    }
-  }), 100);
+
+  setTimeout(() => {
+    const closeDD = (e) => {
+      if (!dd.contains(e.target) && !bell?.contains(e.target)) {
+        dd.remove();
+        document.removeEventListener('click', closeDD);
+      }
+    };
+    document.addEventListener('click', closeDD);
+  }, 100);
 }
+
 
 async function loadNotifList() {
   const { data: notifs } = await sb.from('notifications')
