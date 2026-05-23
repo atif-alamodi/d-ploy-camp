@@ -5380,7 +5380,7 @@ async function uploadTodoFiles(files, todoId) {
   }
 
   if (zone) {
-    zone.innerHTML = '📎 اسحب ملفاً هنا أو اضغط للرفع<input type="file" id="todoFileInput_' + todoId + '" multiple accept="*/*" style="display:none" onchange="handleTodoFileInput(event,'' + todoId + '')">';
+    zone.innerHTML = `📎 اسحب ملفاً هنا أو اضغط للرفع<input type="file" id="todoFileInput_${todoId}" multiple accept="*/*" style="display:none" onchange="handleTodoFileInput(event,'${todoId}')">`;
   }
 }
 
