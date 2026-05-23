@@ -2259,28 +2259,69 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 <!-- Invite Modal (Advanced) -->
 <!-- Complete Profile Modal (shown after accepting invite) -->
 <div class="modal-bg" id="completeProfileModal">
-  <div class="modal" style="max-width:480px">
+  <div class="modal" style="max-width:500px; max-height:90vh; overflow-y:auto">
     <div style="text-align:center; margin-bottom:24px">
       <div style="font-size:48px">🏕️</div>
       <h3 class="modal-title" style="margin-top:8px">أهلاً بك في D-Ploy Camp!</h3>
       <p style="color:var(--text-muted); font-size:14px; margin-top:4px">أكمل بياناتك للبدء</p>
     </div>
-    <div class="alert" id="completeProfileAlert"></div>
-    <div class="form-group">
-      <label style="font-weight:700">👤 الاسم الكامل بالعربي <span style="color:red">*</span></label>
-      <input type="text" class="form-input" id="cpFullName" placeholder="مثال: محمد العمودي" 
-        onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('cpJobTitle').focus();}">
-    </div>
-    <div class="form-group">
-      <label style="font-weight:700">💼 المسمى الوظيفي <span style="color:red">*</span></label>
-      <input type="text" class="form-input" id="cpJobTitle" placeholder="مثال: مشرف المشروع، طالب دكتوراه..."
-        onkeydown="if(event.key==='Enter'){event.preventDefault();saveCompleteProfile();}">
-    </div>
+    <div class="alert" id="completeProfileAlert" style="display:none"></div>
+
     <div class="form-group">
       <label style="font-weight:700">📧 البريد الإلكتروني</label>
       <input type="text" class="form-input" id="cpEmail" disabled style="background:var(--bg-elevated);color:var(--text-muted)">
     </div>
-    <button class="btn btn-primary" style="width:100%; padding:14px; font-size:16px; margin-top:8px" onclick="saveCompleteProfile()">
+    <div class="form-group">
+      <label style="font-weight:700">👤 الاسم الكامل بالعربي <span style="color:#ef4444">*</span></label>
+      <input type="text" class="form-input" id="cpFullName" placeholder="مثال: محمد العمودي"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('cpJobTitle').focus();}">
+    </div>
+    <div class="form-group">
+      <label style="font-weight:700">💼 المسمى الوظيفي <span style="color:#ef4444">*</span></label>
+      <input type="text" class="form-input" id="cpJobTitle" placeholder="مثال: مشرف المشروع، طالب دكتوراه"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('cpPassword').focus();}">
+    </div>
+
+    <div style="background:var(--bg-elevated);border-radius:var(--radius);padding:16px;margin-bottom:16px;border:1px solid var(--border)">
+      <div style="font-weight:700;margin-bottom:12px;font-size:14px">🔐 إنشاء كلمة المرور</div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label style="font-weight:600;font-size:13px">كلمة المرور <span style="color:#ef4444">*</span></label>
+        <div style="position:relative">
+          <input type="password" class="form-input" id="cpPassword" placeholder="أدخل كلمة مرور قوية"
+            oninput="checkPasswordStrength(this.value)"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('cpPassword2').focus();}">
+          <button type="button" onclick="togglePasswordVisibility('cpPassword','eyeBtn1')" id="eyeBtn1"
+            style="position:absolute;left:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;color:var(--text-muted)">👁️</button>
+        </div>
+        <!-- Password strength bar -->
+        <div style="margin-top:8px">
+          <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+            <div id="strengthBar" style="height:100%;width:0%;border-radius:3px;transition:all 0.3s"></div>
+          </div>
+          <div id="strengthText" style="font-size:11px;margin-top:4px;color:var(--text-muted)"></div>
+        </div>
+        <!-- Requirements -->
+        <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:12px">
+          <div id="req_len" style="color:#9ca3af">○ 8 أحرف على الأقل</div>
+          <div id="req_upper" style="color:#9ca3af">○ حرف كبير (A-Z)</div>
+          <div id="req_lower" style="color:#9ca3af">○ حرف صغير (a-z)</div>
+          <div id="req_num" style="color:#9ca3af">○ رقم (0-9)</div>
+          <div id="req_sym" style="color:#9ca3af">○ رمز (!@#$...)</div>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label style="font-weight:600;font-size:13px">تأكيد كلمة المرور <span style="color:#ef4444">*</span></label>
+        <div style="position:relative">
+          <input type="password" class="form-input" id="cpPassword2" placeholder="أعد إدخال كلمة المرور"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();saveCompleteProfile();}">
+          <button type="button" onclick="togglePasswordVisibility('cpPassword2','eyeBtn2')" id="eyeBtn2"
+            style="position:absolute;left:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;color:var(--text-muted)">👁️</button>
+        </div>
+        <div id="passwordMatchMsg" style="font-size:12px;margin-top:4px"></div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="cpSaveBtn" style="width:100%;padding:14px;font-size:16px" onclick="saveCompleteProfile()">
       ✅ حفظ وبدء العمل
     </button>
   </div>
@@ -5085,19 +5126,113 @@ async function notifyProjectMembers(notifType, notifContent, excludeUserId) {
 // ============================================
 // COMPLETE PROFILE (After Invite Accept)
 // ============================================
+function showProfileAlert(msg, type = 'error') {
+  const alertDiv = document.getElementById('completeProfileAlert');
+  if (!alertDiv) return;
+  const bg = type === 'error' ? '#fee2e2' : '#d1fae5';
+  const color = type === 'error' ? '#991b1b' : '#065f46';
+  alertDiv.style.cssText = `display:block;background:${bg};color:${color};padding:10px 14px;border-radius:8px;margin-bottom:12px;font-weight:600;`;
+  alertDiv.textContent = msg;
+}
+
+function togglePasswordVisibility(inputId, btnId) {
+  const input = document.getElementById(inputId);
+  const btn = document.getElementById(btnId);
+  if (!input) return;
+  if (input.type === 'password') {
+    input.type = 'text';
+    if (btn) btn.textContent = '🙈';
+  } else {
+    input.type = 'password';
+    if (btn) btn.textContent = '👁️';
+  }
+}
+
+function checkPasswordStrength(pwd) {
+  const bar = document.getElementById('strengthBar');
+  const text = document.getElementById('strengthText');
+  
+  const hasLen = pwd.length >= 8;
+  const hasUpper = /[A-Z]/.test(pwd);
+  const hasLower = /[a-z]/.test(pwd);
+  const hasNum = /[0-9]/.test(pwd);
+  const hasSym = /[^A-Za-z0-9]/.test(pwd);
+  
+  // Update requirement indicators
+  const setReq = (id, ok) => {
+    const el = document.getElementById(id);
+    if (el) { el.style.color = ok ? '#22c55e' : '#9ca3af'; el.textContent = (ok ? '✅ ' : '○ ') + el.textContent.replace(/^[✅○] /, ''); }
+  };
+  setReq('req_len', hasLen);
+  setReq('req_upper', hasUpper);
+  setReq('req_lower', hasLower);
+  setReq('req_num', hasNum);
+  setReq('req_sym', hasSym);
+
+  // Calculate strength
+  const score = [hasLen, hasUpper, hasLower, hasNum, hasSym].filter(Boolean).length;
+  const levels = [
+    { pct: 0, color: '#e5e7eb', label: '' },
+    { pct: 20, color: '#ef4444', label: '🔴 ضعيفة جداً' },
+    { pct: 40, color: '#f97316', label: '🟠 ضعيفة' },
+    { pct: 60, color: '#eab308', label: '🟡 متوسطة' },
+    { pct: 80, color: '#22c55e', label: '🟢 جيدة' },
+    { pct: 100, color: '#16a34a', label: '💪 قوية جداً' },
+  ];
+  const level = levels[score] || levels[0];
+  if (bar) { bar.style.width = level.pct + '%'; bar.style.background = level.color; }
+  if (text) { text.textContent = level.label; text.style.color = level.color; }
+  
+  // Check password match in real time
+  const p2 = document.getElementById('cpPassword2');
+  if (p2?.value) checkPasswordMatch();
+}
+
+function checkPasswordMatch() {
+  const p1 = document.getElementById('cpPassword')?.value;
+  const p2 = document.getElementById('cpPassword2')?.value;
+  const msg = document.getElementById('passwordMatchMsg');
+  if (!msg || !p2) return;
+  if (p1 === p2) {
+    msg.style.color = '#22c55e';
+    msg.textContent = '✅ كلمتا المرور متطابقتان';
+  } else {
+    msg.style.color = '#ef4444';
+    msg.textContent = '❌ كلمتا المرور غير متطابقتين';
+  }
+}
+
+function validatePassword(pwd) {
+  const errors = [];
+  if (pwd.length < 8) errors.push('يجب أن تكون 8 أحرف على الأقل');
+  if (!/[A-Z]/.test(pwd)) errors.push('يجب أن تحتوي على حرف كبير (A-Z)');
+  if (!/[a-z]/.test(pwd)) errors.push('يجب أن تحتوي على حرف صغير (a-z)');
+  if (!/[0-9]/.test(pwd)) errors.push('يجب أن تحتوي على رقم');
+  if (!/[^A-Za-z0-9]/.test(pwd)) errors.push('يجب أن تحتوي على رمز مثل !@#$%');
+  return errors;
+}
+
 async function showCompleteProfileModal() {
-  // Pre-fill email
   const emailEl = document.getElementById('cpEmail');
   if (emailEl && currentUser?.email) emailEl.value = currentUser.email;
   
-  // Pre-fill existing name if any
   const nameEl = document.getElementById('cpFullName');
   if (nameEl && currentProfile?.full_name && currentProfile.full_name !== currentUser?.email?.split('@')[0]) {
     nameEl.value = currentProfile.full_name;
   }
-  
   const jobEl = document.getElementById('cpJobTitle');
   if (jobEl && currentProfile?.job_title) jobEl.value = currentProfile.job_title;
+  
+  // Reset password fields
+  const p1 = document.getElementById('cpPassword');
+  const p2 = document.getElementById('cpPassword2');
+  if (p1) p1.value = '';
+  if (p2) p2.value = '';
+  const alertDiv = document.getElementById('completeProfileAlert');
+  if (alertDiv) alertDiv.style.display = 'none';
+  
+  // Add realtime match check to confirm field
+  if (p2) p2.addEventListener('input', checkPasswordMatch);
   
   openModal('completeProfileModal');
   setTimeout(() => document.getElementById('cpFullName')?.focus(), 200);
@@ -5106,51 +5241,79 @@ async function showCompleteProfileModal() {
 async function saveCompleteProfile() {
   const fullName = document.getElementById('cpFullName')?.value.trim();
   const jobTitle = document.getElementById('cpJobTitle')?.value.trim();
-  const alertDiv = document.getElementById('completeProfileAlert');
-  
+  const password = document.getElementById('cpPassword')?.value;
+  const password2 = document.getElementById('cpPassword2')?.value;
+  const btn = document.getElementById('cpSaveBtn');
+
+  // Validate name
   if (!fullName) {
-    if (alertDiv) { alertDiv.style.cssText = 'display:block;background:#fee2e2;color:#991b1b;padding:10px 14px;border-radius:8px;margin-bottom:12px;'; alertDiv.textContent = '⚠️ يرجى إدخال الاسم الكامل'; }
+    showProfileAlert('⚠️ يرجى إدخال الاسم الكامل بالعربي');
     document.getElementById('cpFullName')?.focus();
     return;
   }
+  // Validate job title
   if (!jobTitle) {
-    if (alertDiv) { alertDiv.style.cssText = 'display:block;background:#fee2e2;color:#991b1b;padding:10px 14px;border-radius:8px;margin-bottom:12px;'; alertDiv.textContent = '⚠️ يرجى إدخال المسمى الوظيفي'; }
+    showProfileAlert('⚠️ يرجى إدخال المسمى الوظيفي');
     document.getElementById('cpJobTitle')?.focus();
     return;
   }
+  // Validate password
+  if (!password) {
+    showProfileAlert('⚠️ يرجى إدخال كلمة المرور');
+    document.getElementById('cpPassword')?.focus();
+    return;
+  }
+  
+  const pwdErrors = validatePassword(password);
+  if (pwdErrors.length > 0) {
+    showProfileAlert('⚠️ كلمة المرور غير مقبولة: ' + pwdErrors.join(' - '));
+    document.getElementById('cpPassword')?.focus();
+    return;
+  }
+  
+  // Validate password match (case sensitive)
+  if (password !== password2) {
+    showProfileAlert('⚠️ كلمتا المرور غير متطابقتين - كلمة المرور حساسة للحروف الكبيرة والصغيرة');
+    document.getElementById('cpPassword2')?.focus();
+    return;
+  }
 
-  const btn = document.querySelector('#completeProfileModal .btn-primary');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ جارٍ الحفظ...'; }
 
   try {
-    const { error } = await sb.from('profiles').update({
+    // 1. Update password in Supabase Auth (stored securely as bcrypt hash)
+    const { error: pwdErr } = await sb.auth.updateUser({ password });
+    if (pwdErr) {
+      showProfileAlert('❌ خطأ في حفظ كلمة المرور: ' + pwdErr.message);
+      if (btn) { btn.disabled = false; btn.textContent = '✅ حفظ وبدء العمل'; }
+      return;
+    }
+
+    // 2. Update profile data
+    const { error: profileErr } = await sb.from('profiles').update({
       full_name: fullName,
       job_title: jobTitle,
       profile_completed: true
     }).eq('id', currentUser.id);
 
-    if (error) {
-      if (alertDiv) { alertDiv.style.cssText = 'display:block;background:#fee2e2;color:#991b1b;padding:10px 14px;border-radius:8px;margin-bottom:12px;'; alertDiv.textContent = '❌ ' + error.message; }
+    if (profileErr) {
+      showProfileAlert('❌ خطأ في حفظ البيانات: ' + profileErr.message);
       if (btn) { btn.disabled = false; btn.textContent = '✅ حفظ وبدء العمل'; }
       return;
     }
 
-    // Update local profile
+    // 3. Update local state
     currentProfile.full_name = fullName;
     currentProfile.job_title = jobTitle;
     currentProfile.profile_completed = true;
-    
-    // Update sidebar name
     const nameEl = document.getElementById('userName');
     if (nameEl) nameEl.textContent = fullName;
 
     closeModal('completeProfileModal');
-    toast(`🎉 أهلاً ${fullName}! مرحباً بك في المنصة`);
-    
-    // Reload to show projects
+    toast(`🎉 أهلاً ${fullName}! بياناتك محفوظة. مرحباً بك في D-Ploy Camp!`);
+
+    // 4. Open pending project or home
     await loadProjects();
-    
-    // Check if there's a pending project to open
     const pendingProject = localStorage.getItem('pendingProjectOpen');
     if (pendingProject) {
       localStorage.removeItem('pendingProjectOpen');
@@ -5158,9 +5321,10 @@ async function saveCompleteProfile() {
     } else {
       await loadHome();
     }
-    
+
   } catch(e) {
-    if (alertDiv) { alertDiv.style.cssText = 'display:block;background:#fee2e2;color:#991b1b;padding:10px 14px;border-radius:8px;margin-bottom:12px;'; alertDiv.textContent = '❌ خطأ. حاول مرة أخرى.'; }
+    console.error('saveCompleteProfile error:', e);
+    showProfileAlert('❌ خطأ غير متوقع. حاول مرة أخرى.');
     if (btn) { btn.disabled = false; btn.textContent = '✅ حفظ وبدء العمل'; }
   }
 }
