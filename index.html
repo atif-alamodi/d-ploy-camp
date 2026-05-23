@@ -1796,12 +1796,12 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 
       <div class="form-group">
         <label data-i18n="email">البريد الإلكتروني</label>
-        <input type="email" class="form-input" id="loginEmail" placeholder="you@example.com">
+        <input type="email" class="form-input" id="loginEmail" placeholder="you@example.com" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('loginPassword').focus();}">
       </div>
 
       <div class="form-group">
         <label data-i18n="password">كلمة المرور</label>
-        <input type="password" class="form-input" id="loginPassword" placeholder="••••••••">
+        <input type="password" class="form-input" id="loginPassword" placeholder="••••••••" onkeydown="if(event.key==='Enter'){event.preventDefault();handleLogin();}">
       </div>
 
       <div class="forgot-link">
@@ -1825,7 +1825,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 
       <div class="form-group">
         <label data-i18n="email">البريد الإلكتروني</label>
-        <input type="email" class="form-input" id="forgotEmail" placeholder="you@example.com">
+        <input type="email" class="form-input" id="forgotEmail" onkeydown="if(event.key==='Enter'){event.preventDefault();handleForgot();}" placeholder="you@example.com">
       </div>
 
       <button class="btn btn-primary" onclick="handleForgot()" data-i18n="sendResetLink">إرسال رابط الإعادة</button>
@@ -1844,12 +1844,12 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 
       <div class="form-group">
         <label data-i18n="newPassword">كلمة المرور الجديدة (6+ أحرف)</label>
-        <input type="password" class="form-input" id="resetPassword" placeholder="••••••••">
+        <input type="password" class="form-input" id="resetPassword" placeholder="••••••••" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('resetPassword2').focus();}">
       </div>
 
       <div class="form-group">
         <label data-i18n="confirmPassword">تأكيد كلمة المرور</label>
-        <input type="password" class="form-input" id="resetPassword2" placeholder="••••••••">
+        <input type="password" class="form-input" id="resetPassword2" placeholder="••••••••" onkeydown="if(event.key==='Enter'){event.preventDefault();handleResetPassword();}">
       </div>
 
       <button class="btn btn-primary" onclick="handleResetPassword()" data-i18n="updatePassword">تحديث كلمة المرور</button>
@@ -1864,17 +1864,17 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 
       <div class="form-group">
         <label data-i18n="fullName">الاسم الكامل</label>
-        <input type="text" class="form-input" id="signupName" placeholder="عاطف المعمدي">
+        <input type="text" class="form-input" id="signupName" placeholder="عاطف المعمدي" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signupEmail').focus();}">
       </div>
 
       <div class="form-group">
         <label data-i18n="email">البريد الإلكتروني</label>
-        <input type="email" class="form-input" id="signupEmail" placeholder="you@example.com">
+        <input type="email" class="form-input" id="signupEmail" placeholder="you@example.com" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signupPassword').focus();}">
       </div>
 
       <div class="form-group">
         <label data-i18n="password">كلمة المرور (6+ أحرف)</label>
-        <input type="password" class="form-input" id="signupPassword" placeholder="••••••••">
+        <input type="password" class="form-input" id="signupPassword" placeholder="••••••••" onkeydown="if(event.key==='Enter'){event.preventDefault();handleSignup();}">
       </div>
 
       <button class="btn btn-primary" onclick="handleSignup()" data-i18n="createAccount">إنشاء الحساب</button>
@@ -2227,7 +2227,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 
     <div class="form-group">
       <label data-i18n="projName">اسم المشروع</label>
-      <input type="text" class="form-input" id="newProjName" placeholder="مشروع التخرج">
+      <input type="text" class="form-input" id="newProjName" placeholder="مشروع التخرج" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('newProjDesc').focus();}">
     </div>
 
     <div class="form-group">
@@ -2364,7 +2364,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
     <h3 class="modal-title" data-i18n="newListTitle">قائمة مهام جديدة</h3>
     <div class="form-group">
       <label data-i18n="listName">اسم القائمة</label>
-      <input type="text" class="form-input" id="newListName" placeholder="مهام الأسبوع">
+      <input type="text" class="form-input" id="newListName" placeholder="مهام الأسبوع" onkeydown="if(event.key==='Enter'){event.preventDefault();createTodoList();}">
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('newTodoListModal')" data-i18n="cancel">إلغاء</button>
@@ -2418,11 +2418,11 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
     <h3 class="modal-title" data-i18n="newMessageTitle">رسالة جديدة</h3>
     <div class="form-group">
       <label data-i18n="msgTitle">العنوان</label>
-      <input type="text" class="form-input" id="newMsgTitle">
+      <input type="text" class="form-input" id="newMsgTitle" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('newMsgContent').focus();}">
     </div>
     <div class="form-group">
       <label data-i18n="msgContent">المحتوى</label>
-      <textarea class="form-input" id="newMsgContent" style="min-height:140px"></textarea>
+      <textarea class="form-input" id="newMsgContent" onkeydown="if(event.key==='Enter'&&event.ctrlKey){event.preventDefault();createMessage();}" style="min-height:140px"></textarea>
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('newMessageModal')" data-i18n="cancel">إلغاء</button>
@@ -2437,7 +2437,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
     <h3 class="modal-title" data-i18n="newEventTitle">حدث جديد</h3>
     <div class="form-group">
       <label data-i18n="eventTitle">العنوان</label>
-      <input type="text" class="form-input" id="newEventTitle">
+      <input type="text" class="form-input" id="newEventTitle" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('newEventDate').focus();}">
     </div>
     <div class="form-group">
       <label data-i18n="eventDate">التاريخ</label>
@@ -2465,7 +2465,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
     <p class="modal-subtitle" data-i18n="newCheckinSub">سيظهر للأعضاء بشكل دوري ليجاوبوا عليه</p>
     <div class="form-group">
       <label data-i18n="question">السؤال</label>
-      <input type="text" class="form-input" id="newCheckinQ" placeholder="مثلاً: ما الذي عملت عليه هذا الأسبوع؟">
+      <input type="text" class="form-input" id="newCheckinQ" onkeydown="if(event.key==='Enter'){event.preventDefault();createCheckin();}" placeholder="مثلاً: ما الذي عملت عليه هذا الأسبوع؟">
     </div>
     <div class="form-group">
       <label data-i18n="frequency">التكرار</label>
@@ -2489,7 +2489,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
     <input type="hidden" id="respondQuestionId">
     <p id="respondQText" class="modal-subtitle"></p>
     <div class="form-group">
-      <textarea class="form-input" id="respondText" style="min-height:120px"></textarea>
+      <textarea class="form-input" id="respondText" onkeydown="if(event.key==='Enter'&&event.ctrlKey){event.preventDefault();submitCheckinResponse();}" style="min-height:120px"></textarea>
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('respondCheckinModal')" data-i18n="cancel">إلغاء</button>
