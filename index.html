@@ -4662,15 +4662,18 @@ async function loadAdminPanel() {
         <div class="todo-meta">${escapeHTML(u.email)} • ${timeAgo(u.created_at)}</div>
       </div>
       ${u.id !== currentUser.id ? `
-        <button class="btn btn-secondary" onclick="toggleGlobalMute('${u.id}', ${!u.is_muted})">
-          ${u.is_muted ? '🔊' : '🔇'}
-        </button>
-        ${!u.is_super_admin ? `
-          <button class="btn btn-secondary" onclick="toggleSuperAdmin('${u.id}', true)" title="${t('promoteToAdmin')}">👑</button>
-        ` : `
-          <button class="btn btn-warning" onclick="toggleSuperAdmin('${u.id}', false)" title="${t('demoteToMember')}">👤</button>
-        `}
-      ` : `<span class="role-pill admin">${t('you') || 'You'}</span>`}
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn btn-secondary" style="padding:8px 10px" title="${u.is_muted ? 'إلغاء الكتم' : 'كتم المستخدم'}" onclick="toggleGlobalMute('${u.id}', ${!u.is_muted})">
+            ${u.is_muted ? '🔊' : '🔇'}
+          </button>
+          ${!u.is_super_admin ? `
+            <button class="btn btn-secondary" style="padding:8px 10px" onclick="toggleSuperAdmin('${u.id}', true)" title="${t('promoteToAdmin')}">👑</button>
+          ` : `
+            <button class="btn btn-warning" style="padding:8px 10px" onclick="toggleSuperAdmin('${u.id}', false)" title="${t('demoteToMember')}">👤</button>
+          `}
+          <button class="btn btn-danger" style="padding:8px 10px" title="حذف المستخدم من المنصة" onclick="deleteUserFromPlatform('${u.id}', '${escapeHTML(u.full_name || u.email)}')">🗑️</button>
+        </div>
+      ` : `<span class="role-pill admin">${t('you') || 'أنت'}</span>`}
     </div>
   `).join('') || `<div class="empty-state"><div class="empty-icon">👥</div></div>`;
 }
@@ -4870,6 +4873,38 @@ async function adminDeleteProject(id, name) {
   if (error) { toast(error.message); return; }
   toast(t('projectDeleted'));
   await loadAdminPanel();
+}
+
+async function deleteUserFromPlatform(userId, userName) {
+  const msg = `⚠️ حذف المستخدم "${userName}" من المنصة نهائياً؟\n\nسيتم:\n• حذفه من جميع المشاريع\n• حذف بياناته الشخصية\n• لا يمكن التراجع عن هذا الإجراء!`;
+  if (!confirm(msg)) return;
+
+  try {
+    // 1. Remove from all project members
+    const { error: e1 } = await sb.from('project_members').delete().eq('user_id', userId);
+    if (e1) { toast('خطأ في حذف عضوية المشاريع: ' + e1.message); return; }
+
+    // 2. Delete their todos assignments (set to null)
+    await sb.from('todos').update({ assigned_to: null }).eq('assigned_to', userId);
+
+    // 3. Delete their campfire messages
+    await sb.from('campfire_messages').delete().eq('user_id', userId);
+
+    // 4. Delete their todo comments
+    await sb.from('todo_comments').delete().eq('user_id', userId);
+
+    // 5. Delete notifications
+    await sb.from('notifications').delete().eq('user_id', userId);
+
+    // 6. Delete their profile
+    const { error: e2 } = await sb.from('profiles').delete().eq('id', userId);
+    if (e2) { toast('خطأ في حذف الملف الشخصي: ' + e2.message); return; }
+
+    toast('✅ تم حذف المستخدم "' + userName + '" من المنصة نهائياً');
+    await loadAdminPanel();
+  } catch (err) {
+    toast('خطأ: ' + err.message);
+  }
 }
 
 async function toggleGlobalMute(userId, mute) {
