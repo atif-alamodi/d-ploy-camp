@@ -2205,7 +2205,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
             <span>الفرق وقادة الفرق</span>
             <span id="teamsCount" style="background:#6c4ef5;color:white;padding:2px 8px;border-radius:12px;font-size:12px;margin-right:8px">0</span>
           </h3>
-          <button class="btn btn-primary" onclick="openModal('newTeamModal')">➕ فريق جديد</button>
+          <button class="btn btn-primary" onclick="openNewTeamModal()">➕ فريق جديد</button>
         </div>
         <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:12px;margin-bottom:14px;font-size:13px;line-height:1.7">
           <strong>💡 كيف تعمل الفرق:</strong><br>
@@ -5737,6 +5737,16 @@ async function loadTeams() {
   }).join('');
 }
 
+async function openNewTeamModal() {
+  // Refresh leader dropdown every time
+  await populateTeamLeaderDropdown();
+  document.getElementById('teamName').value = '';
+  document.getElementById('teamDesc').value = '';
+  document.getElementById('teamLeader').value = '';
+  openModal('newTeamModal');
+  setTimeout(() => document.getElementById('teamName')?.focus(), 200);
+}
+
 async function createTeam() {
   const name = document.getElementById('teamName').value.trim();
   const leaderId = document.getElementById('teamLeader').value;
@@ -5771,19 +5781,30 @@ async function openManageTeam(teamId, teamName, leaderName) {
   document.getElementById('manageTeamTitle').textContent = '⚙️ إدارة فريق: ' + teamName;
   document.getElementById('manageTeamLeaderName').textContent = leaderName;
   
-  // Load all profiles for dropdown (excluding team leaders/members)
-  const { data: allUsers } = await sb.from('profiles').select('*').order('full_name');
+  // Load all ACTIVE profiles for dropdown
+  const { data: allUsers } = await sb.from('profiles')
+    .select('*')
+    .or('status.eq.active,status.is.null')
+    .order('full_name');
   const { data: currentMembers } = await sb.from('team_members')
     .select('user_id, profile:user_id(full_name, email, is_muted, platform_role)')
     .eq('team_id', teamId);
   
   const memberIds = new Set((currentMembers || []).map(m => m.user_id));
   
-  // Populate dropdown with users NOT in this team
+  // Populate dropdown with users NOT already in this team (admin can include themselves)
   const dd = document.getElementById('addTeamMemberSelect');
-  const candidates = (allUsers || []).filter(u => !memberIds.has(u.id) && u.id !== currentUser.id);
-  dd.innerHTML = '<option value="">— اختر عضواً —</option>' + 
-    candidates.map(u => `<option value="${u.id}">${escapeHTML(u.full_name || u.email)}</option>`).join('');
+  const candidates = (allUsers || []).filter(u => !memberIds.has(u.id));
+  if (candidates.length === 0) {
+    dd.innerHTML = '<option value="">جميع الأعضاء النشطين في الفريق بالفعل</option>';
+  } else {
+    dd.innerHTML = '<option value="">— اختر عضواً —</option>' + 
+      candidates.map(u => {
+        const role = u.platform_role === 'super_admin' ? ' 👑' : (u.platform_role === 'team_leader' ? ' ⭐' : '');
+        const me = u.id === currentUser.id ? ' (أنت)' : '';
+        return `<option value="${u.id}">${escapeHTML(u.full_name || u.email)}${role}${me}</option>`;
+      }).join('');
+  }
   
   // Show current members
   const listDiv = document.getElementById('currentTeamMembersList');
@@ -5855,26 +5876,56 @@ async function removeFromTeam(teamId, userId, userName) {
 }
 
 async function changeTeamLeader(teamId, teamName) {
+  // Open a small modal-like dialog using a dropdown
   const { data: users } = await sb.from('profiles')
-    .select('id, full_name, email')
-    .neq('status', 'pending_approval')
+    .select('id, full_name, email, platform_role')
+    .or('status.eq.active,status.is.null')
     .order('full_name');
   
-  let options = (users || []).map(u => `${u.full_name || u.email} (${u.email})`).join('\n');
-  const choice = prompt(`اختر القائد الجديد لـ "${teamName}":\n\n${options}\n\nاكتب البريد الإلكتروني الكامل للقائد الجديد:`);
-  if (!choice) return;
+  if (!users || users.length === 0) { toast('❌ لا يوجد أعضاء نشطون'); return; }
   
-  const newLeader = (users || []).find(u => u.email.toLowerCase() === choice.trim().toLowerCase());
-  if (!newLeader) { toast('❌ المستخدم غير موجود'); return; }
+  // Build options HTML
+  const options = users.map(u => {
+    const role = u.platform_role === 'super_admin' ? ' 👑' : (u.platform_role === 'team_leader' ? ' ⭐' : '');
+    return `<option value="${u.id}">${escapeHTML(u.full_name || u.email)}${role}</option>`;
+  }).join('');
   
-  const { error } = await sb.from('teams').update({ leader_id: newLeader.id }).eq('id', teamId);
+  // Create temporary modal
+  const modal = document.createElement('div');
+  modal.className = 'modal-bg show';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:440px">
+      <h3 class="modal-title">🔄 تغيير قائد الفريق</h3>
+      <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px">الفريق: <strong>${escapeHTML(teamName)}</strong></p>
+      <div class="form-group">
+        <label>القائد الجديد</label>
+        <select class="form-input" id="changeLeaderSelect">
+          <option value="">— اختر القائد الجديد —</option>
+          ${options}
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="this.closest('.modal-bg').remove()">إلغاء</button>
+        <button class="btn btn-primary" onclick="confirmChangeLeader('${teamId}', this.closest('.modal-bg'))">💾 حفظ</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+async function confirmChangeLeader(teamId, modalEl) {
+  const newLeaderId = document.getElementById('changeLeaderSelect').value;
+  if (!newLeaderId) { toast('⚠️ اختر قائداً'); return; }
+  
+  const { error } = await sb.from('teams').update({ leader_id: newLeaderId }).eq('id', teamId);
   if (error) { toast('❌ ' + error.message); return; }
   
-  // Ensure new leader is also a team member
+  // Ensure new leader is also a member
   await sb.from('team_members').insert({
-    team_id: teamId, user_id: newLeader.id, added_by: currentUser.id
+    team_id: teamId, user_id: newLeaderId, added_by: currentUser.id
   }).then(() => {}).catch(() => {});
   
+  if (modalEl) modalEl.remove();
   toast('✅ تم تغيير قائد الفريق');
   await loadAdminPanel();
 }
@@ -5888,17 +5939,26 @@ async function deleteTeam(teamId, teamName) {
 }
 
 async function populateTeamLeaderDropdown() {
+  // Include both active users AND users without status set (legacy)
   const { data: users } = await sb.from('profiles')
-    .select('id, full_name, email, platform_role')
-    .eq('status', 'active')
+    .select('id, full_name, email, platform_role, status')
+    .or('status.eq.active,status.is.null')
     .order('full_name');
   
   const dd = document.getElementById('teamLeader');
   if (!dd) return;
+  
+  const candidates = (users || []);
+  if (candidates.length === 0) {
+    dd.innerHTML = '<option value="">لا يوجد أعضاء نشطون</option>';
+    return;
+  }
+  
   dd.innerHTML = '<option value="">— اختر قائد الفريق —</option>' +
-    (users || []).map(u => {
-      const label = (u.full_name || u.email) + (u.platform_role === 'team_leader' ? ' ⭐' : '') + (u.platform_role === 'super_admin' ? ' 👑' : '');
-      return `<option value="${u.id}">${escapeHTML(label)}</option>`;
+    candidates.map(u => {
+      const role = u.platform_role === 'super_admin' ? ' 👑' : (u.platform_role === 'team_leader' ? ' ⭐' : '');
+      const me = u.id === currentUser.id ? ' (أنت)' : '';
+      return `<option value="${u.id}">${escapeHTML(u.full_name || u.email)}${role}${me}</option>`;
     }).join('');
 }
 
