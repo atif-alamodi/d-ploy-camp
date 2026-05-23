@@ -3931,7 +3931,10 @@ async function renderMembers(container) {
             <div class="member-role">${escapeHTML(m.profile?.email || '')}</div>
             <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap">${badges}</div>
           </div>
-          ${canManageThis ? `<button class="btn btn-secondary" onclick='openManageMember(${JSON.stringify(m).replace(/'/g, "&apos;")})'>⚙️ ${t('manageMember')}</button>` : ''}
+          <div style="display:flex; gap:6px; align-items:center">
+            ${canManageThis ? `<button class="btn btn-secondary" onclick='openManageMember(${JSON.stringify(m).replace(/'/g, "&apos;")})'>⚙️ ${t('manageMember')}</button>` : ''}
+            ${canRemove && !isMe && !isOwnerMember ? `<button class="btn btn-danger" onclick="removeProjectMember('${m.id}', '${escapeHTML(m.profile?.full_name || '')}')" title="${currentLang === 'ar' ? 'حذف العضو' : 'Remove member'}" style="padding:8px 10px">🗑️</button>` : ''}
+          </div>
         </div>
       </div>
     `;
@@ -4106,6 +4109,25 @@ async function removeMember() {
   if (error) { toast(error.message); return; }
   toast(t('memberRemoved'));
   closeModal('manageMemberModal');
+  await loadProjectTab('members');
+  await loadProjectCounts();
+}
+
+async function removeProjectMember(memberId, memberName) {
+  const msg = currentLang === 'ar'
+    ? `هل تريد حذف "${memberName}" من المشروع؟ لن يتمكن من الوصول إلى بيانات المشروع.`
+    : `Remove "${memberName}" from this project? They will lose access to project data.`;
+  
+  if (!confirm(msg)) return;
+
+  const { error } = await sb.from('project_members').delete().eq('id', memberId);
+  if (error) {
+    toast((currentLang === 'ar' ? 'خطأ: ' : 'Error: ') + error.message);
+    return;
+  }
+
+  toast(currentLang === 'ar' ? '✅ تم حذف العضو' : '✅ Member removed');
+  await logActivity('حذف عضو من المشروع', 'member', memberName);
   await loadProjectTab('members');
   await loadProjectCounts();
 }
