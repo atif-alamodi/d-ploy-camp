@@ -2271,20 +2271,30 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
     <input type="hidden" id="todoListId">
     <div class="form-group">
       <label data-i18n="todoTitle">عنوان المهمة</label>
-      <input type="text" class="form-input" id="newTodoTitle">
+      <input type="text" class="form-input" id="newTodoTitle" onkeydown="if(event.key==='Enter')createTodo()">
     </div>
     <div class="form-group">
-      <label data-i18n="dueDate">تاريخ الاستحقاق (اختياري)</label>
+      <label>👤 تعيين إلى</label>
+      <select class="form-input" id="newTodoAssignee">
+        <option value="">— غير معيّن —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label data-i18n="dueDate">📅 تاريخ الاستحقاق (اختياري)</label>
       <input type="date" class="form-input" id="newTodoDue">
     </div>
     <div class="form-group">
-      <label data-i18n="priority">الأولوية</label>
+      <label data-i18n="priority">🚦 الأولوية</label>
       <select class="form-input" id="newTodoPriority">
         <option value="low" data-i18n="low">منخفضة</option>
         <option value="normal" selected data-i18n="normal">عادية</option>
         <option value="high" data-i18n="high">عالية</option>
         <option value="urgent" data-i18n="urgent">عاجلة</option>
       </select>
+    </div>
+    <div class="form-group">
+      <label>📝 وصف (اختياري)</label>
+      <textarea class="form-input" id="newTodoDesc" rows="2" style="resize:vertical" placeholder="تفاصيل إضافية..."></textarea>
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('newTodoModal')" data-i18n="cancel">إلغاء</button>
@@ -3451,11 +3461,26 @@ async function createTodoList() {
   await loadProjectCounts();
 }
 
-function showNewTodoModal(listId) {
+async function showNewTodoModal(listId) {
   document.getElementById('todoListId').value = listId;
   document.getElementById('newTodoTitle').value = '';
   document.getElementById('newTodoDue').value = '';
   document.getElementById('newTodoPriority').value = 'normal';
+  document.getElementById('newTodoDesc').value = '';
+  // Load project members into assignee dropdown
+  const { data: members } = await sb.from('project_members')
+    .select('user_id, profile:user_id(full_name, email)')
+    .eq('project_id', activeProject.id);
+  const sel = document.getElementById('newTodoAssignee');
+  sel.innerHTML = '<option value="">— غير معيّن —</option>';
+  (members || []).forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.user_id;
+    opt.textContent = m.profile?.full_name || m.profile?.email || m.user_id;
+    if (m.user_id === currentUser.id) opt.textContent += ' (أنا)';
+    sel.appendChild(opt);
+  });
+  sel.value = currentUser.id;
   openModal('newTodoModal');
 }
 
@@ -3464,10 +3489,14 @@ async function createTodo() {
   const title = document.getElementById('newTodoTitle').value.trim();
   const due = document.getElementById('newTodoDue').value;
   const priority = document.getElementById('newTodoPriority').value;
-  if (!title) return;
+  const assignee = document.getElementById('newTodoAssignee').value;
+  const desc = document.getElementById('newTodoDesc').value.trim();
+  if (!title) { document.getElementById('newTodoTitle').focus(); return; }
   await sb.from('todos').insert({
     list_id: listId, project_id: activeProject.id, title,
-    due_date: due || null, priority, created_by: currentUser.id, assigned_to: currentUser.id
+    description: desc || null,
+    due_date: due || null, priority, created_by: currentUser.id,
+    assigned_to: assignee || currentUser.id
   });
   closeModal('newTodoModal');
   toast(currentLang === 'ar' ? 'تمت الإضافة' : 'Added');
