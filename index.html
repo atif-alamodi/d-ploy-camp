@@ -3452,22 +3452,14 @@ async function onAuthSuccess(user) {
 // PROJECTS
 // ============================================
 async function loadProjects() {
-  let projects = [];
-
-  if (currentProfile?.is_super_admin) {
-    const { data, error } = await sb.from('projects').select('*').eq('archived', false).order('created_at', { ascending: false });
-    if (error) { console.error('loadProjects super admin error:', error); }
-    else projects = data || [];
-  } else {
-    const { data: memberships, error: e1 } = await sb
-      .from('project_members')
-      .select('project_id, projects(*)')
-      .eq('user_id', currentUser.id);
-    if (e1) { console.error('loadProjects member error:', e1); return; }
-    projects = (memberships || []).map(m => m.projects).filter(p => p && !p.archived);
+  // ALL authenticated users see ALL projects (new behavior)
+  const { data, error } = await sb.from('projects').select('*').eq('archived', false).order('created_at', { ascending: false });
+  if (error) {
+    console.error('loadProjects error:', error);
+    currentProjects = [];
+    return;
   }
-
-  currentProjects = projects;
+  currentProjects = data || [];
 
   // Render sidebar
   const listEl = document.getElementById('projectsList');
@@ -4854,45 +4846,33 @@ async function cancelInvite(id) {
 }
 
 async function acceptInvitationToken(token) {
-  // Look up invitation by token (no expiry check - unlimited)
+  // Look up invitation - check ALL statuses (don't fail if accepted)
   const { data: invite, error } = await sb
     .from('invitations').select('*, project:project_id(name, icon)')
     .eq('token', token)
-    .neq('status', 'accepted')
-    .single();
+    .maybeSingle();
 
-  if (error || !invite) {
-    // Token already used or not found - just continue normally
-    toast(currentLang === 'ar' ? 'الدعوة مستخدمة أو غير صالحة' : 'Invite already used or invalid');
-    return;
-  }
-
-  // Check if already a member
-  if (invite.project_id) {
-    const { data: existing } = await sb.from('project_members')
-      .select('id').eq('project_id', invite.project_id).eq('user_id', currentUser.id).single();
-
-    if (!existing) {
-      // Add as member
-      const { error: e2 } = await sb.from('project_members').insert({
+  // Always proceed - user is logged in successfully
+  // The new RLS makes them see all projects automatically anyway
+  
+  if (invite && invite.project_id) {
+    // Try to add as member (will skip if already member via ON CONFLICT)
+    try {
+      await sb.from('project_members').insert({
         project_id: invite.project_id,
         user_id: currentUser.id,
         role: 'member'
       });
-      if (e2 && !e2.message.includes('duplicate')) {
-        toast(currentLang === 'ar' ? 'خطأ في الانضمام: ' + e2.message : 'Error joining: ' + e2.message);
-        return;
-      }
-    }
+    } catch(e) { /* already member */ }
+    
+    // Mark accepted (silent)
+    sb.from('invitations').update({
+      status: 'accepted',
+      accepted_at: new Date().toISOString()
+    }).eq('id', invite.id).then(() => {}).catch(() => {});
   }
 
-  // Mark as accepted
-  await sb.from('invitations').update({
-    status: 'accepted',
-    accepted_at: new Date().toISOString()
-  }).eq('id', invite.id);
-
-  const projName = invite.project?.name ? `${invite.project.icon || '📁'} ${invite.project.name}` : 'D-Ploy Camp';
+  const projName = invite?.project?.name ? `${invite.project.icon || '📁'} ${invite.project.name}` : 'D-Ploy Camp';
 
   await loadProjects();
   
@@ -4901,15 +4881,14 @@ async function acceptInvitationToken(token) {
   
   if (!freshProfile?.profile_completed || !freshProfile?.job_title) {
     // Show complete profile modal first
-    if (invite.project_id) {
-      // Store project to open after profile completion
+    if (invite?.project_id) {
       localStorage.setItem('pendingProjectOpen', invite.project_id);
     }
     await showCompleteProfileModal();
-    toast(currentLang === 'ar' ? `🎉 تمت إضافتك إلى ${projName}` : `🎉 You joined ${projName}`);
+    toast(currentLang === 'ar' ? `🎉 مرحباً بك في D-Ploy Camp!` : `🎉 Welcome to D-Ploy Camp!`);
   } else {
     toast(currentLang === 'ar' ? `🎉 مرحباً! تمت إضافتك إلى ${projName}` : `🎉 Welcome! You joined ${projName}`);
-    if (invite.project_id) {
+    if (invite?.project_id) {
       await openProject(invite.project_id);
     } else {
       await loadHome();
@@ -6129,6 +6108,77 @@ async function loadTodoComments(todoId) {
   return comments || [];
 }
 
+
+async function addTodoCommentWithAttachments(todoId, projectId, content, attachments) {
+  if (!content.trim() && (!attachments || attachments.length === 0)) return;
+  try {
+    await sb.from('todo_comments').insert({
+      todo_id: todoId, project_id: projectId,
+      user_id: currentUser.id, content: content.trim() || '📎 مرفق',
+      attachments: attachments || []
+    });
+    await logActivity('علّق على مهمة', 'todo', content.substring(0, 30));
+    // Reload comments display
+    const comments = await loadTodoComments(todoId);
+    const box = document.getElementById('todoCommentsBox');
+    if (box) {
+      box.innerHTML = comments.map(c => renderCommentHTML(c)).join('') || '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px">لا توجد تعليقات بعد</div>';
+      box.scrollTop = box.scrollHeight;
+    }
+    // Clear preview
+    const preview = document.getElementById('commentAttachPreview_' + todoId);
+    if (preview) preview.innerHTML = '';
+  } catch(e) {
+    toast('خطأ: ' + e.message);
+  }
+}
+
+function renderCommentHTML(c) {
+  const atts = c.attachments || [];
+  const attHTML = atts.length > 0 ? `
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
+      ${atts.map(a => `
+        <a href="${escapeHTML(a.url)}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:white;border:1px solid var(--border);border-radius:6px;font-size:11px;text-decoration:none;color:var(--primary)">
+          ${getFileIcon(a.type, a.name)} ${escapeHTML(a.name)}
+        </a>
+      `).join('')}
+    </div>` : '';
+  return `
+    <div class="todo-comment">
+      <div class="avatar" style="width:28px;height:28px;font-size:12px;flex-shrink:0">${(c.profile?.full_name||'?').charAt(0)}</div>
+      <div class="todo-comment-bubble">
+        <div style="font-weight:600;font-size:11px;color:var(--primary);margin-bottom:4px">${escapeHTML(c.profile?.full_name||'مستخدم')}</div>
+        <div>${escapeHTML(c.content)}</div>
+        ${attHTML}
+        <div style="font-size:10px;color:var(--text-muted);margin-top:4px">${timeAgo(c.created_at)}</div>
+      </div>
+    </div>
+  `;
+}
+
+async function uploadCommentAttachment(todoId, event) {
+  const files = Array.from(event.target.files || []);
+  if (!files.length) return;
+  const preview = document.getElementById('commentAttachPreview_' + todoId);
+  window._pendingCommentAttachments = window._pendingCommentAttachments || {};
+  window._pendingCommentAttachments[todoId] = window._pendingCommentAttachments[todoId] || [];
+
+  for (const file of files) {
+    try {
+      const path = `comments/${todoId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const { error } = await sb.storage.from('project-files').upload(path, file);
+      if (error) { toast('❌ ' + file.name + ': ' + error.message); continue; }
+      const { data: urlData } = sb.storage.from('project-files').getPublicUrl(path);
+      const att = { name: file.name, url: urlData.publicUrl, path, size: file.size, type: file.type };
+      window._pendingCommentAttachments[todoId].push(att);
+      if (preview) {
+        preview.innerHTML += `<div style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:var(--bg-elevated);border-radius:6px;font-size:11px;margin-right:4px">${getFileIcon(file.type, file.name)} ${escapeHTML(file.name)}</div>`;
+      }
+    } catch(e) { toast('❌ ' + e.message); }
+  }
+  event.target.value = '';
+}
+
 async function addTodoComment(todoId, projectId, content) {
   if (!content.trim()) return;
   await sb.from('todo_comments').insert({
@@ -6179,16 +6229,7 @@ async function showTodoDetail(todoId) {
       <div id="todoCommentsBox" style="max-height:200px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; margin-bottom:12px">
         ${comments.length === 0
           ? '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px">لا توجد تعليقات بعد</div>'
-          : comments.map(c => `
-            <div class="todo-comment">
-              <div class="avatar" style="width:28px;height:28px;font-size:12px;flex-shrink:0">${(c.profile?.full_name||'?').charAt(0)}</div>
-              <div class="todo-comment-bubble">
-                <div style="font-weight:600;font-size:11px;color:var(--primary);margin-bottom:4px">${escapeHTML(c.profile?.full_name||'مستخدم')}</div>
-                <div>${escapeHTML(c.content)}</div>
-                <div style="font-size:10px;color:var(--text-muted);margin-top:4px">${timeAgo(c.created_at)}</div>
-              </div>
-            </div>
-          `).join('')}
+          : comments.map(c => renderCommentHTML(c)).join('')}
       </div>
       <!-- File drop zone -->
       <div id="todoDropZone_${todoId}" 
@@ -6201,9 +6242,14 @@ async function showTodoDetail(todoId) {
         <input type="file" id="todoFileInput_${todoId}" multiple accept="*/*" style="display:none" onchange="handleTodoFileInput(event,'${todoId}')">
       </div>
       <div id="todoAttachments_${todoId}" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+      <div id="commentAttachPreview_${todoId}" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px"></div>
       <div class="todo-comment-input-row">
         <input class="todo-comment-input" id="todoCommentInput" placeholder="أضف تعليقاً..." 
           onkeydown="if(event.key==='Enter'){submitTodoComment('${todoId}','${activeProject.id}')}">
+        <label class="btn btn-secondary" style="padding:7px 10px;cursor:pointer;font-size:12px" title="إرفاق ملف">
+          📎
+          <input type="file" multiple accept="*/*" style="display:none" onchange="uploadCommentAttachment('${todoId}', event)">
+        </label>
         <button class="btn btn-primary" style="padding:7px 14px; font-size:12px" onclick="submitTodoComment('${todoId}','${activeProject.id}')">إرسال</button>
       </div>
     </div>
@@ -6220,9 +6266,13 @@ async function showTodoDetail(todoId) {
 async function submitTodoComment(todoId, projectId) {
   const input = document.getElementById('todoCommentInput');
   if (!input || !input.value.trim()) return;
-  const content = input.value.trim();
+  const commentText = input.value.trim();
   input.value = '';
-  await addTodoComment(todoId, projectId, content);
+  // Get any pending attachments
+  const pendingAtt = window._pendingCommentAttachments?.[todoId] || [];
+  window._pendingCommentAttachments = window._pendingCommentAttachments || {};
+  window._pendingCommentAttachments[todoId] = [];
+  await addTodoCommentWithAttachments(todoId, projectId, commentText, pendingAtt);
   // Reload comments
   const comments = await loadTodoComments(todoId);
   const box = document.getElementById('todoCommentsBox');
