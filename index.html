@@ -1643,6 +1643,50 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
   margin-top: 4px;
 }
 
+/* === Mobile Responsive === */
+@media (max-width: 768px) {
+  .sidebar { width: 280px !important; transform: translateX(100%); transition: transform 0.3s ease; }
+  .sidebar.open { transform: translateX(0) !important; }
+  .app-layout { flex-direction: column; }
+  .main-content { padding: 12px !important; }
+  .tool-cards-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
+  .modal { margin: 16px !important; max-height: calc(100vh - 32px) !important; }
+  .hero-card { padding: 24px 16px !important; }
+  .hero-stats { gap: 12px !important; }
+  .campfire-wrap { height: calc(100vh - 280px) !important; }
+  .section-header { flex-wrap: wrap !important; gap: 8px !important; }
+  .member-card-full { padding: 12px !important; }
+  .notif-dropdown { right: 8px !important; left: 8px !important; width: auto !important; }
+  .project-header { flex-direction: column !important; gap: 8px !important; }
+  .header-actions { flex-wrap: wrap !important; }
+}
+
+/* === @mention dropdown === */
+.mention-dropdown {
+  position: absolute;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  z-index: 9999;
+  min-width: 200px;
+  max-height: 200px;
+  overflow-y: auto;
+  bottom: 56px;
+  right: 0;
+}
+.mention-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.15s;
+}
+.mention-item:hover, .mention-item.active { background: var(--primary-light); }
+.mention-name { font-weight: 600; color: var(--primary); }
+
 /* === Campfire Chat === */
 .campfire-wrap { display:flex; flex-direction:column; height:calc(100vh - 350px); min-height:400px; }
 .campfire-messages { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; background:var(--bg-elevated); border-radius:var(--radius-lg); margin-bottom:12px; border:1px solid var(--border); }
@@ -3250,10 +3294,12 @@ async function onAuthSuccess(user) {
     await acceptInvitationToken(invToken);
   }
 
+  // Always load projects first
+  await loadProjects();
+  
   // Try to restore previous navigation state
   const restored = await restoreNavState();
   if (!restored) {
-    await loadProjects();
     await loadHome();
   }
 }
@@ -3265,16 +3311,15 @@ async function loadProjects() {
   let projects = [];
 
   if (currentProfile?.is_super_admin) {
-    // Super admin sees all projects
     const { data, error } = await sb.from('projects').select('*').eq('archived', false).order('created_at', { ascending: false });
-    if (!error) projects = data || [];
+    if (error) { console.error('loadProjects super admin error:', error); }
+    else projects = data || [];
   } else {
-    // Regular user: get projects where they are member
     const { data: memberships, error: e1 } = await sb
       .from('project_members')
       .select('project_id, projects(*)')
       .eq('user_id', currentUser.id);
-    if (e1) { console.error(e1); return; }
+    if (e1) { console.error('loadProjects member error:', e1); return; }
     projects = (memberships || []).map(m => m.projects).filter(p => p && !p.archived);
   }
 
@@ -3691,6 +3736,7 @@ async function createMessage() {
   closeModal('newMessageModal');
   toast(currentLang === 'ar' ? '✅ تم النشر' : '✅ Posted');
   logActivity('نشر رسالة', 'message', title);
+  notifyProjectMembers('message', `${title}: ${content.substring(0,80)}`);
   await loadProjectTab('messages');
   await loadProjectCounts();
 }
@@ -4729,9 +4775,6 @@ async function restoreNavState() {
     // Only restore if less than 2 hours old
     if (Date.now() - state.ts > 7200000) { localStorage.removeItem('dpNavState'); return false; }
 
-    // Always load projects first
-    await loadProjects();
-
     if (state.page === 'project' && state.projectId) {
       // Verify project still exists
       const exists = currentProjects.find(p => p.id === state.projectId);
@@ -4874,6 +4917,51 @@ async function loadAdminPanel() {
       ` : `<span class="role-pill admin">${t('you') || 'أنت'}</span>`}
     </div>
   `).join('') || `<div class="empty-state"><div class="empty-icon">👥</div></div>`;
+}
+
+
+// ============================================
+// EMAIL NOTIFICATIONS
+// ============================================
+async function sendNotificationEmail(type, targetUserId, content, projectId, projectName) {
+  if (!targetUserId || targetUserId === currentUser.id) return;
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const senderName = currentProfile?.full_name || currentProfile?.email || 'أحد الأعضاء';
+    await fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, targetUserId, senderName, projectName: projectName || activeProject?.name, content, projectId: projectId || activeProject?.id })
+    });
+  } catch(e) { console.error('sendNotificationEmail:', e); }
+}
+
+async function sendMentionEmail(targetUserId, senderName, msgContent, projectName) {
+  if (!targetUserId || targetUserId === currentUser.id) return;
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    await fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'mention', targetUserId, senderName, projectName, content: msgContent, projectId: activeProject?.id })
+    });
+  } catch(e) {}
+}
+
+async function notifyProjectMembers(type, content, excludeUserId) {
+  if (!activeProject?.id) return;
+  const { data: members } = await sb.from('project_members').select('user_id').eq('project_id', activeProject.id);
+  const senderName = currentProfile?.full_name || 'أحد الأعضاء';
+  for (const m of (members || [])) {
+    if (m.user_id === (excludeUserId || currentUser.id)) continue;
+    // In-app notification
+    sb.from('notifications').insert({
+      user_id: m.user_id, project_id: activeProject.id,
+      type, title: `تحديث في ${activeProject.name}`, body: content.substring(0, 100)
+    }).then(() => {}).catch(() => {});
+    // Email notification (non-blocking)
+    sendNotificationEmail('project_update', m.user_id, content, activeProject.id, activeProject.name);
+  }
 }
 
 // ============================================
@@ -5258,12 +5346,96 @@ async function deleteTodoAttachment(todoId, index) {
   toast('🗑️ تم حذف المرفق');
 }
 
+
+// ============================================
+// @MENTION SYSTEM
+// ============================================
+let mentionMembers = [];
+let mentionActive = false;
+let mentionQuery = '';
+let mentionIndex = 0;
+
+async function loadMentionMembers() {
+  const { data } = await sb.from('project_members')
+    .select('user_id, profile:user_id(full_name, email)')
+    .eq('project_id', activeProject.id);
+  mentionMembers = (data || []).map(m => ({
+    id: m.user_id,
+    name: m.profile?.full_name || m.profile?.email || 'مستخدم',
+    email: m.profile?.email
+  }));
+}
+
+function handleCampfireKey(event) {
+  const dd = document.getElementById('mentionDropdown');
+  if (mentionActive && dd.style.display !== 'none') {
+    const items = dd.querySelectorAll('.mention-item');
+    if (event.key === 'ArrowDown') { event.preventDefault(); mentionIndex = Math.min(mentionIndex+1, items.length-1); items.forEach((el,i) => el.classList.toggle('active', i===mentionIndex)); return; }
+    if (event.key === 'ArrowUp') { event.preventDefault(); mentionIndex = Math.max(mentionIndex-1, 0); items.forEach((el,i) => el.classList.toggle('active', i===mentionIndex)); return; }
+    if (event.key === 'Enter' && items.length > 0) { event.preventDefault(); items[mentionIndex]?.click(); return; }
+    if (event.key === 'Escape') { closeMentionDropdown(); return; }
+  }
+  if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendCampfireMsg(); }
+}
+
+function handleCampfireInput(event) {
+  const input = event.target;
+  const val = input.value;
+  const cursor = input.selectionStart;
+  const before = val.substring(0, cursor);
+  const match = before.match(/@(\w*)$/);
+
+  if (match) {
+    mentionActive = true;
+    mentionQuery = match[1].toLowerCase();
+    mentionIndex = 0;
+    const filtered = mentionMembers.filter(m => m.name.toLowerCase().includes(mentionQuery) || m.email?.toLowerCase().includes(mentionQuery));
+    showMentionDropdown(filtered);
+  } else {
+    closeMentionDropdown();
+  }
+}
+
+function showMentionDropdown(members) {
+  const dd = document.getElementById('mentionDropdown');
+  if (!members.length) { closeMentionDropdown(); return; }
+  dd.style.display = 'block';
+  dd.innerHTML = members.map((m, i) => `
+    <div class="mention-item ${i===0?'active':''}" onclick="insertMention('${m.id}','${escapeHTML(m.name)}')">
+      <div class="avatar" style="width:28px;height:28px;font-size:11px;flex-shrink:0">${m.name.charAt(0).toUpperCase()}</div>
+      <span class="mention-name">@${escapeHTML(m.name)}</span>
+    </div>
+  `).join('');
+}
+
+function closeMentionDropdown() {
+  mentionActive = false;
+  const dd = document.getElementById('mentionDropdown');
+  if (dd) dd.style.display = 'none';
+}
+
+function insertMention(userId, name) {
+  const input = document.getElementById('campfireInput');
+  const cursor = input.selectionStart;
+  const val = input.value;
+  const before = val.substring(0, cursor);
+  const after = val.substring(cursor);
+  const newBefore = before.replace(/@\w*$/, '@' + name + ' ');
+  input.value = newBefore + after;
+  input.focus();
+  // Store mentioned user for notification
+  if (!input.dataset.mentions) input.dataset.mentions = '';
+  input.dataset.mentions += userId + ',';
+  closeMentionDropdown();
+}
+
 // ============================================
 // CAMPFIRE (Real-time Chat)
 // ============================================
 let campfireChannel = null;
 
 async function renderCampfire(container) {
+  await loadMentionMembers();
   container.innerHTML = `
     <div class="section-card">
       <div class="section-header">
@@ -5353,19 +5525,42 @@ async function sendCampfireMsg() {
     box.scrollTop = box.scrollHeight;
   }
 
-  const { error } = await sb.from('campfire_messages').insert({
+  // Get mentioned users before sending
+  const mentionedIds = (input.dataset.mentions || '').split(',').filter(Boolean);
+  input.dataset.mentions = '';
+
+  const { data: newMsg, error } = await sb.from('campfire_messages').insert({
     project_id: activeProject.id,
     user_id: currentUser.id,
     content: msgContent
-  });
+  }).select().single();
 
   if (error) {
-    // Remove temp message
-    document.getElementById('temp-' + (Date.now() - 1))?.remove();
+    document.querySelectorAll('[id^="temp-"]').forEach(t => t.remove());
     toast('خطأ في الإرسال: ' + error.message);
     input.value = msgContent;
     return;
   }
+
+  // Send notifications to mentioned users
+  if (mentionedIds.length > 0 && newMsg) {
+    const senderName = currentProfile?.full_name || 'أحد الأعضاء';
+    for (const uid of mentionedIds) {
+      if (uid === currentUser.id) continue;
+      // In-app notification
+      await sb.from('notifications').insert({
+        user_id: uid,
+        project_id: activeProject.id,
+        type: 'mention',
+        title: `@${senderName} أشار إليك`,
+        body: msgContent.substring(0, 100)
+      });
+      // Email notification via Edge Function
+      sendMentionEmail(uid, senderName, msgContent, activeProject.name);
+    }
+  }
+
+  await logActivity('أرسل رسالة في Campfire', 'campfire', msgContent.substring(0,30));
 }
 
 function subscribeCampfire() {
