@@ -1643,6 +1643,38 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
   margin-top: 4px;
 }
 
+/* === Gantt Chart === */
+.gantt-wrap { background:white; border:1px solid var(--border); border-radius:var(--radius-lg); padding:16px; overflow-x:auto; margin-top:12px }
+.gantt-header { display:flex; align-items:center; margin-bottom:16px; gap:12px; flex-wrap:wrap }
+.gantt-stats { display:flex; gap:8px; flex-wrap:wrap }
+.gantt-stat { background:var(--bg-elevated); padding:8px 14px; border-radius:8px; font-size:12px; font-weight:600 }
+.gantt-table { width:100%; min-width:800px; border-collapse:collapse }
+.gantt-task-name { padding:8px 12px; font-size:13px; font-weight:600; white-space:nowrap; max-width:200px; overflow:hidden; text-overflow:ellipsis }
+.gantt-timeline { position:relative; height:32px; background:#f8fafc; border-radius:8px; overflow:hidden; min-width:600px }
+.gantt-bar { position:absolute; top:4px; bottom:4px; border-radius:6px; padding:0 8px; color:white; font-size:11px; font-weight:600; display:flex; align-items:center; cursor:pointer; transition:opacity 0.2s; white-space:nowrap; overflow:hidden }
+.gantt-bar:hover { opacity:0.85 }
+.gantt-bar-low { background:linear-gradient(135deg,#22c55e,#16a34a) }
+.gantt-bar-normal { background:linear-gradient(135deg,#3b82f6,#2563eb) }
+.gantt-bar-high { background:linear-gradient(135deg,#f97316,#ea580c) }
+.gantt-bar-urgent { background:linear-gradient(135deg,#ef4444,#dc2626) }
+.gantt-bar-completed { background:linear-gradient(135deg,#94a3b8,#64748b) !important }
+.gantt-progress { position:absolute; left:0; top:0; bottom:0; background:rgba(0,0,0,0.15); border-radius:6px 0 0 6px }
+.gantt-grid-line { position:absolute; top:0; bottom:0; width:1px; background:rgba(0,0,0,0.05) }
+.gantt-today-line { position:absolute; top:0; bottom:0; width:2px; background:#ef4444; z-index:2; box-shadow:0 0 8px rgba(239,68,68,0.5) }
+.gantt-month-label { display:inline-block; padding:4px 8px; font-size:11px; color:var(--text-muted); border-bottom:1px solid var(--border) }
+
+/* === Project Layers === */
+.layer-card { background:white; border:2px solid var(--border); border-radius:var(--radius-lg); padding:16px; margin-bottom:12px; transition:all 0.2s }
+.layer-card.in-progress { border-color:#3b82f6; background:linear-gradient(to right, #eff6ff, white) }
+.layer-card.completed { border-color:#22c55e; background:linear-gradient(to right, #f0fdf4, white); opacity:0.85 }
+.layer-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; gap:8px; flex-wrap:wrap }
+.layer-number { background:linear-gradient(135deg,#6c4ef5,#a855f7); color:white; width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; flex-shrink:0 }
+.layer-progress-bar { height:8px; background:var(--border); border-radius:4px; overflow:hidden; margin-top:8px }
+.layer-progress-fill { height:100%; background:linear-gradient(90deg,#6c4ef5,#22c55e); transition:width 0.5s }
+.layer-tasks { margin-top:12px; padding-top:12px; border-top:1px solid var(--border) }
+.layer-task { display:flex; align-items:center; gap:8px; padding:6px 0; font-size:13px }
+.layer-task-done { color:var(--text-muted); text-decoration:line-through }
+
 /* === Mobile Responsive === */
 @media (max-width: 768px) {
   .sidebar { width: 280px !important; transform: translateX(100%); transition: transform 0.3s ease; }
@@ -2040,6 +2072,16 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
           <div class="tool-card-icon" style="background:#fff7ed">🔥</div>
           <div class="tool-card-title">Campfire</div>
           <div class="tool-card-count" id="campfireCount">0</div>
+        </div>
+        <div class="tool-card" onclick="showProjectTab('gantt')">
+          <div class="tool-card-icon" style="background:#fef3c7">📅</div>
+          <div class="tool-card-title">المخطط الزمني</div>
+          <div class="tool-card-count">Gantt</div>
+        </div>
+        <div class="tool-card" onclick="showProjectTab('layers')">
+          <div class="tool-card-icon" style="background:#e0e7ff">🎯</div>
+          <div class="tool-card-title">الجدولة الطبقية</div>
+          <div class="tool-card-count" id="layersCount">0</div>
         </div>
         <div class="tool-card" onclick="showProjectTab('activity')">
           <div class="tool-card-icon" style="background:#f0fdf4">📊</div>
@@ -2457,11 +2499,11 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 
 <!-- New Todo Modal -->
 <div class="modal-bg" id="newTodoModal">
-  <div class="modal">
+  <div class="modal" style="max-width:520px;max-height:90vh;overflow-y:auto">
     <h3 class="modal-title" data-i18n="newTodoTitle">مهمة جديدة</h3>
     <input type="hidden" id="todoListId">
     <div class="form-group">
-      <label data-i18n="todoTitle">عنوان المهمة</label>
+      <label data-i18n="todoTitle">عنوان المهمة <span style="color:red">*</span></label>
       <input type="text" class="form-input" id="newTodoTitle" onkeydown="if(event.key==='Enter')createTodo()">
     </div>
     <div class="form-group">
@@ -2470,17 +2512,35 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
         <option value="">— غير معيّن —</option>
       </select>
     </div>
-    <div class="form-group">
-      <label data-i18n="dueDate">📅 تاريخ الاستحقاق (اختياري)</label>
-      <input type="date" class="form-input" id="newTodoDue">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group">
+        <label>📅 تاريخ البدء</label>
+        <input type="date" class="form-input" id="newTodoStart">
+      </div>
+      <div class="form-group">
+        <label data-i18n="dueDate">🏁 تاريخ الانتهاء</label>
+        <input type="date" class="form-input" id="newTodoDue">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group">
+        <label>⏱️ الساعات المقدّرة</label>
+        <input type="number" class="form-input" id="newTodoHours" min="1" max="500" value="8">
+      </div>
+      <div class="form-group">
+        <label data-i18n="priority">🚦 الأولوية</label>
+        <select class="form-input" id="newTodoPriority">
+          <option value="low" data-i18n="low">منخفضة</option>
+          <option value="normal" selected data-i18n="normal">عادية</option>
+          <option value="high" data-i18n="high">عالية</option>
+          <option value="urgent" data-i18n="urgent">عاجلة</option>
+        </select>
+      </div>
     </div>
     <div class="form-group">
-      <label data-i18n="priority">🚦 الأولوية</label>
-      <select class="form-input" id="newTodoPriority">
-        <option value="low" data-i18n="low">منخفضة</option>
-        <option value="normal" selected data-i18n="normal">عادية</option>
-        <option value="high" data-i18n="high">عالية</option>
-        <option value="urgent" data-i18n="urgent">عاجلة</option>
+      <label>🎯 الطبقة (اختياري)</label>
+      <select class="form-input" id="newTodoLayer">
+        <option value="">— بدون طبقة —</option>
       </select>
     </div>
     <div class="form-group">
@@ -2490,6 +2550,29 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('newTodoModal')" data-i18n="cancel">إلغاء</button>
       <button class="btn btn-primary" onclick="createTodo()" data-i18n="create">إنشاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Layer Modal -->
+<div class="modal-bg" id="newLayerModal">
+  <div class="modal" style="max-width:500px">
+    <h3 class="modal-title">🎯 طبقة جديدة</h3>
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">
+      الطبقات تقسّم المشروع إلى مراحل صغيرة، تنتهي طبقة قبل البدء بالتي تليها
+    </p>
+    <div class="form-group">
+      <label>اسم الطبقة <span style="color:red">*</span></label>
+      <input type="text" class="form-input" id="layerName" placeholder="مثال: مرحلة التخطيط، البحث الأولي..." 
+        onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('layerDesc').focus();}">
+    </div>
+    <div class="form-group">
+      <label>الوصف (اختياري)</label>
+      <textarea class="form-input" id="layerDesc" rows="3" placeholder="ما الهدف من هذه الطبقة؟"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('newLayerModal')">إلغاء</button>
+      <button class="btn btn-primary" onclick="createLayer()">إنشاء الطبقة</button>
     </div>
   </div>
 </div>
@@ -3445,8 +3528,9 @@ async function onAuthSuccess(user) {
   document.getElementById('userAvatar').textContent = initials(currentProfile.full_name || currentProfile.email);
   document.getElementById('heroName').textContent = currentProfile.full_name || currentProfile.email;
 
-  // Show admin panel link if super admin
-  if (currentProfile.is_super_admin) {
+  // Show admin panel link if super admin OR team leader
+  const isLeader = currentProfile.is_super_admin || currentProfile.platform_role === 'team_leader';
+  if (isLeader) {
     document.getElementById('adminPanelLink').classList.remove('hidden');
     // Add super admin badge to user card
     const userNameEl = document.getElementById('userName');
@@ -3717,6 +3801,8 @@ async function loadProjectTab(tab) {
   else if (tab === 'files') await renderFiles(container);
   else if (tab === 'checkins') await renderCheckins(container);
   else if (tab === 'members') await renderMembers(container);
+  else if (tab === 'gantt') await renderGantt(container);
+  else if (tab === 'layers') await renderLayers(container);
 }
 
 // ============================================
@@ -3793,6 +3879,18 @@ async function showNewTodoModal(listId) {
   document.getElementById('newTodoDue').value = '';
   document.getElementById('newTodoPriority').value = 'normal';
   document.getElementById('newTodoDesc').value = '';
+  
+  // Default dates: today → 7 days from now
+  const today = new Date();
+  const nextWeek = new Date(today.getTime() + 7*24*60*60*1000);
+  const fmtDate = d => d.toISOString().split('T')[0];
+  document.getElementById('newTodoStart').value = fmtDate(today);
+  document.getElementById('newTodoDue').value = fmtDate(nextWeek);
+  document.getElementById('newTodoHours').value = '8';
+  
+  // Load layers
+  await loadLayersForTodoModal();
+  
   // Load project members into assignee dropdown
   const { data: members } = await sb.from('project_members')
     .select('user_id, profile:user_id(full_name, email)')
@@ -3813,23 +3911,56 @@ async function showNewTodoModal(listId) {
 async function createTodo() {
   const listId = document.getElementById('todoListId').value;
   const title = document.getElementById('newTodoTitle').value.trim();
+  const start = document.getElementById('newTodoStart').value;
   const due = document.getElementById('newTodoDue').value;
+  const hours = parseInt(document.getElementById('newTodoHours').value) || 8;
   const priority = document.getElementById('newTodoPriority').value;
   const assignee = document.getElementById('newTodoAssignee').value;
+  const layerId = document.getElementById('newTodoLayer').value;
   const desc = document.getElementById('newTodoDesc').value.trim();
   if (!title) { document.getElementById('newTodoTitle').focus(); return; }
-  await sb.from('todos').insert({
+  
+  const { error } = await sb.from('todos').insert({
     list_id: listId, project_id: activeProject.id, title,
     description: desc || null,
-    due_date: due || null, priority, created_by: currentUser.id,
-    assigned_to: assignee || currentUser.id
+    start_date: start || null,
+    due_date: due || null, 
+    estimated_hours: hours,
+    priority, 
+    created_by: currentUser.id,
+    assigned_to: assignee || currentUser.id,
+    layer_id: layerId || null
   });
-  await logActivity('أضاف مهمة جديدة', 'todo', title);
+  
+  if (error) { toast('❌ ' + error.message); return; }
+  
+  logActivity('أضاف مهمة جديدة', 'todo', title);
+  
+  // Notify assigned person
+  if (assignee && assignee !== currentUser.id) {
+    sendNotificationEmail('task_assigned', assignee, title, activeProject.id, activeProject.name);
+    sb.from('notifications').insert({
+      user_id: assignee, project_id: activeProject.id,
+      type: 'task', title: '✅ تم تعيينك في مهمة', body: title
+    }).then(() => {}).catch(() => {});
+  }
+  
   closeModal('newTodoModal');
-  toast(currentLang === 'ar' ? 'تمت الإضافة' : 'Added');
+  toast(currentLang === 'ar' ? '✅ تمت الإضافة' : '✅ Added');
   await loadProjectTab('todos');
   await loadProjectCounts();
   await loadStats();
+}
+
+async function loadLayersForTodoModal() {
+  const select = document.getElementById('newTodoLayer');
+  if (!select || !activeProject?.id) return;
+  const { data: layers } = await sb.from('project_layers')
+    .select('id, layer_number, name')
+    .eq('project_id', activeProject.id)
+    .order('layer_number');
+  select.innerHTML = '<option value="">— بدون طبقة —</option>' + 
+    (layers || []).map(l => `<option value="${l.id}">${l.layer_number}. ${escapeHTML(l.name)}</option>`).join('');
 }
 
 async function toggleTodo(id, completed) {
@@ -5088,32 +5219,37 @@ async function loadAdminPanel() {
 
   // Load all users
   const { data: allUsers } = await sb.from('profiles').select('*').order('created_at', { ascending: false });
-  document.getElementById('allUsersList').innerHTML = (allUsers || []).map(u => `
+  document.getElementById('allUsersList').innerHTML = (allUsers || []).map(u => {
+    const role = u.platform_role || (u.is_super_admin ? 'super_admin' : 'member');
+    const roleBadge = role === 'super_admin' ? '<span style="background:linear-gradient(135deg,#f59e0b,#d97706);color:white;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin-right:4px">👑 مدير النظام</span>'
+      : role === 'team_leader' ? '<span style="background:linear-gradient(135deg,#6c4ef5,#a855f7);color:white;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin-right:4px">⭐ قائد فريق</span>'
+      : '<span style="background:var(--bg-elevated);color:var(--text-muted);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;margin-right:4px">👤 عضو</span>';
+    return `
     <div class="todo-item">
       <div class="avatar">${initials(u.full_name || u.email)}</div>
       <div class="todo-content">
         <div class="todo-title">
           ${escapeHTML(u.full_name || '')}
-          ${u.is_super_admin ? '<span class="super-admin-badge" style="margin-right:6px">👑</span>' : ''}
+          ${roleBadge}
           ${u.is_muted ? '<span class="muted-badge" style="margin-right:6px">🔇</span>' : ''}
         </div>
-        <div class="todo-meta">${escapeHTML(u.email)} • ${timeAgo(u.created_at)}</div>
+        <div class="todo-meta">${escapeHTML(u.email)} ${u.job_title ? ' • 💼 ' + escapeHTML(u.job_title) : ''} • ${timeAgo(u.created_at)}</div>
       </div>
       ${u.id !== currentUser.id ? `
-        <div style="display:flex;gap:6px;align-items:center">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <select onchange="setUserRole('${u.id}', this.value, '${escapeHTML(u.full_name || u.email)}')" style="padding:6px 8px;border-radius:8px;border:1px solid var(--border);font-size:12px;cursor:pointer">
+            <option value="member" ${role === 'member' ? 'selected' : ''}>👤 عضو</option>
+            <option value="team_leader" ${role === 'team_leader' ? 'selected' : ''}>⭐ قائد فريق</option>
+            <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>👑 مدير نظام</option>
+          </select>
           <button class="btn btn-secondary" style="padding:8px 10px" title="${u.is_muted ? 'إلغاء الكتم' : 'كتم المستخدم'}" onclick="toggleGlobalMute('${u.id}', ${!u.is_muted})">
             ${u.is_muted ? '🔊' : '🔇'}
           </button>
-          ${!u.is_super_admin ? `
-            <button class="btn btn-secondary" style="padding:8px 10px" onclick="toggleSuperAdmin('${u.id}', true)" title="${t('promoteToAdmin')}">👑</button>
-          ` : `
-            <button class="btn btn-warning" style="padding:8px 10px" onclick="toggleSuperAdmin('${u.id}', false)" title="${t('demoteToMember')}">👤</button>
-          `}
           <button class="btn btn-danger" style="padding:8px 10px" title="حذف المستخدم من المنصة" onclick="deleteUserFromPlatform('${u.id}', '${escapeHTML(u.full_name || u.email)}')">🗑️</button>
         </div>
       ` : `<span class="role-pill admin">${t('you') || 'أنت'}</span>`}
     </div>
-  `).join('') || `<div class="empty-state"><div class="empty-icon">👥</div></div>`;
+  `;}).join('') || `<div class="empty-state"><div class="empty-icon">👥</div></div>`;
 }
 
 
@@ -5159,6 +5295,291 @@ async function notifyProjectMembers(notifType, notifContent, excludeUserId) {
       sendNotificationEmail('project_update', m.user_id, notifContent, activeProject.id, activeProject.name);
     }
   } catch(e) {}
+}
+
+
+
+// ============================================
+// GANTT CHART
+// ============================================
+async function renderGantt(container) {
+  if (!activeProject?.id) return;
+  
+  const { data: todos } = await sb.from('todos')
+    .select('*, profile:assigned_to(full_name)')
+    .eq('project_id', activeProject.id)
+    .order('start_date', { ascending: true, nullsFirst: false });
+  
+  if (!todos || todos.length === 0) {
+    container.innerHTML = `
+      <div class="section-card">
+        <div style="text-align:center;padding:40px;color:var(--text-muted)">
+          <div style="font-size:48px;margin-bottom:12px">📅</div>
+          <h3 style="margin-bottom:8px">لا توجد مهام بعد</h3>
+          <p style="font-size:13px">أضف مهام لرؤيتها في المخطط الزمني</p>
+          <button class="btn btn-primary" style="margin-top:16px" onclick="showProjectTab('todos')">📋 إضافة مهام</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // Calculate date range
+  const allDates = todos.flatMap(t => [t.start_date, t.due_date].filter(Boolean)).map(d => new Date(d));
+  if (allDates.length === 0) {
+    container.innerHTML = '<div class="section-card"><p>لا توجد تواريخ محددة في المهام</p></div>';
+    return;
+  }
+  const minDate = new Date(Math.min(...allDates));
+  const maxDate = new Date(Math.max(...allDates));
+  minDate.setDate(minDate.getDate() - 2);
+  maxDate.setDate(maxDate.getDate() + 2);
+  const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24));
+  const today = new Date();
+  
+  // Stats
+  const completed = todos.filter(t => t.completed).length;
+  const inProgress = todos.filter(t => !t.completed && new Date(t.start_date) <= today).length;
+  const upcoming = todos.filter(t => !t.completed && new Date(t.start_date) > today).length;
+  const overdue = todos.filter(t => !t.completed && t.due_date && new Date(t.due_date) < today).length;
+  const overallProgress = todos.length > 0 ? Math.round((completed / todos.length) * 100) : 0;
+
+  let html = `
+    <div class="section-card">
+      <div class="section-header">
+        <h3 class="section-title">
+          <span class="section-icon" style="background:#fef3c7">📅</span>
+          المخطط الزمني للمشروع (Gantt Chart)
+        </h3>
+        <button class="btn btn-primary" onclick="openModal('newTodoListModal')">➕ مهمة جديدة</button>
+      </div>
+      
+      <div class="gantt-wrap">
+        <div class="gantt-header">
+          <div class="gantt-stats">
+            <div class="gantt-stat">📊 المجموع: ${todos.length}</div>
+            <div class="gantt-stat" style="background:#dcfce7;color:#166534">✅ مكتملة: ${completed}</div>
+            <div class="gantt-stat" style="background:#dbeafe;color:#1e40af">⚡ جارية: ${inProgress}</div>
+            <div class="gantt-stat" style="background:#fef3c7;color:#92400e">⏳ قادمة: ${upcoming}</div>
+            ${overdue > 0 ? `<div class="gantt-stat" style="background:#fee2e2;color:#991b1b">⚠️ متأخرة: ${overdue}</div>` : ''}
+            <div class="gantt-stat" style="background:linear-gradient(135deg,#6c4ef5,#a855f7);color:white">📈 ${overallProgress}%</div>
+          </div>
+        </div>
+        
+        <table class="gantt-table">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border)">
+              <th style="text-align:right;padding:8px 12px;font-size:12px;color:var(--text-muted);width:200px">المهمة</th>
+              <th style="text-align:right;padding:8px 12px;font-size:12px;color:var(--text-muted);width:120px">المسؤول</th>
+              <th style="text-align:right;padding:8px 12px;font-size:12px;color:var(--text-muted)">الجدول الزمني (${formatDate(minDate.toISOString())} → ${formatDate(maxDate.toISOString())})</th>
+            </tr>
+          </thead>
+          <tbody>
+  `;
+  
+  for (const t of todos) {
+    const start = t.start_date ? new Date(t.start_date) : today;
+    const end = t.due_date ? new Date(t.due_date) : new Date(start.getTime() + 7*24*60*60*1000);
+    const startOffset = Math.max(0, ((start - minDate) / (1000*60*60*24)) / totalDays * 100);
+    const duration = Math.max(2, ((end - start) / (1000*60*60*24)) / totalDays * 100);
+    const todayOffset = ((today - minDate) / (1000*60*60*24)) / totalDays * 100;
+    
+    const priority = t.priority || 'normal';
+    const barClass = t.completed ? 'gantt-bar-completed' : `gantt-bar-${priority}`;
+    const progress = t.completed ? 100 : (t.progress || 0);
+    
+    html += `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td class="gantt-task-name" title="${escapeHTML(t.title)}">
+          ${t.completed ? '✅' : '⚡'} ${escapeHTML(t.title)}
+        </td>
+        <td style="padding:8px 12px;font-size:12px;color:var(--text-muted)">${escapeHTML(t.profile?.full_name || '—')}</td>
+        <td style="padding:8px 12px">
+          <div class="gantt-timeline" title="من ${formatDate(t.start_date)} إلى ${formatDate(t.due_date)}">
+            ${todayOffset >= 0 && todayOffset <= 100 ? `<div class="gantt-today-line" style="right:${todayOffset}%" title="اليوم"></div>` : ''}
+            <div class="gantt-bar ${barClass}" style="right:${startOffset}%; width:${duration}%" onclick="showTodoDetail('${t.id}','${activeProject.id}')">
+              ${progress > 0 ? `<div class="gantt-progress" style="width:${progress}%"></div>` : ''}
+              <span style="position:relative;z-index:1">${Math.ceil((end-start)/(1000*60*60*24))}أيام ${progress > 0 ? `(${progress}%)` : ''}</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+  
+  html += `
+          </tbody>
+        </table>
+        
+        <div style="margin-top:16px;padding:12px;background:var(--bg-elevated);border-radius:8px;font-size:12px;color:var(--text-muted)">
+          <strong>دليل الألوان:</strong>
+          <span style="display:inline-block;width:14px;height:14px;background:#22c55e;border-radius:3px;vertical-align:middle;margin:0 4px"></span> منخفضة
+          <span style="display:inline-block;width:14px;height:14px;background:#3b82f6;border-radius:3px;vertical-align:middle;margin:0 4px"></span> عادية
+          <span style="display:inline-block;width:14px;height:14px;background:#f97316;border-radius:3px;vertical-align:middle;margin:0 4px"></span> مرتفعة
+          <span style="display:inline-block;width:14px;height:14px;background:#ef4444;border-radius:3px;vertical-align:middle;margin:0 4px"></span> عاجلة
+          <span style="display:inline-block;width:14px;height:14px;background:#94a3b8;border-radius:3px;vertical-align:middle;margin:0 4px"></span> مكتملة
+          | الخط الأحمر = اليوم
+        </div>
+      </div>
+    </div>
+  `;
+  
+  container.innerHTML = html;
+}
+
+// ============================================
+// LAYERED SCHEDULING (الجدولة الطبقية)
+// ============================================
+async function renderLayers(container) {
+  if (!activeProject?.id) return;
+  
+  const { data: layers } = await sb.from('project_layers')
+    .select('*')
+    .eq('project_id', activeProject.id)
+    .order('layer_number', { ascending: true });
+  
+  // Update count
+  const countEl = document.getElementById('layersCount');
+  if (countEl) countEl.textContent = (layers?.length || 0) + ' طبقات';
+  
+  const canManage = currentProfile?.platform_role === 'super_admin' || currentProfile?.platform_role === 'team_leader';
+  
+  // Get all todos with layer assignments
+  const { data: todos } = await sb.from('todos').select('*').eq('project_id', activeProject.id);
+  
+  let html = `
+    <div class="section-card">
+      <div class="section-header">
+        <h3 class="section-title">
+          <span class="section-icon" style="background:#e0e7ff">🎯</span>
+          الجدولة الطبقية - تجزئة المشروع
+        </h3>
+        ${canManage ? '<button class="btn btn-primary" onclick="openModal(\'newLayerModal\')">➕ طبقة جديدة</button>' : ''}
+      </div>
+      
+      <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;line-height:1.7">
+        <strong>💡 ما هي الجدولة الطبقية؟</strong><br>
+        نظام يقسّم المشروع إلى طبقات صغيرة متتابعة، كل طبقة تحتوي على مجموعة مهام مرتبطة.
+        تنتهي الطبقة الأولى قبل البدء بالثانية، وهكذا حتى يكتمل المشروع.<br>
+        <strong>الفائدة:</strong> تركيز الفريق، تقدّم واضح، نتائج سريعة، تقليل التشتت.
+      </div>
+  `;
+  
+  if (!layers || layers.length === 0) {
+    html += `
+      <div style="text-align:center;padding:32px;color:var(--text-muted)">
+        <div style="font-size:48px;margin-bottom:12px">🎯</div>
+        <h4>لا توجد طبقات بعد</h4>
+        <p style="font-size:13px;margin-top:8px">${canManage ? 'أنشئ أول طبقة لبدء تجزئة المشروع' : 'لم يقم القائد بتجزئة المشروع بعد'}</p>
+      </div>
+    `;
+  } else {
+    for (const layer of layers) {
+      const layerTodos = (todos || []).filter(t => t.layer_id === layer.id);
+      const layerCompleted = layerTodos.filter(t => t.completed).length;
+      const layerProgress = layerTodos.length > 0 ? Math.round((layerCompleted / layerTodos.length) * 100) : 0;
+      const isCompleted = layerProgress === 100 && layerTodos.length > 0;
+      const cardClass = isCompleted ? 'completed' : (layer.status === 'in_progress' ? 'in-progress' : '');
+      
+      html += `
+        <div class="layer-card ${cardClass}">
+          <div class="layer-header">
+            <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">
+              <div class="layer-number">${layer.layer_number}</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:700;font-size:15px">${escapeHTML(layer.name)}</div>
+                ${layer.description ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">${escapeHTML(layer.description)}</div>` : ''}
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              ${isCompleted ? '<span style="background:#22c55e;color:white;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600">✅ مكتملة</span>' :
+                layer.status === 'in_progress' ? '<span style="background:#3b82f6;color:white;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600">⚡ قيد التنفيذ</span>' :
+                '<span style="background:#94a3b8;color:white;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600">⏸️ بانتظار</span>'}
+              ${canManage ? `<button class="btn btn-secondary" style="padding:4px 10px;font-size:11px" onclick="deleteLayer('${layer.id}', '${escapeHTML(layer.name)}')">🗑️</button>` : ''}
+            </div>
+          </div>
+          <div class="layer-progress-bar">
+            <div class="layer-progress-fill" style="width:${layerProgress}%"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:4px">
+            <span>${layerCompleted} / ${layerTodos.length} مهام مكتملة</span>
+            <span>${layerProgress}%</span>
+          </div>
+          ${layerTodos.length > 0 ? `
+            <div class="layer-tasks">
+              ${layerTodos.map(t => `
+                <div class="layer-task ${t.completed ? 'layer-task-done' : ''}">
+                  ${t.completed ? '✅' : '⚡'} ${escapeHTML(t.title)}
+                </div>
+              `).join('')}
+            </div>
+          ` : `<div style="margin-top:8px;font-size:12px;color:var(--text-muted)">لم تُعيَّن مهام لهذه الطبقة بعد</div>`}
+        </div>
+      `;
+    }
+  }
+  
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+async function createLayer() {
+  const name = document.getElementById('layerName').value.trim();
+  const desc = document.getElementById('layerDesc').value.trim();
+  if (!name) { toast('⚠️ أدخل اسم الطبقة'); return; }
+  
+  // Get next layer number
+  const { data: existing } = await sb.from('project_layers')
+    .select('layer_number')
+    .eq('project_id', activeProject.id)
+    .order('layer_number', { ascending: false })
+    .limit(1);
+  const nextNum = (existing?.[0]?.layer_number || 0) + 1;
+  
+  const { error } = await sb.from('project_layers').insert({
+    project_id: activeProject.id,
+    layer_number: nextNum,
+    name, description: desc,
+    created_by: currentUser.id
+  });
+  
+  if (error) { toast('❌ ' + error.message); return; }
+  
+  document.getElementById('layerName').value = '';
+  document.getElementById('layerDesc').value = '';
+  closeModal('newLayerModal');
+  toast('✅ تم إنشاء الطبقة ' + nextNum);
+  await renderLayers(document.getElementById('projectContent'));
+}
+
+async function deleteLayer(layerId, name) {
+  if (!confirm(`حذف الطبقة "${name}"؟ المهام لن تُحذف.`)) return;
+  // Unassign todos from this layer first
+  await sb.from('todos').update({ layer_id: null }).eq('layer_id', layerId);
+  const { error } = await sb.from('project_layers').delete().eq('id', layerId);
+  if (error) { toast('❌ ' + error.message); return; }
+  toast('🗑️ تم حذف الطبقة');
+  await renderLayers(document.getElementById('projectContent'));
+}
+
+// ============================================
+// TEAM LEADER MANAGEMENT
+// ============================================
+async function setUserRole(userId, newRole, userName) {
+  const roleNames = {
+    'super_admin': 'مدير النظام',
+    'team_leader': 'قائد فريق',
+    'member': 'عضو عادي'
+  };
+  
+  if (!confirm(`تعيين "${userName}" كـ ${roleNames[newRole]}؟`)) return;
+  
+  const { error } = await sb.from('profiles')
+    .update({ platform_role: newRole })
+    .eq('id', userId);
+  
+  if (error) { toast('❌ ' + error.message); return; }
+  toast(`✅ تم تعيين ${userName} كـ ${roleNames[newRole]}`);
+  await loadAdminPanel();
 }
 
 
