@@ -3024,46 +3024,54 @@ async function handleChangePassword(e) {
   const changePasswordBtn = document.getElementById('settingsChangePasswordBtn');
   const alertDiv = document.getElementById('changePasswordAlert');
 
-  // Clear previous alert
   alertDiv.classList.add('hidden');
   alertDiv.innerHTML = '';
 
   if (!newPassword || !confirmPassword) {
-    showAlertToElement(alertDiv, i18n[lang].enterPassword, 'error');
-    return;
+    showAlertToElement(alertDiv, i18n[lang].enterPassword, 'error'); return;
   }
-
   if (newPassword !== confirmPassword) {
-    showAlertToElement(alertDiv, i18n[lang].passwordMismatch, 'error');
-    return;
+    showAlertToElement(alertDiv, i18n[lang].passwordMismatch, 'error'); return;
   }
-
   if (newPassword.length < 6) {
-    showAlertToElement(alertDiv, i18n[lang].passwordTooShort, 'error');
-    return;
+    showAlertToElement(alertDiv, i18n[lang].passwordTooShort, 'error'); return;
   }
 
   try {
     changePasswordBtn.disabled = true;
-    changePasswordBtn.textContent = i18n[lang].updating;
+    changePasswordBtn.textContent = i18n[lang].updating || 'جارٍ التحديث...';
 
-    const { error } = await sb.auth.updateUser({ password: newPassword });
+    // Check session first
+    const { data: sessionData, error: sessionError } = await sb.auth.getSession();
+    if (sessionError || !sessionData?.session) {
+      showAlertToElement(alertDiv, 'انتهت الجلسة - يرجى تسجيل الخروج والدخول مجدداً', 'error');
+      return;
+    }
 
-    if (error) throw error;
+    const { data, error } = await sb.auth.updateUser({ password: newPassword });
 
-    showAlertToElement(alertDiv, i18n[lang].passwordChangedSuccess, 'success');
+    if (error) {
+      showAlertToElement(alertDiv, 'خطأ: ' + error.message, 'error');
+      return;
+    }
+
+    // Success
+    alertDiv.style.cssText = 'display:block; background:#d1fae5; color:#065f46; padding:12px 16px; border-radius:10px; font-weight:600; margin-bottom:15px; border: 1.5px solid #6ee7b7;';
+    alertDiv.textContent = '✅ تم تغيير كلمة المرور بنجاح!';
+    alertDiv.classList.remove('hidden');
+
     document.getElementById('settingsNewPassword').value = '';
     document.getElementById('settingsConfirmPassword').value = '';
-    
-    setTimeout(() => {
-      showPage('home');
-    }, 2000);
+
+    setTimeout(() => showPage('home'), 2500);
+
   } catch (err) {
-    console.error('Password change error:', err);
-    showAlertToElement(alertDiv, i18n[lang].passwordChangedError + ': ' + err.message, 'error');
+    alertDiv.style.cssText = 'display:block; background:#fee2e2; color:#991b1b; padding:12px 16px; border-radius:10px; font-weight:600; margin-bottom:15px;';
+    alertDiv.textContent = 'خطأ: ' + (err.message || 'مجهول');
+    alertDiv.classList.remove('hidden');
   } finally {
     changePasswordBtn.disabled = false;
-    changePasswordBtn.textContent = i18n[lang].changePassword;
+    changePasswordBtn.textContent = 'تغيير كلمة المرور';
   }
 }
 
