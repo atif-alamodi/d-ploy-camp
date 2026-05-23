@@ -5669,44 +5669,25 @@ async function adminDeleteProject(id, name) {
 }
 
 async function deleteUserFromPlatform(userId, userName) {
-  const msg = `⚠️ حذف المستخدم "${userName}" من المنصة نهائياً؟\n\nسيتم:\n• حذفه من جميع المشاريع\n• حذف بياناته الشخصية\n• لا يمكن التراجع عن هذا الإجراء!`;
+  const msg = `⚠️ حذف المستخدم "${userName}" نهائياً؟\n\nسيتم:\n• حذف بياناته من قاعدة البيانات تماماً\n• حذف حسابه من نظام المصادقة\n• يمكن دعوته مجدداً لاحقاً (سيُنشأ له بروفايل جديد)\n\nلا يمكن التراجع عن هذا الإجراء!`;
   if (!confirm(msg)) return;
 
   const btn = document.querySelector(`button[onclick*="${userId}"][title*="حذف"]`);
   if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
 
   try {
-    // 1. Unassign todos
-    const r1 = await sb.from('todos').update({ assigned_to: null }).eq('assigned_to', userId);
-    if (r1.error) console.error('todos unassign:', r1.error.message);
-
-    // 2. Remove from all projects
-    const r2 = await sb.from('project_members').delete().eq('user_id', userId);
-    if (r2.error) { toast('خطأ أعضاء المشاريع: ' + r2.error.message); return; }
-
-    // 3. Delete campfire messages
-    const r3 = await sb.from('campfire_messages').delete().eq('user_id', userId);
-    if (r3.error) console.error('campfire:', r3.error.message);
-
-    // 4. Delete todo comments
-    const r4 = await sb.from('todo_comments').delete().eq('user_id', userId);
-    if (r4.error) console.error('todo_comments:', r4.error.message);
-
-    // 5. Delete notifications
-    const r5 = await sb.from('notifications').delete().eq('user_id', userId);
-    if (r5.error) console.error('notifications:', r5.error.message);
-
-    // 6. Delete invitations sent to them
-    const r6 = await sb.from('invitations').delete().eq('invited_by', userId);
-    if (r6.error) console.error('invitations:', r6.error.message);
-
-    // 7. Delete profile (must be last)
-    const r7 = await sb.from('profiles').delete().eq('id', userId);
-    if (r7.error) { toast('خطأ في حذف الملف الشخصي: ' + r7.error.message); return; }
-
-    toast('✅ تم حذف "' + userName + '" من المنصة نهائياً');
+    // Single RPC call that removes user from ALL tables AND auth.users
+    const { data, error } = await sb.rpc('delete_user_completely', { target_user_id: userId });
     
-    // Remove the card from UI immediately without reload
+    if (error) {
+      toast('❌ خطأ: ' + error.message);
+      if (btn) { btn.disabled = false; btn.textContent = '🗑️'; }
+      return;
+    }
+
+    toast('✅ تم حذف "' + userName + '" نهائياً من كل قواعد البيانات');
+    
+    // Remove the card from UI immediately
     const card = document.querySelector(`button[onclick*="${userId}"]`)?.closest('.todo-item');
     if (card) {
       card.style.transition = 'all 0.3s ease';
@@ -5719,7 +5700,7 @@ async function deleteUserFromPlatform(userId, userName) {
     }
 
   } catch (err) {
-    toast('خطأ: ' + err.message);
+    toast('❌ خطأ: ' + err.message);
     console.error('deleteUserFromPlatform:', err);
     if (btn) { btn.disabled = false; btn.textContent = '🗑️'; }
   }
