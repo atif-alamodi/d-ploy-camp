@@ -2848,6 +2848,14 @@ function showAlert(id, msg, type = 'error') {
   if (type === 'success') setTimeout(() => el.classList.remove('show'), 3000);
 }
 
+function showAlertToElement(element, msg, type = 'error') {
+  if (!element) return;
+  element.className = `alert ${type} show`;
+  element.textContent = msg;
+  element.classList.remove('hidden');
+  if (type === 'success') setTimeout(() => element.classList.add('hidden'), 3000);
+}
+
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -3021,30 +3029,29 @@ async function handleChangePassword(e) {
   alertDiv.innerHTML = '';
 
   if (!newPassword || !confirmPassword) {
-    showAlert(i18n[lang].enterPassword, 'error', alertDiv);
+    showAlertToElement(alertDiv, i18n[lang].enterPassword, 'error');
     return;
   }
 
   if (newPassword !== confirmPassword) {
-    showAlert(i18n[lang].passwordMismatch, 'error', alertDiv);
+    showAlertToElement(alertDiv, i18n[lang].passwordMismatch, 'error');
     return;
   }
 
   if (newPassword.length < 6) {
-    showAlert(i18n[lang].passwordTooShort, 'error', alertDiv);
+    showAlertToElement(alertDiv, i18n[lang].passwordTooShort, 'error');
     return;
   }
 
   try {
     changePasswordBtn.disabled = true;
-    const originalText = changePasswordBtn.textContent;
     changePasswordBtn.textContent = i18n[lang].updating;
 
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    const { error } = await sb.auth.updateUser({ password: newPassword });
 
     if (error) throw error;
 
-    showAlert(i18n[lang].passwordChangedSuccess, 'success', alertDiv);
+    showAlertToElement(alertDiv, i18n[lang].passwordChangedSuccess, 'success');
     document.getElementById('settingsNewPassword').value = '';
     document.getElementById('settingsConfirmPassword').value = '';
     
@@ -3052,7 +3059,8 @@ async function handleChangePassword(e) {
       showPage('home');
     }, 2000);
   } catch (err) {
-    showAlert(i18n[lang].passwordChangedError + ': ' + err.message, 'error', alertDiv);
+    console.error('Password change error:', err);
+    showAlertToElement(alertDiv, i18n[lang].passwordChangedError + ': ' + err.message, 'error');
   } finally {
     changePasswordBtn.disabled = false;
     changePasswordBtn.textContent = i18n[lang].changePassword;
