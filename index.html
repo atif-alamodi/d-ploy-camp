@@ -3240,12 +3240,14 @@ async function onAuthSuccess(user) {
   document.getElementById('authScreen').classList.add('hidden');
   document.getElementById('appScreen').classList.remove('hidden');
 
-  // Check for pending invitation token
-  const params = new URLSearchParams(window.location.hash.substring(1) || window.location.search);
-  const token = params.get('invite') || localStorage.getItem('pending_invite');
-  if (token) {
+  // Check for pending invitation token (supports ?invite_token= and #invite=)
+  const searchParams = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.substring(1));
+  const invToken = searchParams.get('invite_token') || hashParams.get('invite') || hashParams.get('invite_token') || localStorage.getItem('pending_invite');
+  if (invToken) {
     localStorage.removeItem('pending_invite');
-    await acceptInvitationToken(token);
+    history.replaceState({}, '', window.location.pathname);
+    await acceptInvitationToken(invToken);
   }
 
   await loadProjects();
@@ -4539,32 +4541,53 @@ async function cancelInvite(id) {
 }
 
 async function acceptInvitationToken(token) {
+  // Look up invitation by token (no expiry check - unlimited)
   const { data: invite, error } = await sb
-    .from('invitations').select('*, project:project_id(name)')
-    .eq('token', token).eq('status', 'pending').single();
+    .from('invitations').select('*, project:project_id(name, icon)')
+    .eq('token', token)
+    .neq('status', 'accepted')
+    .single();
+
   if (error || !invite) {
-    toast(t('inviteInvalid'));
+    // Token already used or not found - just continue normally
+    toast(currentLang === 'ar' ? 'الدعوة مستخدمة أو غير صالحة' : 'Invite already used or invalid');
     return;
   }
-  if (new Date(invite.expires_at) < new Date()) {
-    toast(t('inviteExpired'));
-    return;
+
+  // Check if already a member
+  if (invite.project_id) {
+    const { data: existing } = await sb.from('project_members')
+      .select('id').eq('project_id', invite.project_id).eq('user_id', currentUser.id).single();
+
+    if (!existing) {
+      // Add as member
+      const { error: e2 } = await sb.from('project_members').insert({
+        project_id: invite.project_id,
+        user_id: currentUser.id,
+        role: 'member'
+      });
+      if (e2 && !e2.message.includes('duplicate')) {
+        toast(currentLang === 'ar' ? 'خطأ في الانضمام: ' + e2.message : 'Error joining: ' + e2.message);
+        return;
+      }
+    }
   }
-  // Add as member
-  const { error: e2 } = await sb.from('project_members').insert({
-    project_id: invite.project_id, user_id: currentUser.id, role: 'member'
-  });
-  if (e2 && !e2.message.includes('duplicate')) {
-    toast(e2.message);
-    return;
-  }
+
   // Mark as accepted
-  await sb.from('invitations').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', invite.id);
-  toast(`✅ ${t('inviteAccepted')} - ${invite.project?.name}`);
-  // Clear hash
-  history.replaceState({}, '', window.location.pathname);
+  await sb.from('invitations').update({
+    status: 'accepted',
+    accepted_at: new Date().toISOString()
+  }).eq('id', invite.id);
+
+  const projName = invite.project?.name ? `${invite.project.icon || '📁'} ${invite.project.name}` : 'D-Ploy Camp';
+  toast(currentLang === 'ar' ? `🎉 مرحباً! تمت إضافتك إلى ${projName}` : `🎉 Welcome! You joined ${projName}`);
+
   await loadProjects();
-  await loadHome();
+  if (invite.project_id) {
+    await openProject(invite.project_id);
+  } else {
+    await loadHome();
+  }
 }
 
 // ============================================
@@ -5322,8 +5345,18 @@ async function submitTodoComment(todoId, projectId) {
 async function init() {
   // Check for password reset flow
   const hashParams = new URLSearchParams(window.location.hash.substring(1));
+  const searchParams = new URLSearchParams(window.location.search);
   const isReset = hashParams.get('reset') === 'true' || hashParams.get('type') === 'recovery';
-  const inviteToken = hashParams.get('invite');
+
+  // Support both ?invite_token= (new) and #invite= (old)
+  const inviteToken = searchParams.get('invite_token') || hashParams.get('invite_token') || hashParams.get('invite');
+
+  // Save to localStorage so it survives signup/login redirect
+  if (inviteToken) {
+    localStorage.setItem('pending_invite', inviteToken);
+    // Clean URL
+    history.replaceState({}, '', window.location.pathname);
+  }
 
   // Listen for auth state changes (e.g., recovery flow)
   sb.auth.onAuthStateChange((event, session) => {
@@ -5338,19 +5371,18 @@ async function init() {
   const { data: { session } } = await sb.auth.getSession();
 
   if (isReset) {
-    // Show reset password form
     showReset();
     return;
   }
 
   if (session) {
-    if (inviteToken) {
-      localStorage.setItem('pending_invite', inviteToken);
-    }
     await onAuthSuccess(session.user);
   } else if (inviteToken) {
-    localStorage.setItem('pending_invite', inviteToken);
-    showAlert('loginAlert', t('pleaseLogin'), 'info');
+    // Show login form with friendly message
+    showAlert('loginAlert', currentLang === 'ar'
+      ? '🎉 تم استلام دعوتك! سجّل دخولك أو أنشئ حساباً للانضمام.'
+      : '🎉 Invite received! Login or sign up to join.',
+      'info');
   }
 }
 
