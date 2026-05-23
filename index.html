@@ -3406,7 +3406,24 @@ async function openProject(id) {
   // Load current user's membership
   const { data: mem } = await sb.from('project_members')
     .select('*').eq('project_id', id).eq('user_id', currentUser.id).maybeSingle();
-  currentMembership = mem;
+  // Super Admin gets virtual Owner membership if not already a member
+  if (!mem && currentProfile?.is_super_admin) {
+    currentMembership = {
+      id: 'super-admin-virtual',
+      project_id: id,
+      user_id: currentUser.id,
+      role: 'owner',
+      perm_invite_members: true,
+      perm_remove_members: true,
+      perm_manage_admins: true,
+      perm_mute_members: true,
+      perm_post_messages: true,
+      perm_manage_todos: true,
+      is_muted: false
+    };
+  } else {
+    currentMembership = mem;
+  }
 
   document.getElementById('projTitle').textContent = activeProject.name;
   document.getElementById('projDesc').textContent = activeProject.description || '';
@@ -3916,7 +3933,12 @@ async function renderMembers(container) {
     const isMe = m.user_id === currentUser.id;
     const isOwnerMember = m.role === 'owner';
     const isSuperAdminMember = m.profile?.is_super_admin;
-    const canManageThis = !isMe && !isOwnerMember && !isSuperAdminMember && (canRemove || canMute || canManageAdmins);
+    // Can delete: Super Admin of platform, OR Owner/Admin of project, but NOT yourself and NOT owner
+    const iAmSuperAdmin = currentProfile?.is_super_admin === true;
+    const iAmOwner = currentMembership?.role === 'owner';
+    const iAmAdmin = currentMembership?.role === 'admin';
+    const canDelete = !isMe && !isOwnerMember && (iAmSuperAdmin || iAmOwner || iAmAdmin);
+    const canManageThis = !isMe && !isOwnerMember && !isSuperAdminMember && (canRemove || canMute || canManageAdmins || iAmOwner || iAmAdmin || iAmSuperAdmin);
 
     let badges = `<span class="role-pill ${m.role}">${t(m.role)}</span>`;
     if (isSuperAdminMember) badges += ` <span class="super-admin-badge">👑 ${t('platformAdmin')}</span>`;
@@ -3933,7 +3955,7 @@ async function renderMembers(container) {
           </div>
           <div style="display:flex; gap:6px; align-items:center">
             ${canManageThis ? `<button class="btn btn-secondary" onclick='openManageMember(${JSON.stringify(m).replace(/'/g, "&apos;")})'>⚙️ ${t('manageMember')}</button>` : ''}
-            ${(isOwner || currentMembership?.role === 'admin' || currentProfile?.is_super_admin) && !isMe && !isOwnerMember && !isSuperAdminMember ? `<button class="btn btn-danger" onclick="removeProjectMember('${m.id}', '${escapeHTML(m.profile?.full_name || '')}')" title="${currentLang === 'ar' ? 'حذف العضو' : 'Remove member'}" style="padding:8px 10px">🗑️</button>` : ''}
+            ${canDelete ? `<button class="btn btn-danger" onclick="removeProjectMember('${m.id}', '${escapeHTML(m.profile?.full_name || m.profile?.email || '')}')" title="${currentLang === 'ar' ? 'حذف العضو من المشروع' : 'Remove from project'}" style="padding:8px 12px; font-size:16px">🗑️</button>` : ''}
           </div>
         </div>
       </div>
