@@ -3250,8 +3250,12 @@ async function onAuthSuccess(user) {
     await acceptInvitationToken(invToken);
   }
 
-  await loadProjects();
-  await loadHome();
+  // Try to restore previous navigation state
+  const restored = await restoreNavState();
+  if (!restored) {
+    await loadProjects();
+    await loadHome();
+  }
 }
 
 // ============================================
@@ -3468,6 +3472,7 @@ async function loadProjectCounts() {
 
 function showProjectTab(tab) {
   activeTab = tab;
+  saveNavState('project', activeProject?.id, tab);
   loadProjectTab(tab);
 }
 
@@ -4593,6 +4598,40 @@ async function acceptInvitationToken(token) {
 // ============================================
 // PAGES
 // ============================================
+function saveNavState(page, projectId = null, tab = null) {
+  const state = { page, projectId, tab, ts: Date.now() };
+  localStorage.setItem('dpNavState', JSON.stringify(state));
+}
+
+async function restoreNavState() {
+  try {
+    const raw = localStorage.getItem('dpNavState');
+    if (!raw) return false;
+    const state = JSON.parse(raw);
+    // Only restore if less than 2 hours old
+    if (Date.now() - state.ts > 7200000) { localStorage.removeItem('dpNavState'); return false; }
+    if (state.page === 'project' && state.projectId) {
+      await loadProjects();
+      await openProject(state.projectId);
+      if (state.tab) {
+        activeTab = state.tab;
+        showProjectTab(state.tab);
+      }
+      return true;
+    } else if (state.page === 'myTasks') {
+      showPage('myTasks');
+      return true;
+    } else if (state.page === 'adminPanel') {
+      showPage('adminPanel');
+      return true;
+    } else if (state.page === 'accountSettings') {
+      showPage('accountSettings');
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
 function showPage(page) {
   document.querySelectorAll('.page-content').forEach(p => p.classList.add('hidden'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -4600,12 +4639,15 @@ function showPage(page) {
     document.getElementById('homePage').classList.remove('hidden');
     document.querySelector('[data-page="home"]').classList.add('active');
     loadHome();
+    saveNavState('home');
   } else if (page === 'project') {
     document.getElementById('projectPage').classList.remove('hidden');
+    saveNavState('project', activeProject?.id, activeTab);
   } else if (page === 'myTasks') {
     document.getElementById('myTasksPage').classList.remove('hidden');
     document.querySelector('[data-page="myTasks"]').classList.add('active');
     loadMyTasks();
+    saveNavState('myTasks');
   } else if (page === 'adminPanel') {
     if (!currentProfile?.is_super_admin) {
       toast(currentLang === 'ar' ? 'صلاحيات غير كافية' : 'Insufficient permissions');
@@ -4614,9 +4656,11 @@ function showPage(page) {
     document.getElementById('adminPanelPage').classList.remove('hidden');
     document.querySelector('[data-page="adminPanel"]')?.classList.add('active');
     loadAdminPanel();
+    saveNavState('adminPanel');
   } else if (page === 'accountSettings') {
     document.getElementById('accountSettingsPage').classList.remove('hidden');
     loadAccountSettings();
+    saveNavState('accountSettings');
   }
   document.getElementById('sidebar').classList.remove('open');
 }
