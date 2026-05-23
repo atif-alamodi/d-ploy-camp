@@ -1666,7 +1666,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 /* === Notifications === */
 .notif-badge { position:absolute; top:-4px; right:-4px; background:var(--secondary); color:white; border-radius:50%; width:18px; height:18px; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; }
 .notif-bell { position:relative; cursor:pointer; font-size:22px; padding:6px; }
-.notif-dropdown { position:absolute; top:44px; left:0; width:320px; background:white; border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); border:1px solid var(--border); z-index:1000; overflow:hidden; }
+.notif-dropdown { position:fixed; top:64px; right:16px; width:340px; max-height:480px; background:white; border-radius:var(--radius-lg); box-shadow:0 20px 60px rgba(0,0,0,0.15); border:1px solid var(--border); z-index:9999; overflow:hidden; display:flex; flex-direction:column; }
 .notif-item { padding:12px 16px; border-bottom:1px solid var(--border); cursor:pointer; transition:background 0.15s; font-size:13px; }
 .notif-item:hover { background:var(--bg-elevated); }
 .notif-item.unread { background:var(--primary-light); }
@@ -3763,57 +3763,159 @@ async function deleteEvent(id) {
 // ============================================
 // FILES (metadata only, files via URL)
 // ============================================
+function getFileIcon(type, name) {
+  if (!type && name) {
+    const ext = name.split('.').pop()?.toLowerCase();
+    if (['jpg','jpeg','png','gif','webp','svg','bmp'].includes(ext)) return '🖼️';
+    if (['pdf'].includes(ext)) return '📕';
+    if (['doc','docx'].includes(ext)) return '📘';
+    if (['xls','xlsx','csv'].includes(ext)) return '📗';
+    if (['ppt','pptx'].includes(ext)) return '📙';
+    if (['zip','rar','7z','tar','gz'].includes(ext)) return '🗜️';
+    if (['mp4','mov','avi','mkv','webm'].includes(ext)) return '🎬';
+    if (['mp3','wav','ogg','m4a'].includes(ext)) return '🎵';
+    if (['txt','md'].includes(ext)) return '📝';
+    if (['js','ts','py','html','css','json'].includes(ext)) return '💻';
+    return '📄';
+  }
+  if (type?.startsWith('image/')) return '🖼️';
+  if (type === 'application/pdf') return '📕';
+  if (type?.includes('word')) return '📘';
+  if (type?.includes('excel') || type?.includes('spreadsheet')) return '📗';
+  if (type?.includes('powerpoint') || type?.includes('presentation')) return '📙';
+  if (type?.startsWith('video/')) return '🎬';
+  if (type?.startsWith('audio/')) return '🎵';
+  if (type?.includes('zip') || type?.includes('rar')) return '🗜️';
+  return '📄';
+}
+
+function formatFileSize(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/(1024*1024)).toFixed(1) + ' MB';
+}
+
 async function renderFiles(container) {
   const { data: files } = await sb
     .from('project_files').select('*, uploader:uploaded_by(full_name)')
     .eq('project_id', activeProject.id)
     .order('created_at', { ascending: false });
 
-  let html = `
+  container.innerHTML = `
     <div class="section-card">
       <div class="section-header">
-        <h3 class="section-title"><span class="section-icon" style="background:#dcfce7">📁</span> ${t('files')}</h3>
-        <button class="btn btn-primary" onclick="addFileLink()">➕ ${currentLang === 'ar' ? 'إضافة ملف/رابط' : 'Add file/link'}</button>
-      </div>
-      <div class="alert info show" style="font-size:13px; margin-bottom:14px">
-        ${currentLang === 'ar' ? '💡 لرفع الملفات: ارفع الملف على Google Drive/Dropbox والصق الرابط هنا.' : '💡 Upload to Google Drive/Dropbox and paste the link here.'}
-      </div>
-  `;
-
-  if (!files || files.length === 0) {
-    html += `<div class="empty-state"><div class="empty-icon">📁</div><div class="empty-title">${t('noFiles')}</div></div>`;
-  } else {
-    html += files.map(f => `
-      <div class="todo-item">
-        <div style="font-size:24px">📄</div>
-        <div class="todo-content">
-          <div class="todo-title"><a href="${escapeHTML(f.file_path)}" target="_blank" style="color:var(--primary); text-decoration:none">${escapeHTML(f.file_name)}</a></div>
-          <div class="todo-meta">${escapeHTML(f.uploader?.full_name || '')} • ${timeAgo(f.created_at)}</div>
+        <h3 class="section-title"><span class="section-icon" style="background:#dcfce7">📁</span> ${currentLang === 'ar' ? 'الملفات' : 'Files'}</h3>
+        <div style="display:flex;gap:8px">
+          <label class="btn btn-primary" style="cursor:pointer" title="${currentLang === 'ar' ? 'رفع ملف' : 'Upload file'}">
+            📤 ${currentLang === 'ar' ? 'رفع ملف' : 'Upload'}
+            <input type="file" id="fileUploadInput" multiple accept="*/*" style="display:none" onchange="handleFileUpload(event)">
+          </label>
+          <button class="btn btn-secondary" onclick="addFileLink()" title="${currentLang === 'ar' ? 'إضافة رابط' : 'Add link'}">🔗 ${currentLang === 'ar' ? 'رابط' : 'Link'}</button>
         </div>
-        <button class="btn btn-ghost" onclick="deleteFile('${f.id}')">🗑️</button>
       </div>
-    `).join('');
+      <div id="fileUploadProgress" style="display:none;padding:12px;background:var(--primary-light);border-radius:var(--radius);margin-bottom:12px;font-size:13px;color:var(--primary)">
+        ⏳ ${currentLang === 'ar' ? 'جارٍ الرفع...' : 'Uploading...'}
+      </div>
+      ${!files || files.length === 0
+        ? `<div class="empty-state"><div class="empty-icon">📁</div><div class="empty-title">${currentLang === 'ar' ? 'لا توجد ملفات بعد' : 'No files yet'}</div><div class="empty-sub">${currentLang === 'ar' ? 'ارفع أي نوع من الملفات' : 'Upload any type of file'}</div></div>`
+        : (files || []).map(f => `
+          <div class="todo-item" style="align-items:center">
+            <div style="font-size:28px;flex-shrink:0">${getFileIcon(f.file_type, f.file_name)}</div>
+            <div class="todo-content">
+              <div class="todo-title">
+                <a href="${escapeHTML(f.file_path)}" target="_blank" style="color:var(--primary);text-decoration:none;word-break:break-all">
+                  ${escapeHTML(f.file_name)}
+                </a>
+              </div>
+              <div class="todo-meta">
+                ${escapeHTML(f.uploader?.full_name || '')} • ${timeAgo(f.created_at)}
+                ${f.file_size ? ` • ${formatFileSize(f.file_size)}` : ''}
+              </div>
+            </div>
+            <div style="display:flex;gap:4px;flex-shrink:0">
+              <a href="${escapeHTML(f.file_path)}" download="${escapeHTML(f.file_name)}" target="_blank" class="btn btn-ghost" style="padding:6px 8px" title="${currentLang === 'ar' ? 'تحميل' : 'Download'}">⬇️</a>
+              <button class="btn btn-ghost" style="padding:6px 8px" onclick="deleteFile('${f.id}','${escapeHTML(f.storage_path || '')}')">🗑️</button>
+            </div>
+          </div>
+        `).join('')
+      }
+    </div>
+  `;
+}
+
+async function handleFileUpload(event) {
+  const files = Array.from(event.target.files);
+  if (!files.length) return;
+
+  const progress = document.getElementById('fileUploadProgress');
+  if (progress) progress.style.display = 'block';
+
+  for (const file of files) {
+    try {
+      const ext = file.name.split('.').pop();
+      const storagePath = `${activeProject.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+
+      // Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await sb.storage
+        .from('project-files')
+        .upload(storagePath, file, { upsert: false, contentType: file.type });
+
+      if (uploadError) {
+        toast(`❌ ${file.name}: ${uploadError.message}`);
+        continue;
+      }
+
+      // Get public URL
+      const { data: urlData } = sb.storage.from('project-files').getPublicUrl(storagePath);
+      const publicUrl = urlData.publicUrl;
+
+      // Save to DB
+      await sb.from('project_files').insert({
+        project_id: activeProject.id,
+        file_name: file.name,
+        file_path: publicUrl,
+        storage_path: storagePath,
+        file_type: file.type,
+        file_size: file.size,
+        uploaded_by: currentUser.id
+      });
+
+      toast(`✅ ${file.name} ${currentLang === 'ar' ? 'تم الرفع' : 'uploaded'}`);
+    } catch (err) {
+      toast(`❌ ${file.name}: ${err.message}`);
+    }
   }
-  html += `</div>`;
-  container.innerHTML = html;
+
+  if (progress) progress.style.display = 'none';
+  event.target.value = '';
+  await loadProjectTab('files');
+  await loadProjectCounts();
+  await logActivity('رفع ملف للمشروع', 'file', files[0]?.name || 'ملف جديد');
 }
 
 async function addFileLink() {
-  const name = prompt(currentLang === 'ar' ? 'اسم الملف:' : 'File name:');
+  const name = prompt(currentLang === 'ar' ? 'اسم الملف أو الرابط:' : 'File/link name:');
   if (!name) return;
-  const url = prompt(currentLang === 'ar' ? 'الرابط (Google Drive، إلخ):' : 'URL (Google Drive, etc.):');
+  const url = prompt(currentLang === 'ar' ? 'الرابط (Google Drive، Dropbox، إلخ):' : 'URL (Google Drive, Dropbox, etc.):');
   if (!url) return;
   await sb.from('project_files').insert({
-    project_id: activeProject.id, file_name: name, file_path: url, uploaded_by: currentUser.id
+    project_id: activeProject.id, file_name: name, file_path: url,
+    file_type: 'link', uploaded_by: currentUser.id
   });
-  toast(currentLang === 'ar' ? 'تمت الإضافة' : 'Added');
+  toast(currentLang === 'ar' ? '✅ تمت الإضافة' : '✅ Added');
   await loadProjectTab('files');
   await loadProjectCounts();
 }
 
-async function deleteFile(id) {
-  if (!confirm(currentLang === 'ar' ? 'حذف الملف؟' : 'Delete?')) return;
+async function deleteFile(id, storagePath) {
+  if (!confirm(currentLang === 'ar' ? 'حذف الملف نهائياً؟' : 'Delete file permanently?')) return;
+  // Delete from storage if uploaded
+  if (storagePath) {
+    await sb.storage.from('project-files').remove([storagePath]);
+  }
   await sb.from('project_files').delete().eq('id', id);
+  toast(currentLang === 'ar' ? '🗑️ تم الحذف' : '🗑️ Deleted');
   await loadProjectTab('files');
   await loadProjectCounts();
 }
