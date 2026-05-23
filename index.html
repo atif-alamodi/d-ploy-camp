@@ -3386,6 +3386,17 @@ async function loadAccountSettings() {
 
 async function onAuthSuccess(user) {
   currentUser = user;
+  
+  // Ensure profile exists (fixes missing profiles for invited users)
+  try {
+    await sb.from('profiles').upsert({
+      id: user.id,
+      email: user.email,
+      full_name: user.user_metadata?.full_name || user.email.split('@')[0],
+      role: 'member'
+    }, { onConflict: 'id', ignoreDuplicates: true });
+  } catch(e) {}
+  
   // Load profile
   const { data: profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
   currentProfile = profile || { id: user.id, email: user.email, full_name: user.email.split('@')[0] };
@@ -4846,17 +4857,28 @@ async function cancelInvite(id) {
 }
 
 async function acceptInvitationToken(token) {
-  // Look up invitation - check ALL statuses (don't fail if accepted)
-  const { data: invite, error } = await sb
-    .from('invitations').select('*, project:project_id(name, icon)')
-    .eq('token', token)
-    .maybeSingle();
+  // Look up invitation - try ANY status (not just pending)
+  let invite = null;
+  try {
+    const result = await sb
+      .from('invitations').select('*, project:project_id(name, icon)')
+      .eq('token', token)
+      .maybeSingle();
+    invite = result.data;
+  } catch(e) { /* ignore - user is still logged in */ }
 
-  // Always proceed - user is logged in successfully
-  // The new RLS makes them see all projects automatically anyway
-  
-  if (invite && invite.project_id) {
-    // Try to add as member (will skip if already member via ON CONFLICT)
+  // ALWAYS ensure user has a profile (in case trigger failed)
+  try {
+    await sb.from('profiles').upsert({
+      id: currentUser.id,
+      email: currentUser.email,
+      full_name: currentUser.user_metadata?.full_name || currentUser.email.split('@')[0],
+      role: 'member'
+    }, { onConflict: 'id', ignoreDuplicates: false });
+  } catch(e) {}
+
+  // If there's a project to join, ensure membership
+  if (invite?.project_id) {
     try {
       await sb.from('project_members').insert({
         project_id: invite.project_id,
@@ -4865,7 +4887,7 @@ async function acceptInvitationToken(token) {
       });
     } catch(e) { /* already member */ }
     
-    // Mark accepted (silent)
+    // Mark invite accepted (silent)
     sb.from('invitations').update({
       status: 'accepted',
       accepted_at: new Date().toISOString()
