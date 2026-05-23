@@ -4297,9 +4297,16 @@ async function deleteProject() {
     toast((currentLang === 'ar' ? 'خطأ في الحذف: ' : 'Delete error: ') + error.message); 
     return; 
   }
-  toast(currentLang === 'ar' ? '🗑️ تم حذف المشروع' : '🗑️ Project deleted');
+  toast(currentLang === 'ar' ? '🗑️ تم حذف المشروع نهائياً' : '🗑️ Project deleted');
   activeProject = null;
+  // Clear saved nav state for this project
+  const savedState = localStorage.getItem('dpNavState');
+  if (savedState) {
+    const s = JSON.parse(savedState);
+    if (s.projectId === pid) localStorage.removeItem('dpNavState');
+  }
   await loadProjects();
+  await loadHome();
   showPage('home');
 }
 
@@ -4715,25 +4722,38 @@ async function restoreNavState() {
     const state = JSON.parse(raw);
     // Only restore if less than 2 hours old
     if (Date.now() - state.ts > 7200000) { localStorage.removeItem('dpNavState'); return false; }
+
+    // Always load projects first
+    await loadProjects();
+
     if (state.page === 'project' && state.projectId) {
-      await loadProjects();
+      // Verify project still exists
+      const exists = currentProjects.find(p => p.id === state.projectId);
+      if (!exists && !currentProfile?.is_super_admin) {
+        // Project not found for this user - go home
+        await loadHome();
+        return true;
+      }
       await openProject(state.projectId);
-      if (state.tab) {
-        activeTab = state.tab;
-        showProjectTab(state.tab);
+      if (state.tab && state.tab !== 'todos') {
+        setTimeout(() => showProjectTab(state.tab), 300);
       }
       return true;
     } else if (state.page === 'myTasks') {
       showPage('myTasks');
       return true;
-    } else if (state.page === 'adminPanel') {
+    } else if (state.page === 'adminPanel' && currentProfile?.is_super_admin) {
       showPage('adminPanel');
       return true;
     } else if (state.page === 'accountSettings') {
       showPage('accountSettings');
       return true;
     }
-  } catch (e) {}
+    await loadHome();
+    return true;
+  } catch (e) {
+    console.error('restoreNavState error:', e);
+  }
   return false;
 }
 
@@ -4747,7 +4767,7 @@ function showPage(page) {
     saveNavState('home');
   } else if (page === 'project') {
     document.getElementById('projectPage').classList.remove('hidden');
-    saveNavState('project', activeProject?.id, activeTab);
+    if (activeProject?.id) saveNavState('project', activeProject.id, activeTab);
   } else if (page === 'myTasks') {
     document.getElementById('myTasksPage').classList.remove('hidden');
     document.querySelector('[data-page="myTasks"]').classList.add('active');
