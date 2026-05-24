@@ -3466,7 +3466,8 @@ async function handleLogin() {
     await onAuthSuccess(data.user);
   } catch(e) {
     console.error('Login error:', e);
-    showAlert('loginAlert', currentLang === 'ar' ? '❌ خطأ في الاتصال. حاول مرة أخرى.' : '❌ Connection error. Please try again.');
+    let errMsg = currentLang === 'ar' ? '❌ خطأ في الاتصال. حاول مرة أخرى.' : '❌ Connection error. Please try again.';
+    showAlert('loginAlert', errMsg);
     if (btn) { btn.disabled = false; btn.textContent = loginLabel; }
   }
 }
@@ -3599,15 +3600,20 @@ async function loadAccountSettings() {
 async function onAuthSuccess(user) {
   currentUser = user;
   
-  // Ensure profile exists (fixes missing profiles for invited users)
+  // Ensure profile exists - only insert if missing, never overwrite
   try {
-    await sb.from('profiles').upsert({
+    await sb.from('profiles').insert({
       id: user.id,
       email: user.email,
       full_name: user.user_metadata?.full_name || user.email.split('@')[0],
-      role: 'member'
-    }, { onConflict: 'id', ignoreDuplicates: true });
-  } catch(e) {}
+      role: 'member',
+      status: 'active',
+      platform_role: 'member',
+      profile_completed: false
+    }).select().maybeSingle();
+  } catch(e) {
+    // Profile already exists - that's fine, ignore error
+  }
   
   // Load profile
   const { data: profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
