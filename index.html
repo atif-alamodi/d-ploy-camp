@@ -2124,6 +2124,17 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
       <div id="myTasksList"></div>
     </div>
 
+    <!-- Todo Detail page (full-page like Basecamp) -->
+    <div id="todoDetailPage" class="page-content hidden">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <button class="btn btn-ghost" style="padding:8px 16px" onclick="closeTodoDetailPage()">
+          ← <span>العودة</span>
+        </button>
+        <span style="color:#9ca3af;font-size:13px" id="todoBreadcrumb"></span>
+      </div>
+      <div id="todoDetailContent"></div>
+    </div>
+
     <!-- Admin Panel page (Super Admin only) -->
     <div id="adminPanelPage" class="page-content hidden">
       <div class="admin-banner">
@@ -9111,6 +9122,279 @@ async function addTodoComment(todoId, projectId, content) {
 }
 
 async function showTodoDetail(todoId) {
+  // Use the new full-page detail view (Basecamp-style)
+  return await showTodoDetailPage(todoId);
+}
+
+// ============================================
+// FULL-PAGE TODO DETAIL VIEW (Basecamp-style)
+// ============================================
+let currentDetailTodoId = null;
+
+async function showTodoDetailPage(todoId) {
+  currentDetailTodoId = todoId;
+  
+  // Fetch full todo with all relations (with fallback)
+  let todo = null;
+  try {
+    const { data } = await sb.from('todos').select(`
+      *, 
+      assigned_profile:assigned_to(full_name),
+      completed_by_profile:completed_by(full_name),
+      reopened_by_profile:reopened_by(full_name),
+      creator:created_by(full_name)
+    `).eq('id', todoId).maybeSingle();
+    todo = data;
+  } catch(e) {
+    const { data } = await sb.from('todos').select('*').eq('id', todoId).maybeSingle();
+    todo = data;
+  }
+  
+  if (!todo) { toast('❌ لم نعثر على المهمة'); return; }
+  
+  // Fetch list
+  const { data: list } = await sb.from('todo_lists').select('title').eq('id', todo.list_id).maybeSingle();
+  
+  // Fetch assignees
+  const { data: assignees } = await sb.from('todo_assignees')
+    .select('user_id, assigned_at, profile:user_id(full_name)')
+    .eq('todo_id', todoId);
+  
+  // Fetch history
+  const { data: history } = await sb.from('todo_history')
+    .select('*, profile:user_id(full_name)')
+    .eq('todo_id', todoId)
+    .order('created_at', { ascending: false })
+    .limit(20);
+  
+  // Hide other pages, show detail page
+  document.querySelectorAll('.page-content').forEach(p => p.classList.add('hidden'));
+  const detailPage = document.getElementById('todoDetailPage');
+  detailPage.classList.remove('hidden');
+  
+  // Update breadcrumb
+  document.getElementById('todoBreadcrumb').innerHTML = `
+    📁 ${escapeHTML(activeProject?.name || '')} › 📋 ${escapeHTML(list?.title || 'قائمة')} › 📌 ${escapeHTML(todo.title)}
+  `;
+  
+  const attachments = todo.attachments || [];
+  const priorityLabels = { low: '🟢 منخفضة', normal: '🔵 عادية', high: '🟡 عالية', urgent: '🔴 عاجلة' };
+  
+  const content = document.getElementById('todoDetailContent');
+  content.innerHTML = `
+    <div class="section-card" style="margin-bottom:20px">
+      <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:16px">
+        <div onclick="toggleTodo('${todo.id}', ${!todo.completed}).then(() => showTodoDetailPage('${todo.id}'))" 
+          style="width:32px;height:32px;border:2.5px solid ${todo.completed ? '#10b981' : '#d1d5db'};border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;background:${todo.completed ? '#10b981' : 'transparent'};color:white;font-size:18px;flex-shrink:0;transition:all 0.2s">
+          ${todo.completed ? '✓' : ''}
+        </div>
+        <div style="flex:1">
+          <h2 style="margin:0 0 4px;font-size:24px;font-weight:900;${todo.completed ? 'text-decoration:line-through;color:#9ca3af' : 'color:#1f2937'}">${escapeHTML(todo.title)}</h2>
+          ${todo.description ? `<p style="margin:8px 0 0;color:#6b7280;font-size:14px;line-height:1.7">${escapeHTML(todo.description)}</p>` : ''}
+        </div>
+        <button class="btn btn-ghost" onclick="toggleReactionPicker(event,'todo','${todo.id}')" style="padding:8px;font-size:18px" title="تفاعل">😊</button>
+      </div>
+      
+      <!-- Status banner -->
+      ${todo.completed && todo.completed_at ? `
+        <div style="padding:10px 14px;background:#f0fdf4;border-radius:12px;border:1px solid #bbf7d0;font-size:13px;color:#15803d;margin-bottom:14px">
+          ✓ <strong>أُغلقت</strong> ${timeAgo(todo.completed_at)} ${todo.completed_by_profile ? '— بواسطة ' + escapeHTML(todo.completed_by_profile.full_name) : ''}
+          <div style="font-size:11px;color:#16a34a;margin-top:2px">${new Date(todo.completed_at).toLocaleString('ar-SA')}</div>
+        </div>
+      ` : ''}
+      ${todo.reopened_at && !todo.completed ? `
+        <div style="padding:10px 14px;background:#fef3c7;border-radius:12px;border:1px solid #fcd34d;font-size:13px;color:#92400e;margin-bottom:14px">
+          🔄 <strong>أُعيد فتحها</strong> ${timeAgo(todo.reopened_at)} ${todo.reopened_by_profile ? '— بواسطة ' + escapeHTML(todo.reopened_by_profile.full_name) : ''}
+          <div style="font-size:11px;color:#a16207;margin-top:2px">${new Date(todo.reopened_at).toLocaleString('ar-SA')}</div>
+        </div>
+      ` : ''}
+      
+      <!-- Quick reactions row -->
+      <div id="reactions-todo-${todo.id}" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px"></div>
+      
+      <!-- Properties grid -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px">
+        <!-- Assignees -->
+        <div style="background:#fafaf9;padding:12px;border-radius:12px;border:1px solid #f1f5f9">
+          <div style="font-size:11px;color:#9ca3af;font-weight:700;margin-bottom:8px">👥 الأعضاء المعيّنون</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+            ${(assignees || []).length === 0 ? '<span style="color:#9ca3af;font-size:12px">لم يُعيَّن أحد</span>' :
+              (assignees || []).map(a => `
+                <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:linear-gradient(135deg,#fff7ed,#fef3c7);border-radius:50px;font-size:12px;font-weight:600;color:#c2410c;border:1px solid #fed7aa">
+                  ${(a.profile?.full_name || '?').charAt(0).toUpperCase()} ${escapeHTML(a.profile?.full_name || 'مستخدم')}
+                </span>
+              `).join('')
+            }
+            <button onclick="openAssigneesPicker('${todo.id}')" style="background:#fef3c7;color:#92400e;border:1px dashed #fbbf24;padding:4px 10px;border-radius:50px;font-size:11px;font-weight:600;cursor:pointer">👥+ تعديل</button>
+          </div>
+        </div>
+        
+        <!-- Dates -->
+        <div style="background:#fafaf9;padding:12px;border-radius:12px;border:1px solid #f1f5f9">
+          <div style="font-size:11px;color:#9ca3af;font-weight:700;margin-bottom:8px">📅 التواريخ</div>
+          <div style="font-size:12px;color:#374151;line-height:1.7">
+            ${todo.start_date ? `▶️ البداية: <strong>${formatDate(todo.start_date)}</strong><br>` : ''}
+            ${todo.due_date ? `🏁 الانتهاء: <strong>${formatDate(todo.due_date)}</strong>` : ''}
+            ${!todo.start_date && !todo.due_date ? '<span style="color:#9ca3af">لم تُحدّد تواريخ</span>' : ''}
+          </div>
+        </div>
+        
+        <!-- Priority -->
+        <div style="background:#fafaf9;padding:12px;border-radius:12px;border:1px solid #f1f5f9">
+          <div style="font-size:11px;color:#9ca3af;font-weight:700;margin-bottom:8px">🚦 الأولوية</div>
+          <span class="priority-badge priority-${todo.priority}">${priorityLabels[todo.priority] || todo.priority}</span>
+        </div>
+        
+        <!-- Layer -->
+        ${todo.layer_number ? `
+          <div style="background:#fafaf9;padding:12px;border-radius:12px;border:1px solid #f1f5f9">
+            <div style="font-size:11px;color:#9ca3af;font-weight:700;margin-bottom:8px">🎯 الطبقة</div>
+            <span style="background:#e0e7ff;color:#3730a3;padding:4px 12px;border-radius:50px;font-size:12px;font-weight:700">طبقة ${todo.layer_number}</span>
+          </div>
+        ` : ''}
+      </div>
+      
+      <!-- Progress -->
+      <div style="background:linear-gradient(135deg,#fff7ed,#fef3c7);padding:16px;border-radius:14px;margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-weight:700;color:#92400e;font-size:14px">📊 نسبة الإنجاز</div>
+          <div style="font-size:24px;font-weight:900;color:#c2410c">${todo.progress || 0}%</div>
+        </div>
+        <div onclick="openProgressEditor('${todo.id}', ${todo.progress || 0})" 
+          style="position:relative;height:12px;background:white;border-radius:6px;cursor:pointer;overflow:hidden">
+          <div style="position:absolute;top:0;left:0;height:100%;background:linear-gradient(90deg,#ff6b35,#f7468a);border-radius:6px;transition:width 0.4s;width:${todo.progress || 0}%"></div>
+        </div>
+        <button onclick="openProgressEditor('${todo.id}', ${todo.progress || 0})" style="margin-top:10px;background:white;color:#c2410c;border:1px solid #fed7aa;padding:6px 14px;border-radius:50px;font-size:12px;font-weight:700;cursor:pointer;width:100%">
+          📊 تحديث نسبة الإنجاز
+        </button>
+      </div>
+    </div>
+    
+    <!-- Attachments section -->
+    <div class="section-card" style="margin-bottom:20px">
+      <div class="section-header">
+        <h3 class="section-title">
+          <span class="section-icon" style="background:#dcfce7">📎</span>
+          المرفقات (${attachments.length})
+        </h3>
+        <button class="btn btn-primary" onclick="openAttachmentUpload('${todo.id}')">📎 رفع ملف</button>
+      </div>
+      <div id="todoDropZone_${todo.id}" 
+        style="border:2px dashed #cbd5e1;border-radius:14px;padding:24px;text-align:center;color:#9ca3af;cursor:pointer;transition:all 0.2s"
+        ondragover="event.preventDefault();this.style.borderColor='#ff6b35';this.style.background='#fff7ed'"
+        ondragleave="this.style.borderColor='#cbd5e1';this.style.background='transparent'"
+        ondrop="handleTodoFileDrop(event,'${todo.id}').then(() => showTodoDetailPage('${todo.id}'))"
+        onclick="openAttachmentUpload('${todo.id}')">
+        📁 اسحب الملفات هنا أو اضغط للرفع
+      </div>
+      ${attachments.length > 0 ? `
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
+          ${attachments.map((a, idx) => `
+            <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px">
+              <a href="${escapeHTML(a.url)}" target="_blank" style="color:#15803d;text-decoration:none;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px">
+                ${getFileIcon(a.type, a.name)} ${escapeHTML(a.name || 'ملف')}
+              </a>
+              <span style="font-size:10px;color:#9ca3af">${a.size ? Math.round(a.size/1024) + 'KB' : ''}</span>
+              <button onclick="removeTodoAttachment('${todo.id}', ${idx})" style="background:transparent;border:none;color:#ef4444;cursor:pointer;font-size:14px" title="حذف">✕</button>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+    </div>
+    
+    <!-- Comments section (always visible) -->
+    <div class="section-card" style="margin-bottom:20px">
+      <div class="section-header">
+        <h3 class="section-title">
+          <span class="section-icon" style="background:#fff7ed">💬</span>
+          التعليقات والمناقشات
+        </h3>
+      </div>
+      <div id="commentsList-${todo.id}" style="display:flex;flex-direction:column;gap:10px;max-height:500px;overflow-y:auto;margin-bottom:16px;padding:4px"></div>
+      <div style="display:flex;gap:6px;align-items:flex-end;border-top:1px solid #f1f5f9;padding-top:14px">
+        <textarea id="commentInput-${todo.id}" placeholder="اكتب تعليقاً... (اضغط Enter للإرسال، Shift+Enter لسطر جديد)" 
+          style="flex:1;padding:10px 14px;border:1px solid #e5e7eb;border-radius:14px;font-family:inherit;font-size:14px;resize:none;min-height:42px;max-height:120px;background:white"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();postInlineComment('${todo.id}','${activeProject.id}')}"></textarea>
+        <button onclick="postInlineComment('${todo.id}','${activeProject.id}')" 
+          style="background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:10px 20px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">
+          📤 إرسال
+        </button>
+      </div>
+    </div>
+    
+    <!-- History section -->
+    <div class="section-card">
+      <div class="section-header">
+        <h3 class="section-title">
+          <span class="section-icon" style="background:#e0e7ff">📜</span>
+          سجل النشاط (${(history || []).length})
+        </h3>
+      </div>
+      ${(history || []).length === 0 ? '<div style="color:#9ca3af;font-size:13px;text-align:center;padding:12px">لا يوجد نشاط بعد</div>' :
+        (history || []).map(h => {
+          const actionIcons = { created: '🆕', completed: '✅', reopened: '🔄', progress_updated: '📊', assigned: '👤+', unassigned: '👤-', priority_changed: '🚦', date_changed: '📅', title_changed: '✏️' };
+          const actionLabels = { created: 'أنشأ المهمة', completed: 'أكمل المهمة', reopened: 'أعاد فتح المهمة', progress_updated: 'حدّث نسبة الإنجاز', assigned: 'عيّن عضو', unassigned: 'ألغى التعيين', priority_changed: 'غيّر الأولوية', date_changed: 'غيّر التاريخ', title_changed: 'غيّر العنوان' };
+          let extra = '';
+          if (h.action === 'progress_updated' && h.metadata) {
+            extra = ` من ${h.metadata.from || 0}% إلى ${h.metadata.to || 0}%`;
+          }
+          return `
+            <div style="display:flex;align-items:center;gap:12px;padding:10px;border-bottom:1px solid #f1f5f9;font-size:13px">
+              <div style="font-size:18px">${actionIcons[h.action] || '•'}</div>
+              <div style="flex:1">
+                <strong>${escapeHTML(h.profile?.full_name || 'عضو')}</strong>
+                <span style="color:#6b7280"> ${actionLabels[h.action] || h.action}${extra}</span>
+              </div>
+              <div style="font-size:11px;color:#9ca3af;white-space:nowrap">${timeAgo(h.created_at)}</div>
+            </div>
+          `;
+        }).join('')
+      }
+    </div>
+  `;
+  
+  // Scroll to top
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  
+  // Load comments and reactions
+  setTimeout(async () => {
+    try { await loadInlineComments(todo.id); } catch(e) {}
+    try {
+      const { data: reactions } = await sb.rpc('get_reactions_for_messages', {
+        p_message_type: 'todo',
+        p_message_ids: [todo.id]
+      });
+      const box = document.getElementById(`reactions-todo-${todo.id}`);
+      if (box) box.innerHTML = renderReactionsRow('todo', todo.id, reactions || []);
+    } catch(e) {}
+  }, 100);
+}
+
+function closeTodoDetailPage() {
+  currentDetailTodoId = null;
+  document.getElementById('todoDetailPage').classList.add('hidden');
+  // Go back to project page
+  if (activeProject) {
+    document.getElementById('projectPage').classList.remove('hidden');
+  } else {
+    document.getElementById('homePage').classList.remove('hidden');
+  }
+}
+
+async function removeTodoAttachment(todoId, idx) {
+  if (!confirm('حذف هذا المرفق؟')) return;
+  const { data: row } = await sb.from('todos').select('attachments').eq('id', todoId).maybeSingle();
+  if (!row) return;
+  const attachments = row.attachments || [];
+  attachments.splice(idx, 1);
+  const { error } = await sb.from('todos').update({ attachments }).eq('id', todoId);
+  if (error) { toast('❌ ' + error.message); return; }
+  toast('✅ تم الحذف');
+  await showTodoDetailPage(todoId);
+}
+
+// Keep the old function name for backward compat
+async function showTodoDetailOld(todoId) {
   const { data: todo } = await sb.from('todos')
     .select('*, assigned_profile:assigned_to(full_name), creator:created_by(full_name)')
     .eq('id', todoId).single();
