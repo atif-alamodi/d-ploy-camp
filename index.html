@@ -7369,6 +7369,133 @@ function insertMention(userId, name) {
 // CAMPFIRE (Real-time Chat)
 // ============================================
 let campfireChannel = null;
+let notificationChannel = null;
+let messagesChannel = null;
+let messageCommentsChannel = null;
+let todoCommentsChannel = null;
+let lastSoundTime = 0;
+let soundEnabled = localStorage.getItem('dp_sound_enabled') !== 'false';
+
+// ============================================
+// NOTIFICATION SOUND
+// ============================================
+function playNotificationSound() {
+  if (!soundEnabled) return;
+  // Throttle: max 1 sound per 800ms
+  const now = Date.now();
+  if (now - lastSoundTime < 800) return;
+  lastSoundTime = now;
+  
+  try {
+    // Generate a pleasant notification chime using Web Audio API
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o1 = ctx.createOscillator();
+    const g1 = ctx.createGain();
+    o1.connect(g1);
+    g1.connect(ctx.destination);
+    o1.frequency.setValueAtTime(880, ctx.currentTime); // A5
+    o1.frequency.setValueAtTime(1175, ctx.currentTime + 0.1); // D6
+    g1.gain.setValueAtTime(0.15, ctx.currentTime);
+    g1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    o1.start(ctx.currentTime);
+    o1.stop(ctx.currentTime + 0.3);
+  } catch(e) {
+    console.log('Audio not available');
+  }
+}
+
+function toggleNotificationSound() {
+  soundEnabled = !soundEnabled;
+  localStorage.setItem('dp_sound_enabled', soundEnabled ? 'true' : 'false');
+  toast(soundEnabled ? '🔔 تم تفعيل النغمة' : '🔕 تم كتم النغمة');
+  // Update UI button if exists
+  const btn = document.getElementById('soundToggleBtn');
+  if (btn) btn.textContent = soundEnabled ? '🔔' : '🔕';
+}
+
+// Subscribe to global notifications (so any new notification triggers sound)
+function subscribeNotifications() {
+  if (!currentUser?.id) return;
+  if (notificationChannel) sb.removeChannel(notificationChannel);
+  notificationChannel = sb.channel('user-notifications-' + currentUser.id)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'notifications',
+      filter: 'user_id=eq.' + currentUser.id
+    }, async (payload) => {
+      // Play sound
+      playNotificationSound();
+      
+      // Show in-app toast for the notification
+      if (payload.new.title) {
+        const notifTitle = payload.new.title;
+        const notifBody = (payload.new.body || '').substring(0, 80);
+        toast('🔔 ' + notifTitle + (notifBody ? ': ' + notifBody : ''));
+      }
+      
+      // Refresh notifications bell if visible
+      if (typeof loadNotifications === 'function') {
+        try { await loadNotifications(); } catch(e) {}
+      }
+    })
+    .subscribe();
+}
+
+// Subscribe to project messages (Basecamp-style)
+function subscribeMessages() {
+  if (!activeProject?.id) return;
+  if (messagesChannel) sb.removeChannel(messagesChannel);
+  messagesChannel = sb.channel('project-msgs-' + activeProject.id)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'messages',
+      filter: 'project_id=eq.' + activeProject.id
+    }, async (payload) => {
+      if (payload.new.author_id !== currentUser.id) {
+        playNotificationSound();
+        toast('📝 رسالة جديدة: ' + (payload.new.title || ''));
+      }
+      // Auto-refresh messages tab if open
+      if (activeTab === 'messages' && typeof loadMessages === 'function') {
+        try { await loadMessages(); } catch(e) {}
+      }
+    })
+    .subscribe();
+  
+  // Subscribe to message comments too (replies)
+  if (messageCommentsChannel) sb.removeChannel(messageCommentsChannel);
+  messageCommentsChannel = sb.channel('msg-comments-' + activeProject.id)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'message_comments'
+    }, async (payload) => {
+      if (payload.new.user_id !== currentUser.id) {
+        playNotificationSound();
+      }
+      if (activeTab === 'messages' && typeof loadMessages === 'function') {
+        try { await loadMessages(); } catch(e) {}
+      }
+    })
+    .subscribe();
+  
+  // Subscribe to todo comments
+  if (todoCommentsChannel) sb.removeChannel(todoCommentsChannel);
+  todoCommentsChannel = sb.channel('todo-comments-' + activeProject.id)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'todo_comments'
+    }, async (payload) => {
+      if (payload.new.user_id !== currentUser.id) {
+        playNotificationSound();
+      }
+    })
+    .subscribe();
+}
+
 
 async function renderCampfire(container) {
   await loadMentionMembers();
@@ -7395,6 +7522,7 @@ async function renderCampfire(container) {
   `;
   await loadCampfireMessages();
   subscribeCampfire();
+  try { subscribeMessages(); } catch(e) { console.log('Realtime messages:', e); }
 }
 
 async function loadCampfireMessages() {
