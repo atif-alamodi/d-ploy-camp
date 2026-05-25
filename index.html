@@ -3844,31 +3844,55 @@ async function handleSignup() {
       return;
     }
     
-    // ===== EXTERNAL FLOW: Standard Supabase signup (needs approval) =====
-    const { data, error } = await sb.auth.signUp({
-      email, password,
-      options: { data: { full_name: name } }
+    // ===== EXTERNAL FLOW: Use RPC to bypass Supabase Auth rate limits =====
+    const { data: extData, error: extError } = await sb.rpc('signup_external', {
+      p_email: email,
+      p_password: password,
+      p_full_name: name
     });
-    if (error) {
-      let msg = error.message;
-      if (error.message.toLowerCase().includes('already')) {
-        msg = currentLang === 'ar' ? '❌ هذا البريد مسجّل مسبقاً. جرّب تسجيل الدخول.' : '❌ Email already registered. Try signing in.';
-      } else if (error.message.toLowerCase().includes('rate')) {
-        msg = currentLang === 'ar' 
-          ? '⚠️ تم تجاوز عدد التسجيلات المسموحة. حاول بعد ساعة، أو اطلب من مدير المنصة دعوة لتسجل عبرها بدون حدود.'
-          : '⚠️ Signup limit reached. Try again in an hour, or request an invite from admin.';
-      }
-      showAlert('signupAlert', msg);
+    
+    if (extError) {
+      showAlert('signupAlert', '❌ ' + extError.message);
       if (btn) { btn.disabled = false; btn.textContent = signupLabel; }
       return;
     }
     
+    if (!extData || !extData.success) {
+      if (extData?.already_registered) {
+        showAlert('signupAlert', '✅ لديك حساب بالفعل! انتقل لتسجيل الدخول.', 'success');
+        setTimeout(() => {
+          showLogin();
+          const loginEmail = document.getElementById('loginEmail');
+          if (loginEmail) loginEmail.value = email;
+        }, 2000);
+        return;
+      }
+      showAlert('signupAlert', '❌ ' + (extData?.error || 'فشل التسجيل'));
+      if (btn) { btn.disabled = false; btn.textContent = signupLabel; }
+      return;
+    }
+    
+    // Auto-approved? (had pending invite for this email) - sign them in
+    if (extData.auto_approved) {
+      showAlert('signupAlert', '🎉 تم التسجيل بنجاح! جارٍ الدخول...', 'success');
+      if (btn) { btn.textContent = '✅ تم'; }
+      
+      setTimeout(async () => {
+        try {
+          const { data: signInData } = await sb.auth.signInWithPassword({ email, password });
+          if (signInData?.user) {
+            await onAuthSuccess(signInData.user);
+          }
+        } catch(e) {
+          showLogin();
+        }
+      }, 1000);
+      return;
+    }
+    
+    // External - awaiting approval
     showAlert('signupAlert', '✅ تم إرسال طلب التسجيل بنجاح!\n\n⏳ حسابك بانتظار موافقة مدير المنصة. ستصلك رسالة بريد إلكتروني عند الموافقة.', 'success');
     if (btn) { btn.disabled = true; btn.textContent = '✅ تم الإرسال'; }
-    
-    if (data.session) {
-      await sb.auth.signOut();
-    }
     
     setTimeout(() => {
       showLogin();
