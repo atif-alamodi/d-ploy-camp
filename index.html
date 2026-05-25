@@ -2196,6 +2196,22 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
         <div id="adminPendingInvites" style="margin-top:16px"></div>
       </div>
 
+      <!-- Manual Account Creation (bypass rate limits) -->
+      <div class="section-card">
+        <div class="section-header">
+          <h3 class="section-title">
+            <span class="section-icon" style="background:#dbeafe">👤</span>
+            <span>إنشاء حساب يدوياً (تجاوز حدود التسجيل)</span>
+          </h3>
+        </div>
+        <p style="color:#6b7280;font-size:13px;margin-bottom:14px">استخدم هذا الزر إذا تعذّر على عضو إكمال التسجيل من رابط الدعوة بسبب حد التسجيلات. ستُنشئ له حساباً مفعّلاً وسيُرسل له إيميل لإنشاء كلمة المرور.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <input class="form-input" id="manualUserEmail" placeholder="البريد الإلكتروني" type="email" style="direction:ltr;text-align:right">
+          <input class="form-input" id="manualUserName" placeholder="الاسم الكامل" type="text">
+        </div>
+        <button class="btn btn-primary" onclick="adminCreateAccountManual()" style="width:100%">➕ إنشاء الحساب وإرسال رابط كلمة المرور</button>
+      </div>
+
       <!-- Pending Signup Requests -->
       <div class="section-card" id="pendingSignupsCard" style="display:none">
         <div class="section-header">
@@ -6280,6 +6296,69 @@ async function populateTeamLeaderDropdown() {
       const me = u.id === currentUser.id ? ' (أنت)' : '';
       return `<option value="${u.id}">${escapeHTML(u.full_name || u.email)}${role}${me}</option>`;
     }).join('');
+}
+
+// ============================================
+// MANUAL ACCOUNT CREATION (bypass auth rate limits)
+// ============================================
+async function adminCreateAccountManual() {
+  const email = document.getElementById('manualUserEmail').value.trim().toLowerCase();
+  const name = document.getElementById('manualUserName').value.trim();
+  
+  if (!email || !name) {
+    toast('⚠️ أدخل البريد الإلكتروني والاسم');
+    return;
+  }
+  
+  if (!email.includes('@')) {
+    toast('⚠️ البريد الإلكتروني غير صحيح');
+    return;
+  }
+  
+  if (!confirm(`إنشاء حساب جديد:\n\n👤 ${name}\n📧 ${email}\n\nسيتم:\n1. إنشاء الحساب فوراً\n2. تفعيله تلقائياً\n3. إضافته لكل المشاريع\n4. إرسال إيميل له لإنشاء كلمة المرور\n\nمتابعة؟`)) return;
+  
+  try {
+    // Generate a random temporary password
+    const tempPass = 'TempPass_' + Math.random().toString(36).substring(2, 12) + '!';
+    
+    // Create account via RPC
+    const { data, error } = await sb.rpc('admin_create_user_with_password', {
+      p_email: email,
+      p_password: tempPass,
+      p_full_name: name
+    });
+    
+    if (error) {
+      toast('❌ ' + error.message);
+      return;
+    }
+    
+    if (!data || !data.success) {
+      toast('❌ ' + (data?.error || 'فشل إنشاء الحساب'));
+      return;
+    }
+    
+    toast('✅ تم إنشاء الحساب بنجاح! جارٍ إرسال رابط كلمة المرور...');
+    
+    // Send password reset email so user can set their own password
+    setTimeout(async () => {
+      try {
+        const { data: resetData } = await sb.rpc('request_password_reset', { target_email: email });
+        toast(`✅ تم إرسال رابط إنشاء كلمة المرور إلى ${email}`);
+        
+        // Clear inputs
+        document.getElementById('manualUserEmail').value = '';
+        document.getElementById('manualUserName').value = '';
+        
+        // Reload admin panel
+        if (typeof loadAdminPanel === 'function') await loadAdminPanel();
+      } catch(e) {
+        console.error(e);
+      }
+    }, 1500);
+  } catch(e) {
+    toast('❌ ' + e.message);
+  }
 }
 
 // ============================================
