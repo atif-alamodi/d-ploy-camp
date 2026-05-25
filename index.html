@@ -1848,6 +1848,11 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 
       <button class="btn btn-primary" onclick="handleLogin()" data-i18n="signIn">تسجيل الدخول</button>
 
+      <div style="margin-top:14px;padding:12px;background:#fef3c7;border:1px solid #fde68a;border-radius:10px;text-align:center;font-size:13px">
+        <div style="font-weight:600;color:#92400e;margin-bottom:4px">📧 تمت دعوتك ولم تستلم الإيميل؟</div>
+        <a onclick="resendInviteForMe()" style="color:#d97706;font-weight:700;cursor:pointer;text-decoration:underline">اضغط هنا لإرسال رابط التفعيل مجدداً</a>
+      </div>
+
       <div class="auth-switch">
         <span data-i18n="noAccount">ليس لديك حساب؟</span>
         <a onclick="showSignup()" data-i18n="signUp">أنشئ حساباً</a>
@@ -3437,8 +3442,52 @@ async function handleResetPassword() {
   }, 1500);
 }
 
+// ============================================
+// SELF-SERVICE INVITE LOOKUP (for invited users who didn't get the email)
+// ============================================
+async function resendInviteForMe() {
+  const emailInput = document.getElementById('loginEmail');
+  let email = (emailInput?.value || '').trim().toLowerCase();
+  
+  if (!email) {
+    email = prompt('أدخل بريدك الإلكتروني للبحث عن دعوتك:');
+    if (!email) return;
+    email = email.trim().toLowerCase();
+  }
+  
+  try {
+    // Check if invitation exists for this email
+    const { data: invite } = await sb.from('invitations')
+      .select('token, status')
+      .eq('email', email)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    if (!invite) {
+      showAlert('loginAlert', '❌ لا توجد دعوة لهذا البريد الإلكتروني. اطلب من مدير المنصة أن يدعوك.');
+      return;
+    }
+    
+    if (invite.status === 'accepted') {
+      // User already accepted - they just need to login or reset password
+      showAlert('loginAlert', '✅ دعوتك مقبولة بالفعل! إذا نسيت كلمة المرور، اضغط على "نسيت كلمة المرور؟" أعلاه.');
+      return;
+    }
+    
+    // Build the invite URL and redirect immediately
+    const inviteUrl = window.location.origin + window.location.pathname + '?invite_token=' + invite.token;
+    
+    if (confirm('✅ وجدنا دعوتك!\n\nسنفتح صفحة التفعيل الآن لتُكمل تسجيلك وتُنشئ كلمة المرور.\n\nاضغط موافق للمتابعة.')) {
+      window.location.href = inviteUrl;
+    }
+  } catch(e) {
+    showAlert('loginAlert', '❌ خطأ: ' + e.message);
+  }
+}
+
 async function handleLogin() {
-  const email = document.getElementById('loginEmail').value.trim();
+  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
   const password = document.getElementById('loginPassword').value;
   const btn = document.querySelector('#loginForm .btn-primary');
   const loginLabel = currentLang === 'ar' ? 'تسجيل الدخول' : 'Sign In';
@@ -3454,11 +3503,34 @@ async function handleLogin() {
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if (error) {
       let msg = '';
-      if (error.message.toLowerCase().includes('invalid') || error.message.toLowerCase().includes('credentials')) {
-        msg = currentLang === 'ar' ? '❌ البريد الإلكتروني أو كلمة المرور غير صحيحة' : '❌ Invalid email or password';
-      } else if (error.message.toLowerCase().includes('not found') || error.message.toLowerCase().includes('user')) {
+      const errLower = error.message.toLowerCase();
+      
+      if (errLower.includes('invalid') || errLower.includes('credentials')) {
+        // Check if user has a pending invitation (not yet registered)
+        try {
+          const { data: inv } = await sb.from('invitations')
+            .select('token')
+            .eq('email', email)
+            .eq('status', 'pending')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          if (inv?.token) {
+            // User has a pending invite but hasn't registered yet
+            const inviteUrl = window.location.origin + window.location.pathname + '?invite_token=' + inv.token;
+            msg = currentLang === 'ar' 
+              ? `⚠️ حسابك لم يُفعّل بعد!\n\nأنت مدعو للمنصة لكن لم تُكمل التسجيل بعد. اضغط على الرابط التالي لإنشاء كلمة المرور وتفعيل حسابك:\n\n${inviteUrl}\n\nأو افتح رابط الدعوة من بريدك الإلكتروني.`
+              : `⚠️ Account not activated!\n\nYou were invited but haven't completed registration. Click this link to set your password:\n\n${inviteUrl}`;
+          } else {
+            msg = currentLang === 'ar' ? '❌ البريد الإلكتروني أو كلمة المرور غير صحيحة' : '❌ Invalid email or password';
+          }
+        } catch {
+          msg = currentLang === 'ar' ? '❌ البريد الإلكتروني أو كلمة المرور غير صحيحة' : '❌ Invalid email or password';
+        }
+      } else if (errLower.includes('not found') || errLower.includes('user')) {
         msg = currentLang === 'ar' ? '❌ لا يوجد حساب بهذا البريد الإلكتروني' : '❌ No account found with this email';
-      } else if (error.message.toLowerCase().includes('confirm')) {
+      } else if (errLower.includes('confirm')) {
         msg = currentLang === 'ar' ? '⚠️ يرجى تأكيد بريدك الإلكتروني أولاً' : '⚠️ Please confirm your email first';
       } else {
         msg = error.message;
