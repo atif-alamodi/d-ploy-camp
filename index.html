@@ -5420,20 +5420,29 @@ function renderTodoListNested(list, allLists, allTodos, assigneesByTodo, depth) 
   const indent = depth * 24;
   const totalCount = listTodos.length;
   const completedCount = listTodos.filter(t => t.completed).length;
+  const canDelete = (list.created_by === currentUser?.id) || currentProfile?.is_super_admin;
+  // Persisted collapse state per list
+  const collapseKey = 'todoListCollapsed_' + list.id;
+  const isCollapsed = localStorage.getItem(collapseKey) === '1';
   
   let html = `
-    <div class="todo-list-block" style="margin-right:${indent}px;border-${currentLang === 'ar' ? 'right' : 'left'}:${depth > 0 ? '3px solid #fed7aa' : 'none'};padding-${currentLang === 'ar' ? 'right' : 'left'}:${depth > 0 ? '14px' : '0'}">
+    <div class="todo-list-block" data-list-id="${list.id}" style="margin-right:${indent}px;border-${currentLang === 'ar' ? 'right' : 'left'}:${depth > 0 ? '3px solid #fed7aa' : 'none'};padding-${currentLang === 'ar' ? 'right' : 'left'}:${depth > 0 ? '14px' : '0'}">
       <div class="todo-list-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <span>${depth > 0 ? '📂' : '📋'} ${escapeHTML(list.title)}</span>
+        <span onclick="toggleListCollapse('${list.id}')" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;user-select:none" 
+          onmouseover="this.style.color='#ff6b35'" onmouseout="this.style.color='inherit'" title="انقر لطي/فتح القائمة">
+          <span id="listCaret-${list.id}" style="font-size:11px;color:#9ca3af;transition:transform 0.2s;display:inline-block;${isCollapsed ? 'transform:rotate(-90deg)' : ''}">▼</span>
+          ${depth > 0 ? '📂' : '📋'} ${escapeHTML(list.title)}
+        </span>
         <span style="font-size:11px;color:#6b7280;background:#f3f4f6;padding:2px 8px;border-radius:8px">${completedCount}/${totalCount}</span>
         <div style="margin-${currentLang === 'ar' ? 'right' : 'left'}:auto;display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-secondary" style="padding:5px 10px; font-size:11px" onclick="showNewTodoModal('${list.id}')">➕ مهمة</button>
           <button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd" onclick="showNewSubListModal('${list.id}')" title="إضافة قائمة فرعية داخل هذه القائمة">📂 قائمة فرعية</button>
-          <button class="btn btn-ghost" style="padding:5px 8px;font-size:11px" onclick="deleteList('${list.id}')" title="حذف القائمة">🗑️</button>
+          ${canDelete ? `<button class="btn btn-ghost" style="padding:5px 8px;font-size:11px;color:#ef4444" onclick="deleteList('${list.id}')" title="حذف القائمة (للمنشئ فقط)">🗑️</button>` : ''}
         </div>
       </div>
-      ${listTodos.length === 0 && subLists.length === 0 ? `<div style="padding:12px; color:var(--text-muted); font-size:13px">لا توجد مهام في هذه القائمة بعد</div>` : ''}
-      ${listTodos.map(td => renderTodoCard(td, assigneesByTodo[td.id] || [])).join('')}
+      <div id="listBody-${list.id}" style="${isCollapsed ? 'display:none' : ''}">
+        ${listTodos.length === 0 && subLists.length === 0 ? `<div style="padding:12px; color:var(--text-muted); font-size:13px">لا توجد مهام في هذه القائمة بعد. اضغط <strong>➕ مهمة</strong> لإضافة أول مهمة.</div>` : ''}
+        ${listTodos.map(td => renderTodoCard(td, assigneesByTodo[td.id] || [])).join('')}
   `;
   
   // Recursively render sub-lists
@@ -5441,8 +5450,19 @@ function renderTodoListNested(list, allLists, allTodos, assigneesByTodo, depth) 
     html += renderTodoListNested(subList, allLists, allTodos, assigneesByTodo, depth + 1);
   }
   
-  html += `</div>`;
+  html += `</div></div>`;
   return html;
+}
+
+// Toggle collapse/expand of a list
+function toggleListCollapse(listId) {
+  const body = document.getElementById('listBody-' + listId);
+  const caret = document.getElementById('listCaret-' + listId);
+  if (!body) return;
+  const isHidden = body.style.display === 'none';
+  body.style.display = isHidden ? '' : 'none';
+  if (caret) caret.style.transform = isHidden ? '' : 'rotate(-90deg)';
+  localStorage.setItem('todoListCollapsed_' + listId, isHidden ? '0' : '1');
 }
 
 // Single todo card renderer
@@ -5491,11 +5511,14 @@ function renderTodoCard(td, assignees) {
       ondragover="event.preventDefault();this.style.borderColor='var(--primary)';this.style.background='var(--primary-light)'"
       ondragleave="this.style.borderColor='';this.style.background=''"
       ondrop="handleTodoFileDrop(event,'${td.id}')">
-      <div class="todo-checkbox ${td.completed ? 'checked' : ''}" onclick="toggleTodo('${td.id}', ${!td.completed})">${td.completed ? '✓' : ''}</div>
+      <div class="todo-checkbox ${td.completed ? 'checked' : ''}" onclick="event.stopPropagation();toggleTodo('${td.id}', ${!td.completed})">${td.completed ? '✓' : ''}</div>
       <div class="todo-content">
-        <div class="todo-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span>${escapeHTML(td.title)}</span>
+        <div class="todo-title" onclick="showTodoDetailPage('${td.id}')" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;cursor:pointer;color:#1f2937;transition:color 0.15s" 
+          onmouseover="this.style.color='#ff6b35'" onmouseout="this.style.color='#1f2937'"
+          title="انقر لفتح المهمة والتفاعل معها">
+          <span style="font-weight:700">${escapeHTML(td.title)}</span>
           ${td.completed ? `<span style="font-size:10px;background:#dcfce7;color:#16a34a;padding:2px 8px;border-radius:8px">✓ مكتملة</span>` : ''}
+          <span style="font-size:11px;color:#ff6b35;font-weight:600">› افتح</span>
         </div>
         <div class="todo-meta" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">
           ${assigneesHtml}
@@ -5552,8 +5575,8 @@ function renderTodoCard(td, assignees) {
         </div>
       </div>
       <button class="btn btn-ghost" style="padding:6px" title="تفاعل سريع" onclick="event.stopPropagation();toggleReactionPicker(event,'todo','${td.id}')">😊</button>
-      <button class="btn btn-ghost" style="padding:6px" title="تفاصيل كاملة" onclick="showTodoDetail('${td.id}')">📋</button>
-      <button class="btn btn-ghost" style="padding:6px" onclick="deleteTodo('${td.id}')">🗑️</button>
+      <button class="btn btn-ghost" style="padding:6px" title="تفاصيل كاملة" onclick="event.stopPropagation();showTodoDetailPage('${td.id}')">📋</button>
+      ${(td.created_by === currentUser?.id || currentProfile?.is_super_admin) ? `<button class="btn btn-ghost" style="padding:6px;color:#ef4444" onclick="event.stopPropagation();deleteTodo('${td.id}')" title="حذف (للمنشئ فقط)">🗑️</button>` : ''}
     </div>
   `;
 }
@@ -9983,12 +10006,21 @@ async function showTodoDetailPage(todoId) {
 function closeTodoDetailPage() {
   currentDetailTodoId = null;
   document.getElementById('todoDetailPage').classList.add('hidden');
-  // Go back to project page
+  // Go back to project page and re-render to reflect any changes
   if (activeProject) {
     document.getElementById('projectPage').classList.remove('hidden');
+    // Refresh the current tab to show updated state
+    if (typeof loadProjectTab === 'function' && activeTab) {
+      loadProjectTab(activeTab);
+    }
+    if (typeof loadProjectCounts === 'function') {
+      loadProjectCounts();
+    }
   } else {
     document.getElementById('homePage').classList.remove('hidden');
   }
+  // Scroll to top
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function removeTodoAttachment(todoId, idx) {
