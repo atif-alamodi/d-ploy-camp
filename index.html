@@ -4085,11 +4085,33 @@ async function openProject(id) {
 }
 
 // Check if current user can perform action
+// ALL active members get full collaboration permissions (assign, edit, upload, post, manage todos)
+// Admin-only actions (mute, remove, role changes) are checked via canAdmin()
 function can(perm) {
-  if (currentProfile?.is_super_admin) return true;
+  // Super admin can do anything
+  if (currentProfile?.is_super_admin || currentProfile?.platform_role === 'super_admin') return true;
+  // No membership = no permission
   if (!currentMembership) return false;
-  if (currentMembership.role === 'owner') return true;
-  return currentMembership[perm] === true;
+  // Muted user has no write permissions
+  if (currentMembership.is_muted === true) return false;
+  
+  // Admin-only permissions (these stay restricted)
+  const adminOnlyPerms = ['perm_remove_members', 'perm_mute_members', 'perm_manage_admins', 'perm_edit_project'];
+  if (adminOnlyPerms.includes(perm)) {
+    if (currentMembership.role === 'owner') return true;
+    return currentMembership[perm] === true;
+  }
+  
+  // Universal collaboration permissions (everyone gets these)
+  // perm_manage_todos, perm_post_messages, perm_invite_members, perm_delete_content (own content)
+  // perm_upload_files - all active members
+  return true;
+}
+
+// Stricter check for admin-only actions
+function canAdmin() {
+  return currentProfile?.is_super_admin || currentProfile?.platform_role === 'super_admin' 
+    || currentMembership?.role === 'owner';
 }
 
 function amIMuted() {
