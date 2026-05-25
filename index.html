@@ -3488,9 +3488,18 @@ async function handleResetPassword() {
       }
       
       showAlert('resetAlert', '✅ تم تغيير كلمة المرور بنجاح! يمكنك تسجيل الدخول الآن.', 'success');
-      // Clean URL
+      // Clean URL - critical to prevent re-triggering the reset form
       history.replaceState({}, '', window.location.pathname);
-      setTimeout(() => showLogin(), 2500);
+      // Sign out any lingering session, then show login
+      try { await sb.auth.signOut(); } catch(e) {}
+      setTimeout(() => {
+        showLogin();
+        // Pre-fill the email for convenience
+        if (data && data.email) {
+          const emailField = document.getElementById('loginEmail');
+          if (emailField) emailField.value = data.email;
+        }
+      }, 2000);
       return;
     }
     
@@ -7609,12 +7618,20 @@ async function init() {
     history.replaceState({}, '', window.location.pathname);
   }
 
-  // Listen for auth state changes (e.g., recovery flow)
+  // Listen for auth state changes - ONLY trigger reset if URL has reset_token
+  // (prevents accidental triggering on every login)
   sb.auth.onAuthStateChange((event, session) => {
     if (event === 'PASSWORD_RECOVERY') {
-      document.getElementById('authScreen').classList.remove('hidden');
-      document.getElementById('appScreen').classList.add('hidden');
-      showReset();
+      // Only show reset form if the URL actually has a reset_token parameter
+      const currentUrlParams = new URLSearchParams(window.location.search);
+      const hasResetToken = currentUrlParams.get('reset_token') || currentUrlParams.get('type') === 'recovery';
+      
+      if (hasResetToken) {
+        document.getElementById('authScreen').classList.remove('hidden');
+        document.getElementById('appScreen').classList.add('hidden');
+        showReset();
+      }
+      // Otherwise ignore - user is just logging in normally
     }
   });
 
