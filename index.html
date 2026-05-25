@@ -2048,55 +2048,61 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
         </div>
       </div>
 
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px;gap:8px">
+        <button class="btn btn-ghost" style="padding:8px 14px;font-size:13px;background:#fff;border:1px solid #e5e7eb;border-radius:50px" onclick="openProjectToolsModal()" title="اختر الأدوات المتاحة في هذا المشروع">
+          ⚙️ إعدادات الأدوات
+        </button>
+      </div>
+
       <div class="tools-grid">
-        <div class="tool-card" onclick="showProjectTab('todos')">
+        <div class="tool-card" data-tool="todos" onclick="showProjectTab('todos')">
           <div class="tool-card-icon" style="background:#fef3c7">📋</div>
           <div class="tool-card-title" data-i18n="todos">المهام</div>
           <div class="tool-card-count" id="todosCount">0</div>
         </div>
-        <div class="tool-card" onclick="showProjectTab('messages')">
+        <div class="tool-card" data-tool="messages" onclick="showProjectTab('messages')">
           <div class="tool-card-icon" style="background:#dbeafe">💬</div>
           <div class="tool-card-title" data-i18n="messages">الرسائل</div>
           <div class="tool-card-count" id="messagesCount">0</div>
         </div>
-        <div class="tool-card" onclick="showProjectTab('schedule')">
+        <div class="tool-card" data-tool="schedule" onclick="showProjectTab('schedule')">
           <div class="tool-card-icon" style="background:#fce7f3">📅</div>
           <div class="tool-card-title" data-i18n="schedule">الجدول</div>
           <div class="tool-card-count" id="scheduleCount">0</div>
         </div>
-        <div class="tool-card" onclick="showProjectTab('files')">
+        <div class="tool-card" data-tool="files" onclick="showProjectTab('files')">
           <div class="tool-card-icon" style="background:#dcfce7">📁</div>
           <div class="tool-card-title" data-i18n="files">الملفات</div>
           <div class="tool-card-count" id="filesCount">0</div>
         </div>
-        <div class="tool-card" onclick="showProjectTab('checkins')">
+        <div class="tool-card" data-tool="checkins" onclick="showProjectTab('checkins')">
           <div class="tool-card-icon" style="background:#fef3c7">🎯</div>
           <div class="tool-card-title" data-i18n="checkins">Check-ins</div>
           <div class="tool-card-count" id="checkinsCount">0</div>
         </div>
-        <div class="tool-card" onclick="showProjectTab('members')">
+        <div class="tool-card" data-tool="members" onclick="showProjectTab('members')">
           <div class="tool-card-icon" style="background:#ede9fe">👥</div>
           <div class="tool-card-title" data-i18n="members">الأعضاء</div>
           <div class="tool-card-count" id="membersCount">0</div>
         </div>
-        <div class="tool-card" onclick="showProjectTab('campfire')">
+        <div class="tool-card" data-tool="campfire" onclick="showProjectTab('campfire')">
           <div class="tool-card-icon" style="background:#fff7ed">🔥</div>
           <div class="tool-card-title">Campfire</div>
           <div class="tool-card-count" id="campfireCount">0</div>
         </div>
-        <div class="tool-card" onclick="showProjectTab('gantt')" title="عرض زمني للمهام مرتبة حسب تواريخ البداية والنهاية - يساعد على تتبع المواعيد">
+        <div class="tool-card" data-tool="gantt" onclick="showProjectTab('gantt')" title="عرض زمني للمهام مرتبة حسب تواريخ البداية والنهاية - يساعد على تتبع المواعيد">
           <div class="tool-card-icon" style="background:#fef3c7">📅</div>
           <div class="tool-card-title">المخطط الزمني</div>
           <div class="tool-card-count" style="font-size:11px;color:#92400e;font-weight:600">Gantt</div>
           <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4">يعرض المهام حسب تواريخها — اضبط البداية والنهاية في المهمة لتظهر هنا</div>
         </div>
-        <div class="tool-card" onclick="showProjectTab('layers')" title="ترتيب المهام في طبقات (مراحل) - مثل: تحليل → تصميم → تطوير → اختبار">
+        <div class="tool-card" data-tool="layers" onclick="showProjectTab('layers')" title="ترتيب المهام في طبقات (مراحل) - مثل: تحليل → تصميم → تطوير → اختبار">
           <div class="tool-card-icon" style="background:#e0e7ff">🎯</div>
           <div class="tool-card-title">الجدولة الطبقية</div>
           <div class="tool-card-count" id="layersCount">0</div>
           <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4">تجزئة المشروع إلى طبقات/مراحل — اضبط رقم الطبقة في المهمة</div>
         </div>
-        <div class="tool-card" onclick="showProjectTab('activity')">
+        <div class="tool-card" data-tool="activity" onclick="showProjectTab('activity')">
           <div class="tool-card-icon" style="background:#f0fdf4">📊</div>
           <div class="tool-card-title">النشاط</div>
           <div class="tool-card-count" id="activityCount"></div>
@@ -2597,6 +2603,52 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('newTodoModal')" data-i18n="cancel">إلغاء</button>
       <button class="btn btn-primary" onclick="createTodo()" data-i18n="create">إنشاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- Project Tools Settings Modal -->
+<div class="modal-bg" id="projectToolsModal">
+  <div class="modal" style="max-width:600px;max-height:90vh;overflow-y:auto">
+    <h3 class="modal-title">⚙️ إعدادات أدوات المشروع</h3>
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">
+      اختر الأدوات المتاحة في هذا المشروع. الأدوات المُغلقة لن تظهر للأعضاء.
+    </p>
+    <div id="toolsSettingsList" style="display:flex;flex-direction:column;gap:10px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('projectToolsModal')">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveProjectTools()">💾 حفظ الإعدادات</button>
+    </div>
+  </div>
+</div>
+
+<!-- Progress Editor Modal -->
+<div class="modal-bg" id="progressEditorModal">
+  <div class="modal" style="max-width:500px">
+    <h3 class="modal-title">📊 تحديث تقدم المهمة</h3>
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">
+      حدّد نسبة الإنجاز الحالية. سيتم تحديث المخطط الزمني والجدولة الطبقية تلقائياً.
+    </p>
+    <input type="hidden" id="progressTodoId">
+    <div style="text-align:center;margin:20px 0">
+      <div style="font-size:48px;font-weight:900;background:linear-gradient(135deg,#ff6b35,#f7468a);-webkit-background-clip:text;background-clip:text;color:transparent" id="progressDisplay">0%</div>
+    </div>
+    <input type="range" id="progressSlider" min="0" max="100" step="5" value="0" 
+      style="width:100%;height:8px;-webkit-appearance:none;background:linear-gradient(90deg,#ff6b35 0%,#f7468a 100%);border-radius:4px;outline:none"
+      oninput="document.getElementById('progressDisplay').textContent = this.value + '%'">
+    <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#9ca3af">
+      <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+    </div>
+    <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:16px">
+      <button class="btn btn-ghost" style="padding:6px 14px;font-size:12px" onclick="document.getElementById('progressSlider').value=0;document.getElementById('progressDisplay').textContent='0%'">0%</button>
+      <button class="btn btn-ghost" style="padding:6px 14px;font-size:12px" onclick="document.getElementById('progressSlider').value=25;document.getElementById('progressDisplay').textContent='25%'">25%</button>
+      <button class="btn btn-ghost" style="padding:6px 14px;font-size:12px" onclick="document.getElementById('progressSlider').value=50;document.getElementById('progressDisplay').textContent='50%'">50%</button>
+      <button class="btn btn-ghost" style="padding:6px 14px;font-size:12px" onclick="document.getElementById('progressSlider').value=75;document.getElementById('progressDisplay').textContent='75%'">75%</button>
+      <button class="btn btn-ghost" style="padding:6px 14px;font-size:12px" onclick="document.getElementById('progressSlider').value=100;document.getElementById('progressDisplay').textContent='100%'">100%</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('progressEditorModal')">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveProgress()">💾 حفظ التقدم</button>
     </div>
   </div>
 </div>
@@ -4406,20 +4458,219 @@ function amIMuted() {
 
 async function loadProjectCounts() {
   const pid = activeProject.id;
-  const [t1, t2, t3, t4, t5, t6] = await Promise.all([
+  // Get total + open todos
+  const [openTodos, totalTodos, t2, t3, t4, t5, t6, campfireMsgs, layers] = await Promise.all([
     sb.from('todos').select('*', { count: 'exact', head: true }).eq('project_id', pid).eq('completed', false),
+    sb.from('todos').select('*', { count: 'exact', head: true }).eq('project_id', pid),
     sb.from('messages').select('*', { count: 'exact', head: true }).eq('project_id', pid),
     sb.from('schedule_events').select('*', { count: 'exact', head: true }).eq('project_id', pid),
     sb.from('project_files').select('*', { count: 'exact', head: true }).eq('project_id', pid),
     sb.from('checkin_questions').select('*', { count: 'exact', head: true }).eq('project_id', pid).eq('active', true),
-    sb.from('project_members').select('*', { count: 'exact', head: true }).eq('project_id', pid)
+    sb.from('project_members').select('*', { count: 'exact', head: true }).eq('project_id', pid),
+    sb.from('campfire_messages').select('*', { count: 'exact', head: true }).eq('project_id', pid),
+    sb.from('project_layers').select('*', { count: 'exact', head: true }).eq('project_id', pid)
   ]);
-  document.getElementById('todosCount').textContent = (t1.count || 0) + (currentLang === 'ar' ? ' مفتوحة' : ' open');
-  document.getElementById('messagesCount').textContent = (t2.count || 0) + (currentLang === 'ar' ? ' رسالة' : '');
-  document.getElementById('scheduleCount').textContent = (t3.count || 0) + (currentLang === 'ar' ? ' حدث' : '');
-  document.getElementById('filesCount').textContent = (t4.count || 0) + (currentLang === 'ar' ? ' ملف' : '');
-  document.getElementById('checkinsCount').textContent = (t5.count || 0) + (currentLang === 'ar' ? ' سؤال' : '');
-  document.getElementById('membersCount').textContent = (t6.count || 0) + (currentLang === 'ar' ? ' عضو' : ' members');
+  // Show total / open format
+  const open = openTodos.count || 0;
+  const total = totalTodos.count || 0;
+  const todosEl = document.getElementById('todosCount');
+  if (todosEl) todosEl.textContent = total === 0 ? (currentLang === 'ar' ? 'لا توجد مهام' : 'No tasks') : (open === 0 ? (currentLang === 'ar' ? `الكل مكتمل (${total})` : `All done (${total})`) : (currentLang === 'ar' ? `${open} مفتوحة من ${total}` : `${open} open / ${total}`));
+  
+  const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+  setText('messagesCount', (t2.count || 0) + (currentLang === 'ar' ? ' رسالة' : ''));
+  setText('scheduleCount', (t3.count || 0) + (currentLang === 'ar' ? ' حدث' : ''));
+  setText('filesCount', (t4.count || 0) + (currentLang === 'ar' ? ' ملف' : ''));
+  setText('checkinsCount', (t5.count || 0) + (currentLang === 'ar' ? ' سؤال' : ''));
+  setText('membersCount', (t6.count || 0) + (currentLang === 'ar' ? ' عضو' : ' members'));
+  setText('campfireCount', (campfireMsgs.count || 0) + (currentLang === 'ar' ? ' رسالة' : ''));
+  setText('layersCount', (layers.count || 0) + (currentLang === 'ar' ? ' طبقات' : ''));
+  
+  // Apply tool visibility settings
+  await applyProjectToolSettings();
+}
+
+// ============================================
+// PROJECT TOOLS SETTINGS
+// ============================================
+const PROJECT_TOOLS = [
+  { key: 'todos', icon: '📋', label: 'المهام', desc: 'قوائم المهام والتعليقات' },
+  { key: 'messages', icon: '💬', label: 'الرسائل', desc: 'لوحة الإعلانات والمناقشات' },
+  { key: 'schedule', icon: '📅', label: 'الجدول', desc: 'الأحداث والمواعيد المهمة' },
+  { key: 'files', icon: '📁', label: 'الملفات', desc: 'مشاركة المستندات والصور' },
+  { key: 'campfire', icon: '🔥', label: 'Campfire', desc: 'محادثة فورية بين الأعضاء' },
+  { key: 'checkins', icon: '🎯', label: 'Check-ins', desc: 'أسئلة دورية للأعضاء' },
+  { key: 'gantt', icon: '📊', label: 'المخطط الزمني', desc: 'عرض المهام على خط زمني' },
+  { key: 'layers', icon: '🎯', label: 'الجدولة الطبقية', desc: 'تنظيم المهام في طبقات' },
+  { key: 'activity', icon: '📊', label: 'النشاط', desc: 'سجل نشاط أعضاء المشروع' }
+];
+
+async function applyProjectToolSettings() {
+  if (!activeProject?.id) return;
+  try {
+    const { data: settings } = await sb.from('project_tools')
+      .select('*')
+      .eq('project_id', activeProject.id)
+      .maybeSingle();
+    
+    if (!settings) return; // No settings = show all (default)
+    
+    PROJECT_TOOLS.forEach(t => {
+      const enabled = settings[t.key + '_enabled'] !== false;
+      const card = document.querySelector(`[data-tool="${t.key}"]`);
+      if (card) {
+        card.style.display = enabled ? '' : 'none';
+      }
+    });
+  } catch(e) { console.log('Apply tool settings:', e); }
+}
+
+// ============================================
+// PROGRESS EDITOR
+// ============================================
+function openProgressEditor(todoId, currentProgress) {
+  document.getElementById('progressTodoId').value = todoId;
+  document.getElementById('progressSlider').value = currentProgress || 0;
+  document.getElementById('progressDisplay').textContent = (currentProgress || 0) + '%';
+  openModal('progressEditorModal');
+}
+
+async function saveProgress() {
+  const todoId = document.getElementById('progressTodoId').value;
+  const progress = parseInt(document.getElementById('progressSlider').value);
+  
+  if (!todoId) return;
+  
+  // If progress = 100, auto-mark completed. If was 100 and now less, reopen.
+  const updateData = { progress };
+  if (progress === 100) {
+    updateData.completed = true;
+  } else {
+    updateData.completed = false;
+  }
+  
+  try {
+    const { error } = await sb.from('todos').update(updateData).eq('id', todoId);
+    if (error) {
+      toast('❌ ' + error.message);
+      return;
+    }
+    closeModal('progressEditorModal');
+    toast(`✅ تم تحديث التقدم إلى ${progress}%`);
+    
+    // Reload todos to reflect changes
+    if (activeTab === 'todos') {
+      await loadProjectTab('todos');
+    }
+    await loadProjectCounts();
+    
+    // Log activity
+    try { await logActivity('حدّث تقدم مهمة', 'todo', progress + '%'); } catch(e) {}
+  } catch(e) {
+    toast('❌ ' + e.message);
+  }
+}
+
+// Inject CSS for slider thumb styling
+(function injectSliderStyles(){
+  if (document.getElementById('progress-slider-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'progress-slider-styles';
+  s.textContent = `
+    #progressSlider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 24px;
+      height: 24px;
+      background: white;
+      border: 3px solid #ff6b35;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(255,107,53,0.4);
+    }
+    #progressSlider::-moz-range-thumb {
+      width: 24px;
+      height: 24px;
+      background: white;
+      border: 3px solid #ff6b35;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(255,107,53,0.4);
+    }
+  `;
+  document.head.appendChild(s);
+})();
+
+async function openProjectToolsModal() {
+  if (!activeProject?.id) return;
+  
+  const { data: settings } = await sb.from('project_tools')
+    .select('*')
+    .eq('project_id', activeProject.id)
+    .maybeSingle();
+  
+  const current = settings || {};
+  
+  const listBox = document.getElementById('toolsSettingsList');
+  listBox.innerHTML = PROJECT_TOOLS.map(tool => {
+    const enabled = current[tool.key + '_enabled'] !== false;
+    return `
+      <div style="display:flex;align-items:center;gap:14px;padding:14px;background:#fafaf9;border-radius:14px;border:1px solid #f1f5f9">
+        <div style="font-size:24px">${tool.icon}</div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:14px;color:#1f2937">${tool.label}</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:2px">${tool.desc}</div>
+        </div>
+        <label style="position:relative;display:inline-block;width:50px;height:26px;cursor:pointer">
+          <input type="checkbox" id="tool-toggle-${tool.key}" ${enabled ? 'checked' : ''} 
+            style="opacity:0;width:0;height:0">
+          <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:${enabled ? 'linear-gradient(135deg,#10b981,#059669)' : '#cbd5e1'};border-radius:26px;transition:0.3s" class="toggle-slider"></span>
+          <span style="position:absolute;height:20px;width:20px;left:${enabled ? '27px' : '3px'};bottom:3px;background:white;border-radius:50%;transition:0.3s;box-shadow:0 1px 3px rgba(0,0,0,0.2)" class="toggle-knob"></span>
+        </label>
+      </div>
+    `;
+  }).join('');
+  
+  // Make toggles functional
+  PROJECT_TOOLS.forEach(tool => {
+    const cb = document.getElementById('tool-toggle-' + tool.key);
+    if (cb) {
+      cb.addEventListener('change', function() {
+        const slider = this.parentElement.querySelector('.toggle-slider');
+        const knob = this.parentElement.querySelector('.toggle-knob');
+        if (this.checked) {
+          slider.style.background = 'linear-gradient(135deg,#10b981,#059669)';
+          knob.style.left = '27px';
+        } else {
+          slider.style.background = '#cbd5e1';
+          knob.style.left = '3px';
+        }
+      });
+    }
+  });
+  
+  openModal('projectToolsModal');
+}
+
+async function saveProjectTools() {
+  if (!activeProject?.id) return;
+  
+  const update = { project_id: activeProject.id, updated_at: new Date().toISOString() };
+  PROJECT_TOOLS.forEach(tool => {
+    const cb = document.getElementById('tool-toggle-' + tool.key);
+    if (cb) update[tool.key + '_enabled'] = cb.checked;
+  });
+  
+  try {
+    const { error } = await sb.from('project_tools').upsert(update, { onConflict: 'project_id' });
+    if (error) {
+      toast('❌ ' + error.message);
+      return;
+    }
+    closeModal('projectToolsModal');
+    toast('✅ تم حفظ الإعدادات');
+    await applyProjectToolSettings();
+  } catch(e) {
+    toast('❌ ' + e.message);
+  }
 }
 
 function showProjectTab(tab) {
@@ -4449,7 +4700,12 @@ async function loadProjectTab(tab) {
 // ============================================
 async function renderTodos(container) {
   const { data: lists } = await sb.from('todo_lists').select('*').eq('project_id', activeProject.id).order('created_at');
-  const { data: todos } = await sb.from('todos').select('*, assigned_profile:assigned_to(full_name)').eq('project_id', activeProject.id).order('created_at');
+  const { data: todos } = await sb.from('todos').select(`
+    *, 
+    assigned_profile:assigned_to(full_name),
+    completed_by_profile:completed_by(full_name),
+    reopened_by_profile:reopened_by(full_name)
+  `).eq('project_id', activeProject.id).order('created_at');
 
   let html = `
     <div class="section-card">
@@ -4511,7 +4767,10 @@ async function renderTodos(container) {
               ondrop="handleTodoFileDrop(event,'${td.id}')">
               <div class="todo-checkbox ${td.completed ? 'checked' : ''}" onclick="toggleTodo('${td.id}', ${!td.completed})">${td.completed ? '✓' : ''}</div>
               <div class="todo-content">
-                <div class="todo-title">${escapeHTML(td.title)}</div>
+                <div class="todo-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <span>${escapeHTML(td.title)}</span>
+                  ${td.completed ? `<span style="font-size:10px;background:#dcfce7;color:#16a34a;padding:2px 8px;border-radius:8px">✓ مكتملة</span>` : ''}
+                </div>
                 <div class="todo-meta" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">
                   ${td.assigned_profile ? `<span style="color:#6b7280">👤 ${escapeHTML(td.assigned_profile.full_name)}</span>` : ''}
                   <span class="priority-badge priority-${td.priority}">${t(td.priority)}</span>
@@ -4523,6 +4782,27 @@ async function renderTodos(container) {
                     💬 <span id="commentCount-${td.id}">تعليقات</span>
                   </button>
                 </div>
+                <!-- Progress bar (always visible, draggable by anyone) -->
+                <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
+                  <span style="font-size:11px;color:#6b7280;white-space:nowrap;min-width:35px">${td.progress || 0}%</span>
+                  <div style="flex:1;position:relative;height:8px;background:#f1f5f9;border-radius:4px;cursor:pointer" 
+                    onclick="event.stopPropagation();openProgressEditor('${td.id}', ${td.progress || 0})"
+                    title="انقر لتحديث التقدم">
+                    <div style="position:absolute;top:0;left:0;height:100%;background:linear-gradient(90deg,#ff6b35,#f7468a);border-radius:4px;transition:width 0.3s;width:${td.progress || 0}%"></div>
+                  </div>
+                  <button onclick="event.stopPropagation();openProgressEditor('${td.id}', ${td.progress || 0})" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;padding:3px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">📊 تحديث</button>
+                </div>
+                <!-- Completion history (if completed or has history) -->
+                ${td.completed && td.completed_at ? `
+                  <div style="margin-top:6px;padding:6px 10px;background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0;font-size:11px;color:#15803d">
+                    ✓ أُغلقت ${timeAgo(td.completed_at)} ${td.completed_by_profile ? 'بواسطة ' + escapeHTML(td.completed_by_profile.full_name) : ''}
+                  </div>
+                ` : ''}
+                ${td.reopened_at && !td.completed ? `
+                  <div style="margin-top:6px;padding:6px 10px;background:#fef3c7;border-radius:8px;border:1px solid #fcd34d;font-size:11px;color:#92400e">
+                    🔄 أُعيد فتحها ${timeAgo(td.reopened_at)} ${td.reopened_by_profile ? 'بواسطة ' + escapeHTML(td.reopened_by_profile.full_name) : ''}
+                  </div>
+                ` : ''}
                 <div id="reactions-todo-${td.id}" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px"></div>
                 <!-- Inline comments section (hidden by default, expanded on click) -->
                 <div id="inlineComments-${td.id}" style="display:none;margin-top:12px;padding:12px;background:#fafaf9;border-radius:12px;border:1px solid #f1f5f9">
