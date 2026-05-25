@@ -4963,13 +4963,34 @@ async function loadProjectTab(tab) {
 // TODOS
 // ============================================
 async function renderTodos(container) {
-  const { data: lists } = await sb.from('todo_lists').select('*').eq('project_id', activeProject.id).order('sort_order', { ascending: true }).order('created_at');
-  const { data: todos } = await sb.from('todos').select(`
-    *, 
-    assigned_profile:assigned_to(full_name),
-    completed_by_profile:completed_by(full_name),
-    reopened_by_profile:reopened_by(full_name)
-  `).eq('project_id', activeProject.id).order('created_at');
+  // Fetch lists - use simple ordering
+  const { data: lists, error: listsErr } = await sb.from('todo_lists').select('*').eq('project_id', activeProject.id).order('created_at', { ascending: true });
+  if (listsErr) console.error('Lists fetch error:', listsErr);
+  
+  // Fetch todos - try with all joins, fallback to simple if join fails
+  let todos = [];
+  try {
+    const result = await sb.from('todos').select(`
+      *, 
+      assigned_profile:assigned_to(full_name),
+      completed_by_profile:completed_by(full_name),
+      reopened_by_profile:reopened_by(full_name)
+    `).eq('project_id', activeProject.id).order('created_at');
+    if (result.error) {
+      console.error('Todos join fetch error:', result.error);
+      // Fallback to simple fetch without joins
+      const simple = await sb.from('todos').select('*').eq('project_id', activeProject.id).order('created_at');
+      todos = simple.data || [];
+    } else {
+      todos = result.data || [];
+    }
+  } catch(e) {
+    console.error('Todos fetch exception:', e);
+    const simple = await sb.from('todos').select('*').eq('project_id', activeProject.id).order('created_at');
+    todos = simple.data || [];
+  }
+  
+  console.log('Loaded lists:', lists?.length, 'todos:', todos?.length, 'for project', activeProject.id);
   
   // Fetch multi-assignees for all todos
   let assigneesByTodo = {};
