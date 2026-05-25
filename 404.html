@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>D-Ploy Camp - جارٍ التحويل...</title>
+<style>
+  body { 
+    margin:0; padding:0; 
+    background:linear-gradient(135deg,#ff6b35,#f7468a,#6c4ef5); 
+    min-height:100vh; 
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Cairo','Segoe UI',Arial,sans-serif;
+    color:white; text-align:center;
+  }
+  .box { padding:40px 24px; }
+  .icon { font-size:64px; margin-bottom:16px; }
+  h1 { margin:0 0 12px; font-size:24px; }
+  p { font-size:15px; opacity:0.9; margin:4px 0; }
+  .spinner { 
+    width:40px; height:40px; 
+    border:4px solid rgba(255,255,255,0.3); 
+    border-top-color:white; 
+    border-radius:50%; 
+    margin:20px auto; 
+    animation:spin 1s linear infinite; 
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  a { color:white; text-decoration:underline; font-weight:700; }
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="icon">🏕️</div>
+  <h1>D-Ploy Camp</h1>
+  <div class="spinner"></div>
+  <p>جارٍ تحويلك إلى المنصة...</p>
+  <p style="font-size:13px;margin-top:16px;opacity:0.7">إذا لم يحدث التحويل تلقائياً <a href="https://atif-alamodi.github.io/d-ploy-camp/">اضغط هنا</a></p>
+</div>
+<script>
+  // Capture invite token and other query params if any
+  const params = window.location.search;
+  const hash = window.location.hash;
+  // Redirect to main app, preserving any query/hash params (like invite tokens)
+  const target = 'https://atif-alamodi.github.io/d-ploy-camp/' + (params || '') + (hash || '');
+  // Use replace so back button doesn't loop
+  window.location.replace(target);
+</script>
+</body>
+</html>
