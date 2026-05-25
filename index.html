@@ -3527,34 +3527,62 @@ async function resendInviteForMe() {
     email = email.trim().toLowerCase();
   }
   
+  // Basic validation
+  if (!email.includes('@') || email.length < 5) {
+    showAlert('loginAlert', '⚠️ البريد الإلكتروني غير صحيح');
+    return;
+  }
+  
+  // Visual feedback
+  const alertBox = document.getElementById('loginAlert');
+  if (alertBox) {
+    alertBox.className = 'alert info show';
+    alertBox.textContent = '⏳ جارٍ البحث عن دعوتك...';
+  }
+  
   try {
-    // Check if invitation exists for this email
-    const { data: invite } = await sb.from('invitations')
-      .select('token, status')
-      .eq('email', email)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // Use SECURITY DEFINER RPC that bypasses RLS safely
+    const { data, error } = await sb.rpc('lookup_my_invitation', { target_email: email });
     
-    if (!invite) {
-      showAlert('loginAlert', '❌ لا توجد دعوة لهذا البريد الإلكتروني. اطلب من مدير المنصة أن يدعوك.');
+    if (error) {
+      showAlert('loginAlert', '❌ خطأ: ' + error.message);
       return;
     }
     
-    if (invite.status === 'accepted') {
-      // User already accepted - they just need to login or reset password
-      showAlert('loginAlert', '✅ دعوتك مقبولة بالفعل! إذا نسيت كلمة المرور، اضغط على "نسيت كلمة المرور؟" أعلاه.');
+    if (!data) {
+      showAlert('loginAlert', '❌ خطأ غير متوقع. حاول مرة أخرى.');
       return;
     }
     
-    // Build the invite URL and redirect immediately
-    const inviteUrl = window.location.origin + window.location.pathname + '?invite_token=' + invite.token;
-    
-    if (confirm('✅ وجدنا دعوتك!\n\nسنفتح صفحة التفعيل الآن لتُكمل تسجيلك وتُنشئ كلمة المرور.\n\nاضغط موافق للمتابعة.')) {
-      window.location.href = inviteUrl;
+    // Handle different statuses
+    if (data.success && data.status === 'invite_resent') {
+      // Email was resent + we have the URL too
+      showAlert('loginAlert', '✅ ' + data.message, 'success');
+      
+      // Also offer instant access via the URL (in case email is delayed)
+      setTimeout(() => {
+        if (data.invite_url && confirm('✅ تم إرسال رابط الدعوة إلى بريدك!\n\nهل تريد فتح صفحة التفعيل الآن مباشرة بدون انتظار الإيميل؟\n\nاضغط موافق للفتح الفوري.')) {
+          window.location.href = data.invite_url;
+        }
+      }, 1500);
+      return;
     }
+    
+    if (data.status === 'already_registered') {
+      showAlert('loginAlert', '✅ ' + data.error);
+      return;
+    }
+    
+    if (data.status === 'not_invited') {
+      showAlert('loginAlert', '❌ ' + data.error);
+      return;
+    }
+    
+    // Generic error
+    showAlert('loginAlert', '❌ ' + (data.error || 'فشل البحث عن الدعوة'));
   } catch(e) {
-    showAlert('loginAlert', '❌ خطأ: ' + e.message);
+    console.error('Invite lookup error:', e);
+    showAlert('loginAlert', '❌ خطأ في الاتصال. حاول مرة أخرى.');
   }
 }
 
