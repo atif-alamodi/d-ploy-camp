@@ -5309,47 +5309,88 @@ async function executeBulkInvite() {
 }
 
 function showInviteResults(results) {
-  const sent = results.filter(r => r.status === 'sent').length;
-  const failed = results.filter(r => r.status === 'error' || r.status === 'invalid').length;
-  const skipped = results.filter(r => r.status === 'already_member').length;
-  const partial = results.filter(r => r.status === 'partial').length;
+  // Normalize results from Edge Function format
+  // EF returns: { email, ok: true/false, error: "...", link: "..." }
+  // Old format: { email, status: 'sent'/'error', ... }
+  const normalized = results.map(r => {
+    if (r.ok === true) return { ...r, status: 'sent' };
+    if (r.ok === false) {
+      // Already-known error patterns to categorize
+      const errMsg = (r.error || '').toLowerCase();
+      if (errMsg.includes('غير لاتينية') || errMsg.includes('non-ascii') || errMsg.includes('invalid email') || errMsg.includes('صيغة')) {
+        return { ...r, status: 'invalid' };
+      }
+      return { ...r, status: 'error' };
+    }
+    return r;
+  });
+  
+  const sent = normalized.filter(r => r.status === 'sent').length;
+  const failed = normalized.filter(r => r.status === 'error' || r.status === 'invalid').length;
+  const skipped = normalized.filter(r => r.status === 'already_member').length;
 
   document.getElementById('resultsSummary').innerHTML = `
     <div class="invite-summary-stat">
-      <div class="invite-summary-num">${results.length}</div>
-      <div class="invite-summary-label">${t('total')}</div>
+      <div class="invite-summary-num">${normalized.length}</div>
+      <div class="invite-summary-label">${t('total') || 'الإجمالي'}</div>
     </div>
     <div class="invite-summary-stat">
-      <div class="invite-summary-num" style="background:linear-gradient(135deg, #06d6a0 0%, #00b4d8 100%); -webkit-background-clip:text; background-clip:text;">${sent + partial}</div>
-      <div class="invite-summary-label">${t('sent')}</div>
+      <div class="invite-summary-num" style="background:linear-gradient(135deg, #06d6a0 0%, #00b4d8 100%); -webkit-background-clip:text; background-clip:text;">${sent}</div>
+      <div class="invite-summary-label">${t('sent') || 'أُرسل'}</div>
     </div>
     ${skipped > 0 ? `<div class="invite-summary-stat">
       <div class="invite-summary-num" style="background:linear-gradient(135deg, #6c4ef5 0%, #00b4d8 100%); -webkit-background-clip:text; background-clip:text;">${skipped}</div>
-      <div class="invite-summary-label">${t('skipped')}</div>
+      <div class="invite-summary-label">${t('skipped') || 'تم التخطي'}</div>
     </div>` : ''}
     ${failed > 0 ? `<div class="invite-summary-stat">
       <div class="invite-summary-num" style="background:linear-gradient(135deg, #ef4444 0%, #f7468a 100%); -webkit-background-clip:text; background-clip:text;">${failed}</div>
-      <div class="invite-summary-label">${t('failed')}</div>
+      <div class="invite-summary-label">${t('failed') || 'فشل'}</div>
     </div>` : ''}
   `;
 
-  document.getElementById('resultsList').innerHTML = results.map(r => {
-    let icon, status, statusClass, extra = '';
-    if (r.status === 'sent') { icon = '✅'; status = t('sent'); statusClass = 'status-success'; }
-    else if (r.status === 'partial') { 
-      icon = '⚠️'; status = currentLang === 'ar' ? 'دعوة فقط (انسخ الرابط)' : 'Link only (copy)'; 
-      statusClass = 'status-pending';
-      if (r.link) extra = `<button class="btn btn-secondary" style="padding:4px 10px; font-size:11px" onclick="copyText('${r.link}')">📋</button>`;
+  document.getElementById('resultsList').innerHTML = normalized.map(r => {
+    let icon, status, statusClass, extra = '', errorDetail = '';
+    
+    if (r.status === 'sent') { 
+      icon = '✅'; 
+      status = '✅ أُرسل'; 
+      statusClass = 'status-success';
+      // Even on success, show copy link button as fallback
+      if (r.link) {
+        extra = `<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="navigator.clipboard.writeText('${r.link}').then(()=>toast('📋 تم نسخ الرابط'))" title="نسخ الرابط احتياطياً">📋</button>`;
+      }
     }
-    else if (r.status === 'already_member') { icon = '👥'; status = t('alreadyMember'); statusClass = 'status-skip'; }
-    else if (r.status === 'invalid') { icon = '⚠️'; status = t('invalidEmails'); statusClass = 'status-error'; }
-    else { icon = '❌'; status = t('failed'); statusClass = 'status-error'; }
+    else if (r.status === 'already_member') { 
+      icon = '👥'; 
+      status = 'عضو موجود'; 
+      statusClass = 'status-skip'; 
+    }
+    else if (r.status === 'invalid') { 
+      icon = '⚠️'; 
+      status = 'بريد غير صحيح'; 
+      statusClass = 'status-error';
+      errorDetail = `<div style="grid-column: 1 / -1; font-size:11px; color:#dc2626; margin-top:4px; padding:4px 8px; background:#fef2f2; border-radius:6px">💡 ${escapeHTML(r.error || 'تحقق من صحة البريد')}</div>`;
+    }
+    else { 
+      icon = '❌'; 
+      status = 'فشل'; 
+      statusClass = 'status-error';
+      if (r.error) {
+        errorDetail = `<div style="grid-column: 1 / -1; font-size:11px; color:#dc2626; margin-top:4px; padding:4px 8px; background:#fef2f2; border-radius:6px">💡 ${escapeHTML(r.error)}</div>`;
+      }
+      // Even on failure, offer the link so admin can share manually
+      if (r.link) {
+        extra = `<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="navigator.clipboard.writeText('${r.link}').then(()=>toast('📋 تم نسخ الرابط'))" title="نسخ رابط الدعوة لإرساله يدوياً">📋 نسخ الرابط</button>`;
+      }
+    }
+    
     return `
-      <div class="confirm-item ${r.status === 'invalid' || r.status === 'error' ? 'invalid' : ''}">
-        <div class="confirm-item-icon">${icon}</div>
-        <div class="confirm-item-email">${escapeHTML(r.email)}</div>
+      <div class="confirm-item ${r.status === 'invalid' || r.status === 'error' ? 'invalid' : ''}" style="display:grid;grid-template-columns:auto 1fr auto auto;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid #f1f5f9">
+        <div class="confirm-item-icon" style="font-size:18px">${icon}</div>
+        <div class="confirm-item-email" style="font-size:13px;direction:ltr;text-align:right;word-break:break-all">${escapeHTML(r.email)}</div>
         ${extra}
-        <div class="confirm-item-status ${statusClass}">${status}</div>
+        <div class="confirm-item-status ${statusClass}" style="font-size:12px;font-weight:600">${status}</div>
+        ${errorDetail}
       </div>
     `;
   }).join('');
