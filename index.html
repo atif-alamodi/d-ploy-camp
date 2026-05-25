@@ -3385,6 +3385,13 @@ function showLogin() {
   document.getElementById('forgotForm').classList.add('hidden');
   document.getElementById('resetForm').classList.add('hidden');
   document.getElementById('loginForm').classList.remove('hidden');
+  // Reset signup email field state (in case it was locked for invite flow)
+  const signupEmail = document.getElementById('signupEmail');
+  if (signupEmail) {
+    signupEmail.readOnly = false;
+    signupEmail.style.background = '';
+    signupEmail.style.cursor = '';
+  }
 }
 
 function showForgot() {
@@ -3683,7 +3690,7 @@ async function handleLogin() {
 
 async function handleSignup() {
   const name = document.getElementById('signupName').value.trim();
-  const email = document.getElementById('signupEmail').value.trim();
+  const email = document.getElementById('signupEmail').value.trim().toLowerCase();
   const password = document.getElementById('signupPassword').value;
   const btn = document.querySelector('#signupForm .btn-primary');
   const signupLabel = currentLang === 'ar' ? 'إنشاء الحساب' : 'Create Account';
@@ -3697,7 +3704,13 @@ async function handleSignup() {
     return;
   }
 
-  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  // Check if this is an INVITE flow (token in localStorage or URL)
+  const pendingInvite = localStorage.getItem('pending_invite');
+  const searchParams = new URLSearchParams(window.location.search);
+  const inviteTokenInUrl = searchParams.get('invite_token');
+  const isInviteFlow = !!(pendingInvite || inviteTokenInUrl);
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ جارٍ التسجيل...'; }
 
   try {
     const { data, error } = await sb.auth.signUp({
@@ -3713,18 +3726,30 @@ async function handleSignup() {
       if (btn) { btn.disabled = false; btn.textContent = signupLabel; }
       return;
     }
-    // Always show approval pending message for external signups
+    
+    // ===== INVITE FLOW: User was invited, trigger set status='active' automatically =====
+    if (isInviteFlow && data.session) {
+      // User is invited - they're auto-approved. Let them in immediately.
+      showAlert('signupAlert', '🎉 تم التسجيل بنجاح! جارٍ الدخول للمنصة...', 'success');
+      if (btn) { btn.textContent = '✅ تم'; }
+      // The auth state change will handle the redirect
+      setTimeout(async () => {
+        await onAuthSuccess(data.user);
+      }, 1000);
+      return;
+    }
+    
+    // ===== EXTERNAL FLOW: Not invited - needs admin approval =====
     showAlert('signupAlert', '✅ تم إرسال طلب التسجيل بنجاح!\n\n⏳ حسابك بانتظار موافقة مدير المنصة. ستصلك رسالة بريد إلكتروني عند الموافقة.', 'success');
     if (btn) { btn.disabled = true; btn.textContent = '✅ تم الإرسال'; }
     
-    // Sign out user immediately - they cannot use the platform until approved
+    // Sign out external user immediately - they cannot use the platform until approved
     if (data.session) {
       await sb.auth.signOut();
     }
     
     setTimeout(() => {
       showLogin();
-      // Clear signup form
       document.getElementById('signupName').value = '';
       document.getElementById('signupEmail').value = '';
       document.getElementById('signupPassword').value = '';
@@ -3732,7 +3757,13 @@ async function handleSignup() {
     return;
   } catch(e) {
     console.error('Signup error:', e);
-    showAlert('signupAlert', currentLang === 'ar' ? '❌ خطأ. حاول مرة أخرى.' : '❌ Error. Please try again.');
+    let errMsg = e.message || '';
+    if (errMsg.includes('Database error')) {
+      errMsg = currentLang === 'ar' ? '❌ خطأ في قاعدة البيانات. حاول مرة أخرى.' : '❌ Database error.';
+    } else if (errMsg.includes('already')) {
+      errMsg = currentLang === 'ar' ? '❌ البريد مسجّل مسبقاً.' : '❌ Email already registered.';
+    }
+    showAlert('signupAlert', errMsg || (currentLang === 'ar' ? '❌ خطأ. حاول مرة أخرى.' : '❌ Error. Please try again.'));
     if (btn) { btn.disabled = false; btn.textContent = signupLabel; }
   }
 }
@@ -7709,11 +7740,61 @@ async function init() {
   if (session) {
     await onAuthSuccess(session.user);
   } else if (inviteToken) {
-    // Show login form with friendly message
-    showAlert('loginAlert', currentLang === 'ar'
-      ? '🎉 تم استلام دعوتك! سجّل دخولك أو أنشئ حساباً للانضمام.'
-      : '🎉 Invite received! Login or sign up to join.',
-      'info');
+    // INVITE FLOW: Auto-lookup the invitation to get the email, then show signup form
+    try {
+      // Use the public RPC to safely look up the invitation
+      const { data: inviteInfo } = await sb.rpc('get_invitation_email_by_token', { p_token: inviteToken });
+      
+      if (inviteInfo && inviteInfo.success) {
+        if (inviteInfo.status === 'already_registered') {
+          // User already has account - show login with pre-filled email
+          document.getElementById('signupForm')?.classList.add('hidden');
+          document.getElementById('loginForm')?.classList.remove('hidden');
+          const loginEmail = document.getElementById('loginEmail');
+          if (loginEmail && inviteInfo.email) loginEmail.value = inviteInfo.email;
+          showAlert('loginAlert', currentLang === 'ar'
+            ? '✅ لديك حساب بالفعل! سجّل دخولك للانضمام.'
+            : '✅ You already have an account. Sign in to join.',
+            'info');
+        } else {
+          // Show signup form pre-filled - this is the invite acceptance flow
+          document.getElementById('loginForm')?.classList.add('hidden');
+          document.getElementById('forgotForm')?.classList.add('hidden');
+          document.getElementById('resetForm')?.classList.add('hidden');
+          document.getElementById('signupForm')?.classList.remove('hidden');
+          
+          // Pre-fill email and lock it (so they use the correct one)
+          const signupEmail = document.getElementById('signupEmail');
+          if (signupEmail && inviteInfo.email) {
+            signupEmail.value = inviteInfo.email;
+            signupEmail.readOnly = true;
+            signupEmail.style.background = '#f3f4f6';
+            signupEmail.style.cursor = 'not-allowed';
+          }
+          
+          showAlert('signupAlert', currentLang === 'ar'
+            ? '🎉 مرحباً! أكمل التسجيل لقبول دعوتك للمنصة.'
+            : '🎉 Welcome! Complete signup to accept your invitation.',
+            'success');
+        }
+      } else {
+        // Token invalid or expired
+        showAlert('loginAlert', currentLang === 'ar'
+          ? '⚠️ رابط الدعوة غير صالح أو منتهي. اطلب من مدير المنصة دعوة جديدة.'
+          : '⚠️ Invitation link invalid or expired. Request a new invitation.',
+          'error');
+        localStorage.removeItem('pending_invite');
+      }
+    } catch(e) {
+      console.error('Invite lookup error:', e);
+      // Fallback: just show signup form
+      document.getElementById('loginForm')?.classList.add('hidden');
+      document.getElementById('signupForm')?.classList.remove('hidden');
+      showAlert('signupAlert', currentLang === 'ar'
+        ? '🎉 أكمل التسجيل لقبول دعوتك.'
+        : '🎉 Complete signup to accept invitation.',
+        'info');
+    }
   }
 }
 
