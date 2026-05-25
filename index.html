@@ -4518,11 +4518,28 @@ async function renderTodos(container) {
                   ${hasSchedule ? `<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer" onclick="showProjectTab('gantt')" title="انقر للذهاب إلى المخطط الزمني">📅 ${dateText}</span>` : ''}
                   ${hasLayer ? `<span style="background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer" onclick="showProjectTab('layers')" title="انقر للذهاب إلى الجدولة الطبقية">🎯 طبقة ${td.layer_number}</span>` : ''}
                   ${!hasSchedule && !hasLayer ? `<span style="background:#f3f4f6;color:#9ca3af;padding:2px 8px;border-radius:10px;font-size:11px;cursor:pointer" onclick="showTodoDetail('${td.id}')" title="أضف تواريخ وطبقة لتظهر في الجداول">⚙️ أضف جدولة</span>` : ''}
+                  <button onclick="event.stopPropagation();toggleInlineComments('${td.id}')" id="commentToggle-${td.id}" 
+                    style="background:#fff7ed;color:#c2410c;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #fed7aa;display:inline-flex;align-items:center;gap:4px">
+                    💬 <span id="commentCount-${td.id}">تعليقات</span>
+                  </button>
                 </div>
                 <div id="reactions-todo-${td.id}" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px"></div>
+                <!-- Inline comments section (hidden by default, expanded on click) -->
+                <div id="inlineComments-${td.id}" style="display:none;margin-top:12px;padding:12px;background:#fafaf9;border-radius:12px;border:1px solid #f1f5f9">
+                  <div id="commentsList-${td.id}" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;margin-bottom:10px"></div>
+                  <div style="display:flex;gap:6px;align-items:flex-end">
+                    <textarea id="commentInput-${td.id}" placeholder="اكتب تعليقاً..." 
+                      style="flex:1;padding:8px 12px;border:1px solid #e5e7eb;border-radius:12px;font-family:inherit;font-size:13px;resize:none;min-height:36px;max-height:100px;background:white"
+                      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();postInlineComment('${td.id}','${activeProject.id}')}"></textarea>
+                    <button onclick="postInlineComment('${td.id}','${activeProject.id}')" 
+                      style="background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:8px 16px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">
+                      📤 إرسال
+                    </button>
+                  </div>
+                </div>
               </div>
               <button class="btn btn-ghost" style="padding:6px" title="تفاعل سريع" onclick="event.stopPropagation();toggleReactionPicker(event,'todo','${td.id}')">😊</button>
-              <button class="btn btn-ghost" style="padding:6px" title="تعليقات وتفاصيل" onclick="showTodoDetail('${td.id}')">💬</button>
+              <button class="btn btn-ghost" style="padding:6px" title="تفاصيل كاملة" onclick="showTodoDetail('${td.id}')">📋</button>
               <button class="btn btn-ghost" style="padding:6px" onclick="deleteTodo('${td.id}')">🗑️</button>
             </div>
           `;}).join('')}
@@ -4551,7 +4568,169 @@ async function renderTodos(container) {
         if (box) box.innerHTML = renderReactionsRow('todo', td.id, reactionsByTodo[td.id] || []);
       });
     } catch(e) { console.log('Load todo reactions:', e); }
+    
+    // Also load comment counts
+    try { await refreshTodoCommentCounts(todos.map(t => t.id)); } catch(e) {}
   }
+}
+
+// ============================================
+// INLINE COMMENTS UNDER TODOS (always available)
+// ============================================
+async function toggleInlineComments(todoId) {
+  const box = document.getElementById('inlineComments-' + todoId);
+  if (!box) return;
+  
+  if (box.style.display === 'none') {
+    box.style.display = 'block';
+    await loadInlineComments(todoId);
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+async function loadInlineComments(todoId) {
+  const listBox = document.getElementById('commentsList-' + todoId);
+  if (!listBox) return;
+  
+  const { data: comments, error } = await sb.from('todo_comments')
+    .select('*, profile:user_id(full_name)')
+    .eq('todo_id', todoId)
+    .order('created_at', { ascending: true });
+  
+  if (error) {
+    listBox.innerHTML = '<div style="color:#dc2626;font-size:12px;text-align:center;padding:8px">خطأ في تحميل التعليقات</div>';
+    return;
+  }
+  
+  // Update count badge
+  const countBadge = document.getElementById('commentCount-' + todoId);
+  if (countBadge) {
+    countBadge.textContent = (comments && comments.length > 0) ? `${comments.length} تعليق` : 'تعليقات';
+  }
+  
+  if (!comments || comments.length === 0) {
+    listBox.innerHTML = '<div style="color:#9ca3af;font-size:12px;text-align:center;padding:12px;font-style:italic">لا توجد تعليقات بعد - كن أول من يعلق!</div>';
+    return;
+  }
+  
+  listBox.innerHTML = comments.map(c => {
+    const isMine = c.user_id === currentUser.id;
+    const name = c.profile?.full_name || 'مستخدم';
+    const initial = name.charAt(0).toUpperCase();
+    const time = timeAgo(c.created_at);
+    return `
+      <div style="display:flex;gap:8px;align-items:flex-start;${isMine ? 'flex-direction:row-reverse' : ''}" data-comment-id="${c.id}">
+        <div style="width:28px;height:28px;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0">${initial}</div>
+        <div style="flex:1;max-width:75%">
+          <div style="background:${isMine ? '#fff7ed' : 'white'};border:1px solid ${isMine ? '#fed7aa' : '#e5e7eb'};border-radius:12px;padding:8px 12px;position:relative">
+            <div style="font-weight:600;font-size:11px;color:#ff6b35;margin-bottom:2px">${escapeHTML(name)}</div>
+            <div style="font-size:13px;line-height:1.6;color:#1f2937;word-wrap:break-word">${escapeHTML(c.content)}</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+              <div style="font-size:10px;color:#9ca3af">${time}</div>
+              <button onclick="event.stopPropagation();toggleReactionPicker(event,'todo_comment','${c.id}')" 
+                style="background:transparent;border:none;font-size:13px;cursor:pointer;opacity:0.5;padding:2px 4px;border-radius:50%" 
+                onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="تفاعل">😊</button>
+            </div>
+            <div id="reactions-todo_comment-${c.id}" style="display:flex;gap:3px;flex-wrap:wrap;margin-top:4px"></div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  // Load reactions for these comments
+  setTimeout(async () => {
+    try {
+      const { data: reactions } = await sb.rpc('get_reactions_for_messages', {
+        p_message_type: 'todo_comment',
+        p_message_ids: comments.map(c => c.id)
+      });
+      const reactionsByComment = {};
+      (reactions || []).forEach(r => {
+        if (!reactionsByComment[r.message_id]) reactionsByComment[r.message_id] = [];
+        reactionsByComment[r.message_id].push(r);
+      });
+      comments.forEach(c => {
+        const box = document.getElementById(`reactions-todo_comment-${c.id}`);
+        if (box) box.innerHTML = renderReactionsRow('todo_comment', c.id, reactionsByComment[c.id] || []);
+      });
+    } catch(e) {}
+  }, 100);
+}
+
+async function postInlineComment(todoId, projectId) {
+  const input = document.getElementById('commentInput-' + todoId);
+  if (!input) return;
+  const content = input.value.trim();
+  if (!content) {
+    input.focus();
+    return;
+  }
+  
+  // Check if muted
+  if (amIMuted()) {
+    toast('⚠️ لا يمكنك التعليق - حسابك مُكتم');
+    return;
+  }
+  
+  input.disabled = true;
+  
+  try {
+    const { error } = await sb.from('todo_comments').insert({
+      todo_id: todoId,
+      project_id: projectId,
+      user_id: currentUser.id,
+      content: content,
+      attachments: []
+    });
+    
+    if (error) {
+      toast('❌ ' + error.message);
+      input.disabled = false;
+      return;
+    }
+    
+    input.value = '';
+    input.disabled = false;
+    input.focus();
+    
+    // Reload comments to show the new one
+    await loadInlineComments(todoId);
+    
+    // Log activity
+    try { await logActivity('علّق على مهمة', 'todo', content.substring(0, 30)); } catch(e) {}
+    
+    // Auto-scroll to bottom
+    const listBox = document.getElementById('commentsList-' + todoId);
+    if (listBox) listBox.scrollTop = listBox.scrollHeight;
+  } catch(e) {
+    toast('❌ ' + e.message);
+    input.disabled = false;
+  }
+}
+
+// Auto-load comment counts for all visible todos
+async function refreshTodoCommentCounts(todoIds) {
+  if (!todoIds || todoIds.length === 0) return;
+  try {
+    const { data: counts } = await sb.from('todo_comments')
+      .select('todo_id')
+      .in('todo_id', todoIds);
+    
+    const countMap = {};
+    (counts || []).forEach(c => {
+      countMap[c.todo_id] = (countMap[c.todo_id] || 0) + 1;
+    });
+    
+    todoIds.forEach(tid => {
+      const badge = document.getElementById('commentCount-' + tid);
+      if (badge) {
+        const count = countMap[tid] || 0;
+        badge.textContent = count > 0 ? `${count} تعليق` : 'تعليقات';
+      }
+    });
+  } catch(e) {}
 }
 
 function showNewTodoListModal() {
@@ -7674,6 +7853,20 @@ function subscribeMessages() {
     }, async (payload) => {
       if (payload.new.user_id !== currentUser.id) {
         playNotificationSound();
+      }
+      // If the inline comments box for this todo is currently open, refresh it
+      const inlineBox = document.getElementById('inlineComments-' + payload.new.todo_id);
+      if (inlineBox && inlineBox.style.display !== 'none') {
+        try { await loadInlineComments(payload.new.todo_id); } catch(e) {}
+      } else {
+        // Just update the count badge
+        const countBadge = document.getElementById('commentCount-' + payload.new.todo_id);
+        if (countBadge) {
+          const currentText = countBadge.textContent;
+          const match = currentText.match(/(\d+)/);
+          const currentCount = match ? parseInt(match[1]) : 0;
+          countBadge.textContent = `${currentCount + 1} تعليق`;
+        }
       }
     })
     .subscribe();
