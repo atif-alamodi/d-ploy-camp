@@ -3572,10 +3572,31 @@ async function handleLogin() {
   if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
 
   try {
+    // SECURITY: Check if account is locked due to brute force attempts
+    try {
+      const { data: lockCheck } = await sb.rpc('check_account_lockout', { target_email: email });
+      if (lockCheck?.locked) {
+        const minutes = Math.ceil(lockCheck.minutes_remaining || 15);
+        showAlert('loginAlert', `🔒 الحساب مقفل مؤقتاً بسبب محاولات فاشلة متعددة. حاول بعد ${minutes} دقيقة.`);
+        if (btn) { btn.disabled = false; btn.textContent = loginLabel; }
+        return;
+      }
+    } catch(e) { /* if lockout check fails, allow login attempt */ }
+    
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if (error) {
       let msg = '';
       const errLower = error.message.toLowerCase();
+      
+      // SECURITY: Record failed login attempt
+      try {
+        const { data: failData } = await sb.rpc('record_failed_login', { target_email: email, user_ip: null });
+        if (failData?.locked) {
+          showAlert('loginAlert', `🔒 تم قفل الحساب لمدة ${failData.lockout_minutes || 15} دقيقة بعد ${failData.attempts} محاولات فاشلة.`);
+          if (btn) { btn.disabled = false; btn.textContent = loginLabel; }
+          return;
+        }
+      } catch(e) { /* ignore */ }
       
       if (errLower.includes('invalid') || errLower.includes('credentials')) {
         // Check if user has a pending invitation (not yet registered)
@@ -3611,7 +3632,8 @@ async function handleLogin() {
       if (btn) { btn.disabled = false; btn.textContent = loginLabel; }
       return;
     }
-    // Success
+    // Success - clear any lockout
+    try { await sb.rpc('clear_lockout', { target_email: email }); } catch(e) {}
     if (btn) { btn.textContent = '✅'; }
     await onAuthSuccess(data.user);
   } catch(e) {
