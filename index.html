@@ -5295,44 +5295,41 @@ async function executeBulkInvite() {
   if (pendingInviteEmails.length === 0) return;
   const btn = document.getElementById('confirmSendBtn');
   btn.disabled = true;
-  btn.innerHTML = `<div class="spinner" style="width:18px; height:18px; margin:0; border-width:2px"></div> ${t('sending')} (قد يستغرق ${Math.ceil(pendingInviteEmails.length * 0.7)} ثانية)`;
+  btn.innerHTML = `<div class="spinner" style="width:18px; height:18px; margin:0; border-width:2px"></div> ${t('sending')} (قد يستغرق ${Math.ceil(pendingInviteEmails.length * 0.8)} ثانية)`;
 
   try {
-    const { data: { session } } = await sb.auth.getSession();
-
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/send-invitation`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        emails: pendingInviteEmails,
-        projectId: activeProject?.id || null,
-        projectName: activeProject?.name || 'D-Ploy Camp',
-        inviterName: currentProfile?.full_name || currentProfile?.email || 'مدير المنصة'
-      })
+    // Use direct RPC instead of Edge Function (more reliable)
+    const { data, error } = await sb.rpc('bulk_send_invitations', {
+      p_emails: pendingInviteEmails,
+      p_project_id: activeProject?.id || null,
+      p_project_name: activeProject?.name || 'D-Ploy Camp',
+      p_inviter_name: currentProfile?.full_name || currentProfile?.email || 'مدير المنصة'
     });
 
-    const result = await response.json();
+    if (error) {
+      toast('❌ ' + error.message);
+      btn.disabled = false;
+      btn.innerHTML = `✅ ${t('confirmSend')}`;
+      return;
+    }
 
-    if (!response.ok) {
-      toast(result.error || 'Failed');
+    if (!data || !data.success) {
+      toast('❌ ' + (data?.error || 'فشل غير معروف'));
       btn.disabled = false;
       btn.innerHTML = `✅ ${t('confirmSend')}`;
       return;
     }
 
     // Display results
-    showInviteResults(result.results || []);
+    showInviteResults(data.results || []);
     
     // Auto-summary toast
-    if (result.sent > 0) {
-      toast(`✅ تم إرسال ${result.sent} دعوة بنجاح${result.failed > 0 ? ` (فشل ${result.failed})` : ''}`);
+    if (data.sent > 0) {
+      toast(`✅ تم إرسال ${data.sent} دعوة بنجاح${data.failed > 0 ? ` (فشل ${data.failed})` : ''}`);
     }
   } catch (err) {
     console.error(err);
-    toast(err.message);
+    toast('❌ ' + err.message);
   } finally {
     btn.disabled = false;
     btn.innerHTML = `✅ ${t('confirmSend')}`;
