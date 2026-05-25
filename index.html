@@ -6705,40 +6705,40 @@ async function sendAdminInvites() {
   }
 
   btn.disabled = true;
-  btn.innerHTML = '<div class="spinner" style="width:16px;height:16px;margin:0;border-width:2px;display:inline-block;"></div> جارٍ الإرسال...';
+  btn.innerHTML = `<div class="spinner" style="width:16px;height:16px;margin:0;border-width:2px;display:inline-block;"></div> جارٍ الإرسال... (قد يستغرق ${Math.ceil(emails.length * 0.8)} ثانية)`;
   alertDiv.style.display = 'none';
 
   try {
-    const { data: { session } } = await sb.auth.getSession();
-    const appUrl = window.location.origin + window.location.pathname;
-
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/send-invitation`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        emails: emails,
-        projectId: projectId || null,
-        appUrl: appUrl
-      })
+    // Use direct DB RPC (more reliable than Edge Function)
+    let projectName = 'D-Ploy Camp';
+    if (projectId) {
+      const { data: proj } = await sb.from('projects').select('name').eq('id', projectId).maybeSingle();
+      if (proj?.name) projectName = proj.name;
+    }
+    
+    const { data, error } = await sb.rpc('bulk_send_invitations', {
+      p_emails: emails,
+      p_project_id: projectId || null,
+      p_project_name: projectName,
+      p_inviter_name: currentProfile?.full_name || currentProfile?.email || 'مدير المنصة'
     });
 
-    const result = await response.json();
-
-    if (!response.ok) {
+    if (error) {
       alertDiv.style.cssText = 'display:block;background:#fee2e2;color:#991b1b;padding:12px 16px;border-radius:10px;font-weight:600;';
-      alertDiv.textContent = '❌ ' + (result.error || 'فشل الإرسال');
+      alertDiv.textContent = '❌ ' + error.message;
       return;
     }
 
-    // Show results
-    const results = result.results || [];
-    const sent = results.filter(r => r.status === 'sent').length;
-    const partial = results.filter(r => r.status === 'partial').length;
-    const failed = results.filter(r => r.status === 'error' || r.status === 'invalid').length;
-    const skipped = results.filter(r => r.status === 'already_member').length;
+    if (!data || !data.success) {
+      alertDiv.style.cssText = 'display:block;background:#fee2e2;color:#991b1b;padding:12px 16px;border-radius:10px;font-weight:600;';
+      alertDiv.textContent = '❌ ' + (data?.error || 'فشل الإرسال');
+      return;
+    }
+
+    // Normalize results from RPC format { email, ok, error, link }
+    const results = data.results || [];
+    const sent = results.filter(r => r.ok === true).length;
+    const failed = results.filter(r => r.ok === false).length;
 
     const resultsDiv = document.getElementById('adminInviteResults');
     resultsDiv.style.display = 'block';
@@ -6746,22 +6746,16 @@ async function sendAdminInvites() {
       <div style="background:var(--bg-elevated); border-radius:var(--radius); padding:16px; border:1px solid var(--border);">
         <div style="font-weight:700; margin-bottom:12px; font-size:16px">📊 نتائج الإرسال</div>
         <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
-          <div style="background:#d1fae5;color:#065f46;padding:8px 16px;border-radius:8px;font-weight:600">✅ أُرسل: ${sent + partial}</div>
+          <div style="background:#d1fae5;color:#065f46;padding:8px 16px;border-radius:8px;font-weight:600">✅ أُرسل: ${sent}</div>
           ${failed > 0 ? `<div style="background:#fee2e2;color:#991b1b;padding:8px 16px;border-radius:8px;font-weight:600">❌ فشل: ${failed}</div>` : ''}
-          ${skipped > 0 ? `<div style="background:#ede9fe;color:#5b21b6;padding:8px 16px;border-radius:8px;font-weight:600">⏭️ موجود: ${skipped}</div>` : ''}
         </div>
         <div style="display:flex; flex-direction:column; gap:6px;">
           ${results.map(r => `
             <div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:white; border-radius:8px; font-size:13px; border:1px solid var(--border);">
-              <span>${r.status === 'sent' || r.status === 'partial' ? '✅' : r.status === 'already_member' ? '⏭️' : '❌'}</span>
-              <span style="flex:1; font-family:monospace">${r.email}</span>
-              <span style="color:var(--text-muted)">${
-                r.status === 'sent' ? 'إيميل أُرسل' :
-                r.status === 'partial' ? 'دعوة أُنشئت (rate limit)' :
-                r.status === 'already_member' ? 'موجود مسبقاً' :
-                r.error || 'فشل'
-              }</span>
-              ${r.invite_link ? `<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="navigator.clipboard.writeText('${r.invite_link}').then(()=>toast('تم نسخ الرابط'))">📋 نسخ الرابط</button>` : ''}
+              <span style="font-size:16px">${r.ok ? '✅' : '❌'}</span>
+              <span style="flex:1; font-family:monospace;direction:ltr;text-align:right">${escapeHTML(r.email)}</span>
+              <span style="color:${r.ok ? '#065f46' : '#991b1b'};font-size:11px">${r.ok ? 'أُرسل' : escapeHTML(r.error || 'فشل')}</span>
+              ${r.link ? `<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="navigator.clipboard.writeText('${r.link}').then(()=>toast('📋 تم نسخ الرابط'))">📋 نسخ الرابط</button>` : ''}
             </div>
           `).join('')}
         </div>
@@ -6769,12 +6763,15 @@ async function sendAdminInvites() {
     `;
 
     // Clear chips after success
-    document.getElementById('adminChipArea').querySelectorAll('.email-chip').forEach(c => c.remove());
+    if (sent > 0) {
+      document.getElementById('adminChipArea').querySelectorAll('.email-chip').forEach(c => c.remove());
+    }
     
     // Reload pending invites
-    loadAdminPendingInvites();
+    if (typeof loadAdminPendingInvites === 'function') loadAdminPendingInvites();
 
   } catch (err) {
+    console.error('Send admin invites error:', err);
     alertDiv.style.cssText = 'display:block;background:#fee2e2;color:#991b1b;padding:12px 16px;border-radius:10px;font-weight:600;';
     alertDiv.textContent = '❌ خطأ: ' + err.message;
   } finally {
