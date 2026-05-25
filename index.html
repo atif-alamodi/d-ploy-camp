@@ -4160,16 +4160,39 @@ async function loadHome() {
   }
 
   grid.innerHTML = currentProjects.map(p => `
-    <div class="proj-card" onclick="openProject('${p.id}')">
-      <div class="proj-card-icon" style="background:${p.color}22; color:${p.color}">${p.icon}</div>
-      <div class="proj-card-title">${escapeHTML(p.name)}</div>
-      <div class="proj-card-desc">${escapeHTML(p.description || '')}</div>
-      <div class="proj-card-meta">
-        <span>👥 ${counts[p.id]} ${t('membersCount')}</span>
-        <span>${timeAgo(p.created_at)}</span>
+    <div class="proj-card" data-project-id="${p.id}">
+      <div onclick="openProject('${p.id}')" style="cursor:pointer">
+        <div class="proj-card-icon" style="background:${p.color}22; color:${p.color}">${p.icon}</div>
+        <div class="proj-card-title">${escapeHTML(p.name)}</div>
+        <div class="proj-card-desc">${escapeHTML(p.description || '')}</div>
+        <div class="proj-card-meta">
+          <span>👥 ${counts[p.id]} ${t('membersCount')}</span>
+          <span>${timeAgo(p.created_at)}</span>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid #f1f5f9">
+        <div id="reactions-project-${p.id}" style="display:flex;gap:4px;flex-wrap:wrap;flex:1"></div>
+        <button class="btn btn-ghost" style="padding:4px 10px;font-size:14px" onclick="event.stopPropagation();toggleReactionPicker(event,'project','${p.id}')" title="تفاعل سريع">😊</button>
       </div>
     </div>
   `).join('');
+  
+  // Bulk-load reactions for all projects
+  try {
+    const { data: reactions } = await sb.rpc('get_reactions_for_messages', {
+      p_message_type: 'project',
+      p_message_ids: currentProjects.map(p => p.id)
+    });
+    const reactionsByProj = {};
+    (reactions || []).forEach(r => {
+      if (!reactionsByProj[r.message_id]) reactionsByProj[r.message_id] = [];
+      reactionsByProj[r.message_id].push(r);
+    });
+    currentProjects.forEach(p => {
+      const box = document.getElementById(`reactions-project-${p.id}`);
+      if (box) box.innerHTML = renderReactionsRow('project', p.id, reactionsByProj[p.id] || []);
+    });
+  } catch(e) { console.log('Load project reactions:', e); }
 }
 
 let selectedIcon = '📚';
@@ -4413,7 +4436,9 @@ async function renderTodos(container) {
                   ${hasLayer ? `<span style="background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer" onclick="showProjectTab('layers')" title="انقر للذهاب إلى الجدولة الطبقية">🎯 طبقة ${td.layer_number}</span>` : ''}
                   ${!hasSchedule && !hasLayer ? `<span style="background:#f3f4f6;color:#9ca3af;padding:2px 8px;border-radius:10px;font-size:11px;cursor:pointer" onclick="showTodoDetail('${td.id}')" title="أضف تواريخ وطبقة لتظهر في الجداول">⚙️ أضف جدولة</span>` : ''}
                 </div>
+                <div id="reactions-todo-${td.id}" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px"></div>
               </div>
+              <button class="btn btn-ghost" style="padding:6px" title="تفاعل سريع" onclick="event.stopPropagation();toggleReactionPicker(event,'todo','${td.id}')">😊</button>
               <button class="btn btn-ghost" style="padding:6px" title="تعليقات وتفاصيل" onclick="showTodoDetail('${td.id}')">💬</button>
               <button class="btn btn-ghost" style="padding:6px" onclick="deleteTodo('${td.id}')">🗑️</button>
             </div>
@@ -4424,6 +4449,26 @@ async function renderTodos(container) {
   }
   html += `</div>`;
   container.innerHTML = html;
+  
+  // Bulk-load reactions for all todos
+  if (todos && todos.length > 0) {
+    try {
+      const { data: reactions } = await sb.rpc('get_reactions_for_messages', {
+        p_message_type: 'todo',
+        p_message_ids: todos.map(t => t.id)
+      });
+      const reactionsByTodo = {};
+      (reactions || []).forEach(r => {
+        if (!reactionsByTodo[r.message_id]) reactionsByTodo[r.message_id] = [];
+        reactionsByTodo[r.message_id].push(r);
+      });
+      // Inject reactions into each todo
+      todos.forEach(td => {
+        const box = document.getElementById(`reactions-todo-${td.id}`);
+        if (box) box.innerHTML = renderReactionsRow('todo', td.id, reactionsByTodo[td.id] || []);
+      });
+    } catch(e) { console.log('Load todo reactions:', e); }
+  }
 }
 
 function showNewTodoListModal() {
@@ -4574,22 +4619,40 @@ async function renderMessages(container) {
       ${muted ? `<div class="muted-warning">${t('youAreMuted')}</div>` : ''}
   `;
 
+  // Bulk fetch reactions for all messages
+  let reactionsByMsg = {};
+  if (messages && messages.length > 0) {
+    try {
+      const { data: reactions } = await sb.rpc('get_reactions_for_messages', {
+        p_message_type: 'message',
+        p_message_ids: messages.map(m => m.id)
+      });
+      (reactions || []).forEach(r => {
+        if (!reactionsByMsg[r.message_id]) reactionsByMsg[r.message_id] = [];
+        reactionsByMsg[r.message_id].push(r);
+      });
+    } catch(e) {}
+  }
+
   if (!messages || messages.length === 0) {
     html += `<div class="empty-state"><div class="empty-icon">💬</div><div class="empty-title">${t('noMessages')}</div></div>`;
   } else {
     html += messages.map(m => {
       const canDelete = m.created_by === currentUser.id || can('perm_delete_content');
+      const msgReactions = reactionsByMsg[m.id] || [];
       return `
-      <div class="message-card">
+      <div class="message-card" data-msg-id="${m.id}" style="position:relative">
         <div class="message-header">
           <div class="avatar" style="width:32px; height:32px; font-size:12px">${initials(m.author?.full_name || '?')}</div>
           <div style="flex:1">
             <div class="message-title">${escapeHTML(m.title)}</div>
             <div style="font-size:11px; color:var(--text-muted)">${escapeHTML(m.author?.full_name || '')} • ${timeAgo(m.created_at)}</div>
           </div>
+          <button class="btn btn-ghost" onclick="toggleReactionPicker(event,'message','${m.id}')" style="padding:6px" title="إضافة تفاعل">😊</button>
           ${canDelete ? `<button class="btn btn-ghost" onclick="deleteMessage('${m.id}')" style="padding:6px">🗑️</button>` : ''}
         </div>
         <div class="message-content">${escapeHTML(m.content)}</div>
+        <div id="reactions-message-${m.id}" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:10px">${renderReactionsRow('message', m.id, msgReactions)}</div>
       </div>
     `;}).join('');
   }
@@ -8013,6 +8076,28 @@ async function loadTodoComments(todoId) {
     .select('*, profile:user_id(full_name)')
     .eq('todo_id', todoId)
     .order('created_at', { ascending: true });
+  
+  // Bulk-load reactions for comments
+  if (comments && comments.length > 0) {
+    setTimeout(async () => {
+      try {
+        const { data: reactions } = await sb.rpc('get_reactions_for_messages', {
+          p_message_type: 'todo_comment',
+          p_message_ids: comments.map(c => c.id)
+        });
+        const reactionsByComment = {};
+        (reactions || []).forEach(r => {
+          if (!reactionsByComment[r.message_id]) reactionsByComment[r.message_id] = [];
+          reactionsByComment[r.message_id].push(r);
+        });
+        comments.forEach(c => {
+          const box = document.getElementById(`reactions-todo_comment-${c.id}`);
+          if (box) box.innerHTML = renderReactionsRow('todo_comment', c.id, reactionsByComment[c.id] || []);
+        });
+      } catch(e) { console.log('Load comment reactions:', e); }
+    }, 100);
+  }
+  
   return comments || [];
 }
 
@@ -8052,13 +8137,19 @@ function renderCommentHTML(c) {
       `).join('')}
     </div>` : '';
   return `
-    <div class="todo-comment">
+    <div class="todo-comment" data-comment-id="${c.id}" style="position:relative">
       <div class="avatar" style="width:28px;height:28px;font-size:12px;flex-shrink:0">${(c.profile?.full_name||'?').charAt(0)}</div>
-      <div class="todo-comment-bubble">
+      <div class="todo-comment-bubble" style="position:relative">
         <div style="font-weight:600;font-size:11px;color:var(--primary);margin-bottom:4px">${escapeHTML(c.profile?.full_name||'مستخدم')}</div>
         <div>${escapeHTML(c.content)}</div>
         ${attHTML}
-        <div style="font-size:10px;color:var(--text-muted);margin-top:4px">${timeAgo(c.created_at)}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+          <div style="font-size:10px;color:var(--text-muted)">${timeAgo(c.created_at)}</div>
+          <button onclick="event.stopPropagation();toggleReactionPicker(event,'todo_comment','${c.id}')" 
+            style="background:transparent;border:none;font-size:14px;cursor:pointer;opacity:0.5;padding:2px 6px;border-radius:50%" 
+            onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="تفاعل">😊</button>
+        </div>
+        <div id="reactions-todo_comment-${c.id}" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px"></div>
       </div>
     </div>
   `;
