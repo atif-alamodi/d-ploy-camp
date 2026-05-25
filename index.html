@@ -1960,6 +1960,11 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
         <span class="nav-icon">🔥</span>
         <span>Campfire</span>
       </div>
+      <div class="nav-item" onclick="toggleNotificationsPanel()" style="position:relative">
+        <span class="nav-icon">🔔</span>
+        <span>الإشعارات</span>
+        <span id="notifBadge" style="display:none;position:absolute;top:8px;${'right'};right:12px;background:#ef4444;color:white;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;min-width:18px;text-align:center"></span>
+      </div>
       <div class="nav-item hidden" id="adminPanelLink" data-page="adminPanel" onclick="showPage('adminPanel')" style="position:relative">
         <span class="nav-icon">👑</span>
         <span data-i18n="adminPanel">لوحة الإدارة</span>
@@ -2816,19 +2821,44 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 
 <!-- New Message Modal -->
 <div class="modal-bg" id="newMessageModal">
-  <div class="modal">
-    <h3 class="modal-title" data-i18n="newMessageTitle">رسالة جديدة</h3>
+  <div class="modal" style="max-width:620px;max-height:90vh;overflow-y:auto">
+    <h3 class="modal-title">📢 إعلان جديد</h3>
+    <p style="color:#6b7280;font-size:12px;margin-bottom:14px">شارك إعلاناً أو فكرة أو تحديثاً للفريق. الجميع يمكنه التعليق والتفاعل.</p>
+    
     <div class="form-group">
-      <label data-i18n="msgTitle">العنوان</label>
-      <input type="text" class="form-input" id="newMsgTitle" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('newMsgContent').focus();}">
+      <label>📌 النوع</label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px" id="msgCategoryPicker">
+        <button type="button" onclick="selectMsgCategory('announcement', this)" style="padding:6px 12px;border-radius:50px;border:1px solid #e5e7eb;background:white;cursor:pointer;font-size:12px;font-weight:600">📢 إعلان</button>
+        <button type="button" onclick="selectMsgCategory('pitch', this)" style="padding:6px 12px;border-radius:50px;border:1px solid #e5e7eb;background:white;cursor:pointer;font-size:12px;font-weight:600">💡 فكرة</button>
+        <button type="button" onclick="selectMsgCategory('update', this)" style="padding:6px 12px;border-radius:50px;border:1px solid #e5e7eb;background:white;cursor:pointer;font-size:12px;font-weight:600">🔄 تحديث</button>
+        <button type="button" onclick="selectMsgCategory('celebration', this)" style="padding:6px 12px;border-radius:50px;border:1px solid #e5e7eb;background:white;cursor:pointer;font-size:12px;font-weight:600">🎉 احتفال</button>
+        <button type="button" onclick="selectMsgCategory('heads_up', this)" style="padding:6px 12px;border-radius:50px;border:1px solid #e5e7eb;background:white;cursor:pointer;font-size:12px;font-weight:600">⚠️ تنبيه</button>
+        <button type="button" onclick="selectMsgCategory('fyi', this)" style="padding:6px 12px;border-radius:50px;border:1px solid #e5e7eb;background:white;cursor:pointer;font-size:12px;font-weight:600">ℹ️ للعلم</button>
+      </div>
+      <input type="hidden" id="newMsgCategory" value="announcement">
+    </div>
+    
+    <div class="form-group">
+      <label>📷 صورة الغلاف (اختياري)</label>
+      <div id="coverImagePreview" style="display:none;margin-bottom:10px">
+        <img id="coverImg" style="max-width:100%;max-height:200px;border-radius:10px;display:block">
+        <button type="button" onclick="clearCoverImage()" style="margin-top:6px;background:#fee2e2;color:#dc2626;border:none;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">✕ حذف الصورة</button>
+      </div>
+      <button type="button" onclick="uploadMsgCover()" id="uploadCoverBtn" style="background:#f0fdf4;color:#15803d;border:1px dashed #bbf7d0;padding:10px 16px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;width:100%">📷 إضافة صورة غلاف</button>
+      <input type="hidden" id="newMsgCoverImage" value="">
+    </div>
+    
+    <div class="form-group">
+      <label>📝 العنوان</label>
+      <input type="text" class="form-input" id="newMsgTitle" placeholder="مثل: اليوم الوطني، تذكير، إنجاز...">
     </div>
     <div class="form-group">
-      <label data-i18n="msgContent">المحتوى</label>
-      <textarea class="form-input" id="newMsgContent" onkeydown="if(event.key==='Enter'&&event.ctrlKey){event.preventDefault();createMessage();}" style="min-height:140px"></textarea>
+      <label>📄 المحتوى</label>
+      <textarea class="form-input" id="newMsgContent" style="min-height:140px" placeholder="اكتب التفاصيل هنا..."></textarea>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeModal('newMessageModal')" data-i18n="cancel">إلغاء</button>
-      <button class="btn btn-primary" onclick="createMessage()" data-i18n="post">نشر</button>
+      <button class="btn btn-ghost" onclick="closeMessageModal()">إلغاء</button>
+      <button class="btn btn-primary" onclick="createMessage()">📢 نشر</button>
     </div>
   </div>
 </div>
@@ -4341,7 +4371,9 @@ async function loadHome() {
     counts[p.id] = count || 0;
   }
 
-  grid.innerHTML = currentProjects.map(p => `
+  grid.innerHTML = currentProjects.map(p => {
+    const canDelete = (p.created_by === currentUser?.id) || currentProfile?.is_super_admin;
+    return `
     <div class="proj-card" data-project-id="${p.id}">
       <div onclick="openProject('${p.id}')" style="cursor:pointer">
         <div class="proj-card-icon" style="background:${p.color}22; color:${p.color}">${p.icon}</div>
@@ -4354,10 +4386,14 @@ async function loadHome() {
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid #f1f5f9">
         <div id="reactions-project-${p.id}" style="display:flex;gap:4px;flex-wrap:wrap;flex:1"></div>
-        <button class="btn btn-ghost" style="padding:4px 10px;font-size:14px" onclick="event.stopPropagation();toggleReactionPicker(event,'project','${p.id}')" title="تفاعل سريع">😊</button>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-ghost" style="padding:4px 10px;font-size:14px" onclick="event.stopPropagation();toggleReactionPicker(event,'project','${p.id}')" title="تفاعل سريع">😊</button>
+          ${canDelete ? `<button class="btn btn-ghost" style="padding:4px 10px;font-size:14px;color:#ef4444" onclick="event.stopPropagation();deleteProject('${p.id}','${escapeHTML(p.name).replace(/'/g, '&#39;')}')" title="حذف المشروع (للمنشئ فقط)">🗑️</button>` : ''}
+        </div>
       </div>
     </div>
-  `).join('');
+    `;
+  }).join('');
   
   // Bulk-load reactions for all projects
   try {
@@ -4569,6 +4605,297 @@ async function applyProjectToolSettings() {
       }
     });
   } catch(e) { console.log('Apply tool settings:', e); }
+}
+
+// ============================================
+// DELETE PROJECT (creator only)
+// ============================================
+async function deleteProject(projectId, projectName) {
+  if (!confirm(`⚠️ تحذير: سيتم حذف المشروع "${projectName}" نهائياً مع كل محتوياته:\n\n• كل المهام والقوائم\n• كل الرسائل والتعليقات\n• كل الملفات والمرفقات\n• كل أحداث الجدول\n\nهل أنت متأكد؟ لا يمكن التراجع!`)) return;
+  
+  // Double-check with the name
+  const confirmation = prompt(`للتأكيد، اكتب اسم المشروع بالضبط:\n${projectName}`);
+  if (confirmation !== projectName) {
+    toast('❌ الاسم غير مطابق - تم الإلغاء');
+    return;
+  }
+  
+  try {
+    const { error } = await sb.from('projects').delete().eq('id', projectId);
+    if (error) {
+      toast('❌ ' + error.message);
+      return;
+    }
+    toast('✅ تم حذف المشروع');
+    await loadProjects();
+    await loadHome();
+    // Navigate home if currently on this project
+    if (activeProject?.id === projectId) {
+      showPage('home');
+    }
+  } catch(e) {
+    toast('❌ ' + e.message);
+  }
+}
+
+// ============================================
+// EDIT/DELETE MESSAGES (campfire, board, comments)
+// ============================================
+async function editCampfireMessage(messageId, currentContent) {
+  const newContent = prompt('تعديل الرسالة:', currentContent);
+  if (newContent === null || newContent.trim() === '' || newContent === currentContent) return;
+  
+  try {
+    const { error } = await sb.from('campfire_messages')
+      .update({ content: newContent.trim(), edited_at: new Date().toISOString() })
+      .eq('id', messageId);
+    if (error) { toast('❌ ' + error.message); return; }
+    toast('✅ تم التعديل');
+    // Realtime will refresh others
+    if (typeof loadCampfire === 'function') await loadCampfire();
+  } catch(e) { toast('❌ ' + e.message); }
+}
+
+async function deleteCampfireMessage(messageId) {
+  if (!confirm('حذف هذه الرسالة؟')) return;
+  try {
+    const { error } = await sb.from('campfire_messages').delete().eq('id', messageId);
+    if (error) { toast('❌ ' + error.message); return; }
+    toast('✅ تم الحذف');
+    if (typeof loadCampfire === 'function') await loadCampfire();
+  } catch(e) { toast('❌ ' + e.message); }
+}
+
+async function editTodoComment(commentId, todoId, currentContent) {
+  const newContent = prompt('تعديل التعليق:', currentContent);
+  if (newContent === null || newContent.trim() === '' || newContent === currentContent) return;
+  
+  try {
+    const { error } = await sb.from('todo_comments')
+      .update({ content: newContent.trim(), edited_at: new Date().toISOString() })
+      .eq('id', commentId);
+    if (error) { toast('❌ ' + error.message); return; }
+    toast('✅ تم التعديل');
+    if (typeof loadInlineComments === 'function') await loadInlineComments(todoId);
+  } catch(e) { toast('❌ ' + e.message); }
+}
+
+async function deleteTodoComment(commentId, todoId) {
+  if (!confirm('حذف هذا التعليق؟')) return;
+  try {
+    const { error } = await sb.from('todo_comments').delete().eq('id', commentId);
+    if (error) { toast('❌ ' + error.message); return; }
+    toast('✅ تم الحذف');
+    if (typeof loadInlineComments === 'function') await loadInlineComments(todoId);
+  } catch(e) { toast('❌ ' + e.message); }
+}
+
+async function editMessage(messageId, currentTitle, currentContent) {
+  const newTitle = prompt('تعديل عنوان الرسالة:', currentTitle);
+  if (newTitle === null) return;
+  const newContent = prompt('تعديل محتوى الرسالة:', currentContent);
+  if (newContent === null) return;
+  
+  if (newTitle === currentTitle && newContent === currentContent) return;
+  
+  try {
+    const { error } = await sb.from('messages')
+      .update({ 
+        title: newTitle.trim() || currentTitle, 
+        content: newContent.trim(),
+        edited_at: new Date().toISOString() 
+      })
+      .eq('id', messageId);
+    if (error) { toast('❌ ' + error.message); return; }
+    toast('✅ تم التعديل');
+    if (activeTab === 'messages') await loadProjectTab('messages');
+  } catch(e) { toast('❌ ' + e.message); }
+}
+
+async function deleteMessage(messageId) {
+  if (!confirm('حذف هذه الرسالة؟ سيتم حذف كل التعليقات معها.')) return;
+  try {
+    const { error } = await sb.from('messages').delete().eq('id', messageId);
+    if (error) { toast('❌ ' + error.message); return; }
+    toast('✅ تم الحذف');
+    if (activeTab === 'messages') await loadProjectTab('messages');
+  } catch(e) { toast('❌ ' + e.message); }
+}
+
+async function editMessageComment(commentId, messageId, currentContent) {
+  const newContent = prompt('تعديل التعليق:', currentContent);
+  if (newContent === null || newContent.trim() === '' || newContent === currentContent) return;
+  
+  try {
+    const { error } = await sb.from('message_comments')
+      .update({ content: newContent.trim(), edited_at: new Date().toISOString() })
+      .eq('id', commentId);
+    if (error) { toast('❌ ' + error.message); return; }
+    toast('✅ تم التعديل');
+    if (typeof loadMessageDetail === 'function' && messageId) await loadMessageDetail(messageId);
+  } catch(e) { toast('❌ ' + e.message); }
+}
+
+async function deleteMessageComment(commentId, messageId) {
+  if (!confirm('حذف هذا التعليق؟')) return;
+  try {
+    const { error } = await sb.from('message_comments').delete().eq('id', commentId);
+    if (error) { toast('❌ ' + error.message); return; }
+    toast('✅ تم الحذف');
+    if (typeof loadMessageDetail === 'function' && messageId) await loadMessageDetail(messageId);
+  } catch(e) { toast('❌ ' + e.message); }
+}
+
+// ============================================
+// IMAGE UPLOAD HELPER (for campfire + comments)
+// ============================================
+async function uploadImagesForMessage(files, folder) {
+  const uploaded = [];
+  for (const file of files) {
+    try {
+      const safeName = (file.name || 'image').replace(/[^\w.\-]/g, '_');
+      const path = `${activeProject?.id || 'shared'}/${folder}/${Date.now()}_${safeName}`;
+      const { error: upErr } = await sb.storage.from('project-files').upload(path, file);
+      if (upErr) { console.error(upErr); continue; }
+      const { data: urlData } = sb.storage.from('project-files').getPublicUrl(path);
+      uploaded.push({
+        name: file.name,
+        url: urlData.publicUrl,
+        path: path,
+        type: file.type || 'image/jpeg',
+        size: file.size,
+        uploaded_by: currentUser.id,
+        uploaded_at: new Date().toISOString()
+      });
+    } catch(e) { console.error('Upload error:', e); }
+  }
+  return uploaded;
+}
+
+// Trigger file picker for image upload in current input context
+function pickImagesForCampfire() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip';
+  input.multiple = true;
+  input.onchange = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    toast(`📤 جارٍ رفع ${files.length} ملف...`);
+    const uploaded = await uploadImagesForMessage(files, 'campfire');
+    if (uploaded.length === 0) { toast('❌ فشل الرفع'); return; }
+    
+    // Insert as a campfire message with attachments
+    const textInput = document.getElementById('campfireInput');
+    const text = (textInput?.value || '').trim();
+    const { error } = await sb.from('campfire_messages').insert({
+      project_id: activeProject.id,
+      user_id: currentUser.id,
+      content: text || (uploaded.length === 1 ? `📎 ${uploaded[0].name}` : `📎 ${uploaded.length} مرفقات`),
+      attachments: uploaded
+    });
+    if (error) { toast('❌ ' + error.message); return; }
+    if (textInput) textInput.value = '';
+    toast('✅ تم الرفع');
+  };
+  input.click();
+}
+
+// ============================================
+// IN-APP NOTIFICATIONS SIDE PANEL
+// ============================================
+let notificationsPanelOpen = false;
+
+function toggleNotificationsPanel() {
+  let panel = document.getElementById('notificationsSidePanel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'notificationsSidePanel';
+    panel.style.cssText = `
+      position:fixed;top:0;${currentLang === 'ar' ? 'left' : 'right'}:0;height:100vh;width:380px;max-width:90vw;
+      background:white;box-shadow:-4px 0 24px rgba(0,0,0,0.12);z-index:9999;
+      display:flex;flex-direction:column;transform:translateX(${currentLang === 'ar' ? '-' : ''}100%);transition:transform 0.3s ease
+    `;
+    panel.innerHTML = `
+      <div style="padding:18px 20px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white">
+        <h3 style="margin:0;font-size:18px;font-weight:900">🔔 الإشعارات</h3>
+        <button onclick="toggleNotificationsPanel()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:18px">×</button>
+      </div>
+      <div style="padding:10px 16px;border-bottom:1px solid #f1f5f9;display:flex;gap:8px">
+        <button onclick="markAllNotificationsRead()" style="flex:1;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:6px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">✓ قراءة الكل</button>
+      </div>
+      <div id="notificationsList" style="flex:1;overflow-y:auto;padding:8px"></div>
+    `;
+    document.body.appendChild(panel);
+  }
+  
+  notificationsPanelOpen = !notificationsPanelOpen;
+  panel.style.transform = notificationsPanelOpen ? 'translateX(0)' : `translateX(${currentLang === 'ar' ? '-' : ''}100%)`;
+  
+  if (notificationsPanelOpen) {
+    loadNotificationsList();
+  }
+}
+
+async function loadNotificationsList() {
+  const list = document.getElementById('notificationsList');
+  if (!list) return;
+  
+  const { data: notifs } = await sb.from('notifications')
+    .select('*')
+    .eq('user_id', currentUser.id)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  
+  if (!notifs || notifs.length === 0) {
+    list.innerHTML = '<div style="padding:30px;text-align:center;color:#9ca3af;font-size:13px">📭 لا توجد إشعارات</div>';
+    return;
+  }
+  
+  list.innerHTML = notifs.map(n => {
+    const isUnread = !n.read_at;
+    return `
+      <div style="padding:12px 14px;background:${isUnread ? '#fff7ed' : '#fafaf9'};border:1px solid ${isUnread ? '#fed7aa' : '#f1f5f9'};border-radius:12px;margin-bottom:8px;cursor:pointer"
+        onclick="markNotificationRead('${n.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div style="font-weight:700;font-size:13px;color:#1f2937">${escapeHTML(n.title || 'إشعار')}</div>
+          ${isUnread ? '<span style="background:#ff6b35;width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px"></span>' : ''}
+        </div>
+        ${n.body ? `<div style="font-size:12px;color:#6b7280;margin-top:4px;line-height:1.6">${escapeHTML(n.body)}</div>` : ''}
+        <div style="font-size:10px;color:#9ca3af;margin-top:6px">${timeAgo(n.created_at)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function markNotificationRead(notifId) {
+  await sb.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', notifId);
+  await loadNotificationsList();
+  await updateNotificationBadge();
+}
+
+async function markAllNotificationsRead() {
+  await sb.from('notifications').update({ read_at: new Date().toISOString() })
+    .eq('user_id', currentUser.id).is('read_at', null);
+  toast('✅ تمت قراءة الكل');
+  await loadNotificationsList();
+  await updateNotificationBadge();
+}
+
+async function updateNotificationBadge() {
+  if (!currentUser?.id) return;
+  const { count } = await sb.from('notifications')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', currentUser.id).is('read_at', null);
+  const badge = document.getElementById('notifBadge');
+  if (badge) {
+    if (count && count > 0) {
+      badge.textContent = count > 99 ? '99+' : count;
+      badge.style.display = 'inline-flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
 }
 
 // ============================================
@@ -5274,9 +5601,12 @@ async function loadInlineComments(todoId) {
   
   listBox.innerHTML = comments.map(c => {
     const isMine = c.user_id === currentUser.id;
+    const canModify = isMine || currentProfile?.is_super_admin;
     const name = c.profile?.full_name || 'مستخدم';
     const initial = name.charAt(0).toUpperCase();
     const time = timeAgo(c.created_at);
+    const editedBadge = c.edited_at ? '<span style="font-size:9px;color:#9ca3af" title="معدّل">✎</span> ' : '';
+    const safeContent = (c.content || '').replace(/`/g, '\\`').replace(/\$/g, '\\$').replace(/'/g, "\\'");
     return `
       <div style="display:flex;gap:8px;align-items:flex-start;${isMine ? 'flex-direction:row-reverse' : ''}" data-comment-id="${c.id}">
         <div style="width:28px;height:28px;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0">${initial}</div>
@@ -5284,11 +5614,21 @@ async function loadInlineComments(todoId) {
           <div style="background:${isMine ? '#fff7ed' : 'white'};border:1px solid ${isMine ? '#fed7aa' : '#e5e7eb'};border-radius:12px;padding:8px 12px;position:relative">
             <div style="font-weight:600;font-size:11px;color:#ff6b35;margin-bottom:2px">${escapeHTML(name)}</div>
             <div style="font-size:13px;line-height:1.6;color:#1f2937;word-wrap:break-word">${escapeHTML(c.content)}</div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
-              <div style="font-size:10px;color:#9ca3af">${time}</div>
-              <button onclick="event.stopPropagation();toggleReactionPicker(event,'todo_comment','${c.id}')" 
-                style="background:transparent;border:none;font-size:13px;cursor:pointer;opacity:0.5;padding:2px 4px;border-radius:50%" 
-                onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="تفاعل">😊</button>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:4px">
+              <div style="font-size:10px;color:#9ca3af">${editedBadge}${time}</div>
+              <div style="display:flex;gap:2px">
+                <button onclick="event.stopPropagation();toggleReactionPicker(event,'todo_comment','${c.id}')" 
+                  style="background:transparent;border:none;font-size:13px;cursor:pointer;opacity:0.5;padding:2px 4px;border-radius:50%" 
+                  onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="تفاعل">😊</button>
+                ${canModify ? `
+                  <button onclick="event.stopPropagation();editTodoComment('${c.id}','${todoId}','${safeContent}')" 
+                    style="background:transparent;border:none;font-size:11px;cursor:pointer;opacity:0.5;padding:2px 4px;border-radius:50%" 
+                    onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="تعديل">✏️</button>
+                  <button onclick="event.stopPropagation();deleteTodoComment('${c.id}','${todoId}')" 
+                    style="background:transparent;border:none;font-size:11px;cursor:pointer;opacity:0.5;padding:2px 4px;border-radius:50%;color:#ef4444" 
+                    onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="حذف">🗑️</button>
+                ` : ''}
+              </div>
             </div>
             <div id="reactions-todo_comment-${c.id}" style="display:flex;gap:3px;flex-wrap:wrap;margin-top:4px"></div>
           </div>
@@ -5529,17 +5869,29 @@ async function renderMessages(container) {
     .eq('project_id', activeProject.id)
     .order('created_at', { ascending: false });
 
+  // Fetch comment counts
+  let commentCounts = {};
+  if (messages && messages.length > 0) {
+    const { data: comments } = await sb.from('message_comments')
+      .select('message_id')
+      .in('message_id', messages.map(m => m.id));
+    (comments || []).forEach(c => {
+      commentCounts[c.message_id] = (commentCounts[c.message_id] || 0) + 1;
+    });
+  }
+
   const muted = amIMuted();
   let html = `
     <div class="section-card">
       <div class="section-header">
-        <h3 class="section-title"><span class="section-icon" style="background:#dbeafe">💬</span> ${t('messages')}</h3>
-        ${muted ? '' : `<button class="btn btn-primary" onclick="openModal('newMessageModal')">➕ ${t('addMessage')}</button>`}
+        <h3 class="section-title"><span class="section-icon" style="background:#dbeafe">📢</span> لوحة الإعلانات (Message Board)</h3>
+        ${muted ? '' : `<button class="btn btn-primary" onclick="openModal('newMessageModal')">➕ إعلان جديد</button>`}
       </div>
+      <p style="color:#6b7280;font-size:13px;margin-bottom:14px">انشر الإعلانات والتعاميم والإنجازات. كل عضو يستطيع التعليق والتفاعل تحتها.</p>
       ${muted ? `<div class="muted-warning">${t('youAreMuted')}</div>` : ''}
   `;
 
-  // Bulk fetch reactions for all messages
+  // Bulk fetch reactions
   let reactionsByMsg = {};
   if (messages && messages.length > 0) {
     try {
@@ -5553,26 +5905,73 @@ async function renderMessages(container) {
       });
     } catch(e) {}
   }
+  
+  const categoryConfig = {
+    announcement: { icon: '📢', color: '#f7468a', bg: '#fce7f3', label: 'إعلان' },
+    pitch: { icon: '💡', color: '#0369a1', bg: '#dbeafe', label: 'فكرة / اقتراح' },
+    update: { icon: '🔄', color: '#9333ea', bg: '#f3e8ff', label: 'تحديث' },
+    celebration: { icon: '🎉', color: '#16a34a', bg: '#dcfce7', label: 'احتفال' },
+    heads_up: { icon: '⚠️', color: '#d97706', bg: '#fef3c7', label: 'تنبيه' },
+    fyi: { icon: 'ℹ️', color: '#6b7280', bg: '#f3f4f6', label: 'للعلم' },
+    general: { icon: '💬', color: '#374151', bg: '#f3f4f6', label: 'عام' }
+  };
 
   if (!messages || messages.length === 0) {
-    html += `<div class="empty-state"><div class="empty-icon">💬</div><div class="empty-title">${t('noMessages')}</div></div>`;
+    html += `<div class="empty-state"><div class="empty-icon">📢</div><div class="empty-title">لا توجد إعلانات بعد</div><div class="empty-text">انشر أول إعلان أو فكرة للفريق</div></div>`;
   } else {
     html += messages.map(m => {
-      const canDelete = m.created_by === currentUser.id || can('perm_delete_content');
+      const isMine = m.created_by === currentUser?.id;
+      const canModify = isMine || currentProfile?.is_super_admin;
       const msgReactions = reactionsByMsg[m.id] || [];
+      const cat = categoryConfig[m.category || 'general'] || categoryConfig.general;
+      const commentCount = commentCounts[m.id] || 0;
+      const editedBadge = m.edited_at ? '<span style="font-size:10px;color:#9ca3af;margin-right:4px" title="معدّل">✎</span>' : '';
+      const safeTitle = (m.title || '').replace(/`/g, '\\`').replace(/'/g, "\\'");
+      const safeContent = (m.content || '').replace(/`/g, '\\`').replace(/'/g, "\\'");
+      
       return `
-      <div class="message-card" data-msg-id="${m.id}" style="position:relative">
-        <div class="message-header">
-          <div class="avatar" style="width:32px; height:32px; font-size:12px">${initials(m.author?.full_name || '?')}</div>
+      <div class="message-card" data-msg-id="${m.id}" style="position:relative;border-${currentLang === 'ar' ? 'right' : 'left'}:4px solid ${cat.color};background:white;padding:16px;border-radius:14px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,0.05)">
+        ${m.cover_image ? `<img src="${escapeHTML(m.cover_image)}" alt="" style="width:100%;max-height:240px;object-fit:cover;border-radius:10px;margin-bottom:14px;cursor:pointer" onclick="window.open('${escapeHTML(m.cover_image)}','_blank')">` : ''}
+        
+        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px">
+          <div style="width:40px;height:40px;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0">${initials(m.author?.full_name || '?')}</div>
           <div style="flex:1">
-            <div class="message-title">${escapeHTML(m.title)}</div>
-            <div style="font-size:11px; color:var(--text-muted)">${escapeHTML(m.author?.full_name || '')} • ${timeAgo(m.created_at)}</div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+              <span style="background:${cat.bg};color:${cat.color};padding:2px 10px;border-radius:50px;font-size:11px;font-weight:700">${cat.icon} ${cat.label}</span>
+            </div>
+            <h3 style="margin:0;font-size:18px;font-weight:900;color:#1f2937">${escapeHTML(m.title)}</h3>
+            <div style="font-size:11px;color:#9ca3af;margin-top:2px">${escapeHTML(m.author?.full_name || '')} • ${timeAgo(m.created_at)} ${editedBadge}</div>
           </div>
-          <button class="btn btn-ghost" onclick="toggleReactionPicker(event,'message','${m.id}')" style="padding:6px" title="إضافة تفاعل">😊</button>
-          ${canDelete ? `<button class="btn btn-ghost" onclick="deleteMessage('${m.id}')" style="padding:6px">🗑️</button>` : ''}
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-ghost" onclick="toggleReactionPicker(event,'message','${m.id}')" style="padding:6px" title="تفاعل">😊</button>
+            ${canModify ? `
+              <button class="btn btn-ghost" onclick="editMessage('${m.id}', \`${safeTitle}\`, \`${safeContent}\`)" style="padding:6px" title="تعديل">✏️</button>
+              <button class="btn btn-ghost" onclick="deleteMessage('${m.id}')" style="padding:6px;color:#ef4444" title="حذف">🗑️</button>
+            ` : ''}
+          </div>
         </div>
-        <div class="message-content">${escapeHTML(m.content)}</div>
-        <div id="reactions-message-${m.id}" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:10px">${renderReactionsRow('message', m.id, msgReactions)}</div>
+        
+        <div style="font-size:14px;color:#374151;line-height:1.8;white-space:pre-wrap;margin-bottom:12px">${escapeHTML(m.content)}</div>
+        
+        <div id="reactions-message-${m.id}" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">${renderReactionsRow('message', m.id, msgReactions)}</div>
+        
+        <!-- Comments section (always visible like Basecamp) -->
+        <div style="border-top:1px solid #f1f5f9;padding-top:12px;margin-top:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div style="font-size:12px;color:#6b7280;font-weight:700">💬 ${commentCount > 0 ? commentCount + ' تعليق' : 'لا توجد تعليقات بعد'}</div>
+            <button onclick="toggleMessageComments('${m.id}')" id="msgCommentToggle-${m.id}" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;padding:4px 12px;border-radius:50px;font-size:11px;font-weight:700;cursor:pointer">${commentCount > 0 ? 'عرض التعليقات' : '+ تعليق'}</button>
+          </div>
+          <div id="msgComments-${m.id}" style="display:none">
+            <div id="msgCommentsList-${m.id}" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;margin-bottom:10px"></div>
+            <div style="display:flex;gap:6px;align-items:flex-end">
+              <textarea id="msgCommentInput-${m.id}" placeholder="اكتب تعليقاً..." 
+                style="flex:1;padding:8px 12px;border:1px solid #e5e7eb;border-radius:12px;font-family:inherit;font-size:13px;resize:none;min-height:36px;max-height:100px;background:white"
+                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();postMessageComment('${m.id}')}"></textarea>
+              <button onclick="postMessageComment('${m.id}')" 
+                style="background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:8px 16px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">📤 إرسال</button>
+            </div>
+          </div>
+        </div>
       </div>
     `;}).join('');
   }
@@ -5580,31 +5979,181 @@ async function renderMessages(container) {
   container.innerHTML = html;
 }
 
-async function deleteMessage(id) {
-  if (!confirm(currentLang === 'ar' ? 'حذف الرسالة؟' : 'Delete message?')) return;
-  const { error } = await sb.from('messages').delete().eq('id', id);
-  if (error) { toast(error.message); return; }
-  toast(currentLang === 'ar' ? 'تم الحذف' : 'Deleted');
-  await loadProjectTab('messages');
-  await loadProjectCounts();
+// Toggle and load comments for a message board post
+async function toggleMessageComments(messageId) {
+  const box = document.getElementById('msgComments-' + messageId);
+  if (!box) return;
+  if (box.style.display === 'none') {
+    box.style.display = 'block';
+    await loadMessageComments(messageId);
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+async function loadMessageComments(messageId) {
+  const listBox = document.getElementById('msgCommentsList-' + messageId);
+  if (!listBox) return;
+  
+  const { data: comments } = await sb.from('message_comments')
+    .select('*, profile:created_by(full_name)')
+    .eq('message_id', messageId)
+    .order('created_at', { ascending: true });
+  
+  if (!comments || comments.length === 0) {
+    listBox.innerHTML = '<div style="color:#9ca3af;font-size:12px;text-align:center;padding:8px;font-style:italic">لا توجد تعليقات بعد - كن أول من يعلق!</div>';
+    return;
+  }
+  
+  listBox.innerHTML = comments.map(c => {
+    const isMine = c.created_by === currentUser?.id;
+    const canModify = isMine || currentProfile?.is_super_admin;
+    const name = c.profile?.full_name || 'مستخدم';
+    const initial = name.charAt(0).toUpperCase();
+    const time = timeAgo(c.created_at);
+    const editedBadge = c.edited_at ? '<span style="font-size:9px;color:#9ca3af" title="معدّل">✎</span> ' : '';
+    const safeContent = (c.content || '').replace(/`/g, '\\`').replace(/'/g, "\\'");
+    return `
+      <div style="display:flex;gap:8px;align-items:flex-start;${isMine ? 'flex-direction:row-reverse' : ''}">
+        <div style="width:28px;height:28px;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0">${initial}</div>
+        <div style="flex:1;max-width:75%">
+          <div style="background:${isMine ? '#fff7ed' : 'white'};border:1px solid ${isMine ? '#fed7aa' : '#e5e7eb'};border-radius:12px;padding:8px 12px">
+            <div style="font-weight:600;font-size:11px;color:#ff6b35;margin-bottom:2px">${escapeHTML(name)}</div>
+            <div style="font-size:13px;line-height:1.6;color:#1f2937;word-wrap:break-word;white-space:pre-wrap">${escapeHTML(c.content)}</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:4px">
+              <div style="font-size:10px;color:#9ca3af">${editedBadge}${time}</div>
+              <div style="display:flex;gap:2px">
+                ${canModify ? `
+                  <button onclick="editMessageComment('${c.id}','${messageId}','${safeContent}')" 
+                    style="background:transparent;border:none;font-size:11px;cursor:pointer;opacity:0.5;padding:2px" title="تعديل">✏️</button>
+                  <button onclick="deleteMessageComment('${c.id}','${messageId}')" 
+                    style="background:transparent;border:none;font-size:11px;cursor:pointer;opacity:0.5;padding:2px;color:#ef4444" title="حذف">🗑️</button>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function postMessageComment(messageId) {
+  const input = document.getElementById('msgCommentInput-' + messageId);
+  if (!input) return;
+  const content = input.value.trim();
+  if (!content) { input.focus(); return; }
+  if (amIMuted()) { toast('⚠️ حسابك مكتوم'); return; }
+  
+  input.disabled = true;
+  try {
+    const { error } = await sb.from('message_comments').insert({
+      message_id: messageId,
+      content,
+      created_by: currentUser.id
+    });
+    if (error) { toast('❌ ' + error.message); input.disabled = false; return; }
+    input.value = '';
+    input.disabled = false;
+    input.focus();
+    await loadMessageComments(messageId);
+    // Update count
+    if (activeTab === 'messages') {
+      setTimeout(() => loadProjectTab('messages'), 200);
+    }
+  } catch(e) {
+    toast('❌ ' + e.message);
+    input.disabled = false;
+  }
+}
+
+// Old function kept as alias for backward compat
+async function deleteMessageOld(id) {
+  if (!confirm('حذف الرسالة؟')) return;
+  await sb.from('messages').delete().eq('id', id);
+  if (activeTab === 'messages') await loadProjectTab('messages');
 }
 
 async function createMessage() {
   const title = document.getElementById('newMsgTitle').value.trim();
   const msgBody = document.getElementById('newMsgContent').value.trim();
-  if (!title || !msgBody) return;
+  const category = document.getElementById('newMsgCategory')?.value || 'announcement';
+  const cover = document.getElementById('newMsgCoverImage')?.value || null;
+  if (!title || !msgBody) {
+    toast('⚠️ العنوان والمحتوى مطلوبان');
+    return;
+  }
   const { error: msgErr } = await sb.from('messages').insert({
-    project_id: activeProject.id, title, content: msgBody, created_by: currentUser.id
+    project_id: activeProject.id, 
+    title, 
+    content: msgBody, 
+    category,
+    cover_image: cover,
+    created_by: currentUser.id
   });
-  if (msgErr) { toast('خطأ: ' + msgErr.message); return; }
-  document.getElementById('newMsgTitle').value = '';
-  document.getElementById('newMsgContent').value = '';
-  closeModal('newMessageModal');
-  toast(currentLang === 'ar' ? '✅ تم النشر' : '✅ Posted');
-  logActivity('نشر رسالة', 'message', title);
+  if (msgErr) { toast('❌ ' + msgErr.message); return; }
+  closeMessageModal();
+  toast('✅ تم النشر');
+  logActivity('نشر إعلاناً', 'message', title);
   notifyProjectMembers('message', `${title}: ${msgBody.substring(0,80)}`);
   await loadProjectTab('messages');
   await loadProjectCounts();
+}
+
+function closeMessageModal() {
+  document.getElementById('newMsgTitle').value = '';
+  document.getElementById('newMsgContent').value = '';
+  document.getElementById('newMsgCoverImage').value = '';
+  document.getElementById('newMsgCategory').value = 'announcement';
+  document.getElementById('coverImagePreview').style.display = 'none';
+  document.getElementById('uploadCoverBtn').style.display = 'block';
+  // Reset category selection
+  document.querySelectorAll('#msgCategoryPicker button').forEach(b => {
+    b.style.background = 'white';
+    b.style.color = '#374151';
+    b.style.borderColor = '#e5e7eb';
+  });
+  // Pre-select "announcement"
+  const annBtn = document.querySelector('#msgCategoryPicker button');
+  if (annBtn) { annBtn.style.background = 'linear-gradient(135deg,#ff6b35,#f7468a)'; annBtn.style.color = 'white'; annBtn.style.borderColor = 'transparent'; }
+  closeModal('newMessageModal');
+}
+
+function selectMsgCategory(cat, btn) {
+  document.getElementById('newMsgCategory').value = cat;
+  document.querySelectorAll('#msgCategoryPicker button').forEach(b => {
+    b.style.background = 'white';
+    b.style.color = '#374151';
+    b.style.borderColor = '#e5e7eb';
+  });
+  btn.style.background = 'linear-gradient(135deg,#ff6b35,#f7468a)';
+  btn.style.color = 'white';
+  btn.style.borderColor = 'transparent';
+}
+
+function uploadMsgCover() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    toast('📤 جارٍ رفع الصورة...');
+    const uploaded = await uploadImagesForMessage([file], 'message-covers');
+    if (uploaded.length === 0) { toast('❌ فشل الرفع'); return; }
+    document.getElementById('newMsgCoverImage').value = uploaded[0].url;
+    document.getElementById('coverImg').src = uploaded[0].url;
+    document.getElementById('coverImagePreview').style.display = 'block';
+    document.getElementById('uploadCoverBtn').style.display = 'none';
+    toast('✅ تم رفع الصورة');
+  };
+  input.click();
+}
+
+function clearCoverImage() {
+  document.getElementById('newMsgCoverImage').value = '';
+  document.getElementById('coverImagePreview').style.display = 'none';
+  document.getElementById('uploadCoverBtn').style.display = 'block';
 }
 
 // ============================================
@@ -8447,19 +8996,43 @@ function subscribeNotifications() {
       // Play sound
       playNotificationSound();
       
-      // Show in-app toast for the notification
+      // Show in-app toast
       if (payload.new.title) {
         const notifTitle = payload.new.title;
         const notifBody = (payload.new.body || '').substring(0, 80);
         toast('🔔 ' + notifTitle + (notifBody ? ': ' + notifBody : ''));
       }
       
-      // Refresh notifications bell if visible
+      // Try browser notification (works only after permission)
+      try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification(payload.new.title || 'D-Ploy Camp', {
+            body: (payload.new.body || '').substring(0, 120),
+            icon: '/d-ploy-camp/favicon.ico'
+          });
+        }
+      } catch(e) {}
+      
+      // Refresh side panel and badge
+      try { await updateNotificationBadge(); } catch(e) {}
+      if (notificationsPanelOpen) {
+        try { await loadNotificationsList(); } catch(e) {}
+      }
       if (typeof loadNotifications === 'function') {
         try { await loadNotifications(); } catch(e) {}
       }
     })
     .subscribe();
+  
+  // Initial badge update
+  try { updateNotificationBadge(); } catch(e) {}
+  
+  // Request browser notification permission once
+  try {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      setTimeout(() => Notification.requestPermission(), 2000);
+    }
+  } catch(e) {}
 }
 
 // Subscribe to project messages (Basecamp-style)
@@ -8563,6 +9136,7 @@ async function renderCampfire(container) {
           <input class="campfire-input" id="campfireInput" placeholder="اكتب رسالة... (استخدم @ للإشارة لعضو)"
             onkeydown="handleCampfireKey(event)"
             oninput="handleCampfireInput(event)">
+          <button class="campfire-send-btn" onclick="pickImagesForCampfire()" title="إرفاق صورة أو ملف" style="background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0">📎</button>
           <button class="campfire-send-btn" onclick="sendCampfireMsg()">🔥</button>
         </div>
       </div>
@@ -8610,21 +9184,57 @@ async function loadCampfireMessages() {
 
 function renderCampfireMsg(m) {
   const isMine = m.user_id === currentUser.id;
+  const canModify = isMine || currentProfile?.is_super_admin;
   const name = m.profile?.full_name || 'مستخدم';
   const initial = name.charAt(0).toUpperCase();
   const time = new Date(m.created_at).toLocaleTimeString('ar-SA', { hour:'2-digit', minute:'2-digit' });
   const reactionsHtml = renderReactionsRow('campfire', m.id, m.reactions || []);
+  const attachments = m.attachments || [];
+  
+  // Render attachments (images inline, files as links)
+  let attHtml = '';
+  if (attachments.length > 0) {
+    attHtml = '<div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;max-width:100%">';
+    for (const a of attachments) {
+      const isImage = (a.type || '').startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(a.name || '');
+      if (isImage) {
+        attHtml += `<img src="${escapeHTML(a.url)}" alt="${escapeHTML(a.name)}" 
+          style="max-width:280px;max-height:300px;border-radius:12px;cursor:pointer;display:block;object-fit:cover" 
+          onclick="window.open('${escapeHTML(a.url)}','_blank')">`;
+      } else {
+        attHtml += `<a href="${escapeHTML(a.url)}" target="_blank" 
+          style="display:inline-flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(255,255,255,0.85);border:1px solid #e5e7eb;border-radius:10px;text-decoration:none;color:#1f2937;font-size:12px;font-weight:600;max-width:280px">
+          ${getFileIcon(a.type, a.name)} ${escapeHTML((a.name || 'ملف').substring(0, 28))}${(a.name || '').length > 28 ? '...' : ''}
+        </a>`;
+      }
+    }
+    attHtml += '</div>';
+  }
+  
+  const editedBadge = m.edited_at ? '<span style="font-size:10px;color:#9ca3af;margin-right:4px" title="تم التعديل">✎</span>' : '';
+  
   return `
     <div class="campfire-msg ${isMine ? 'mine' : ''}" data-msg-id="${m.id}">
       <div class="avatar" style="font-size:14px">${initial}</div>
       <div style="display:flex;flex-direction:column;${isMine ? 'align-items:flex-end' : 'align-items:flex-start'};gap:4px;max-width:75%">
         <div class="campfire-bubble" style="position:relative">
           ${!isMine ? `<div class="campfire-bubble-name">${escapeHTML(name)}</div>` : ''}
-          <div class="campfire-bubble-text">${escapeHTML(m.content)}</div>
-          <div class="campfire-bubble-time">${time}</div>
-          <button onclick="event.stopPropagation();toggleReactionPicker(event,'campfire','${m.id}')" 
-                  style="position:absolute;top:-10px;${isMine ? 'left:-12px' : 'right:-12px'};background:#fff;border:1px solid #e5e7eb;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,0.08);display:none;align-items:center;justify-content:center" 
-                  class="msg-react-btn" title="إضافة تفاعل">😊</button>
+          ${m.content ? `<div class="campfire-bubble-text">${escapeHTML(m.content)}</div>` : ''}
+          ${attHtml}
+          <div class="campfire-bubble-time">${editedBadge}${time}</div>
+          <div style="position:absolute;top:-10px;${isMine ? 'left:-12px' : 'right:-12px'};display:flex;gap:4px">
+            <button onclick="event.stopPropagation();toggleReactionPicker(event,'campfire','${m.id}')" 
+                    style="background:#fff;border:1px solid #e5e7eb;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,0.08);display:none;align-items:center;justify-content:center" 
+                    class="msg-react-btn" title="إضافة تفاعل">😊</button>
+            ${canModify ? `
+              <button onclick="event.stopPropagation();editCampfireMessage('${m.id}', \`${(m.content || '').replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" 
+                      style="background:#fff;border:1px solid #e5e7eb;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:12px;box-shadow:0 2px 6px rgba(0,0,0,0.08);display:none;align-items:center;justify-content:center" 
+                      class="msg-react-btn" title="تعديل">✏️</button>
+              <button onclick="event.stopPropagation();deleteCampfireMessage('${m.id}')" 
+                      style="background:#fff;border:1px solid #fecaca;color:#ef4444;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:12px;box-shadow:0 2px 6px rgba(0,0,0,0.08);display:none;align-items:center;justify-content:center" 
+                      class="msg-react-btn" title="حذف">🗑️</button>
+            ` : ''}
+          </div>
         </div>
         <div id="reactions-campfire-${m.id}" style="display:flex;gap:4px;flex-wrap:wrap">${reactionsHtml}</div>
       </div>
