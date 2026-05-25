@@ -3402,44 +3402,116 @@ function showReset() {
 }
 
 async function handleForgot() {
-  const email = document.getElementById('forgotEmail').value.trim();
+  const email = document.getElementById('forgotEmail').value.trim().toLowerCase();
+  const btn = document.querySelector('#forgotForm .btn-primary');
+  const forgotLabel = currentLang === 'ar' ? 'إرسال رابط الإعادة' : 'Send reset link';
+  
   if (!email) {
     showAlert('forgotAlert', currentLang === 'ar' ? 'الرجاء إدخال البريد الإلكتروني' : 'Please enter your email');
     return;
   }
-  const redirectUrl = window.location.origin + window.location.pathname + '#reset=true';
-  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl });
-  if (error) {
-    showAlert('forgotAlert', error.message);
+  if (!email.includes('@')) {
+    showAlert('forgotAlert', currentLang === 'ar' ? '⚠️ البريد الإلكتروني غير صحيح' : '⚠️ Invalid email');
     return;
   }
-  showAlert('forgotAlert', t('resetLinkSent'), 'success');
-  setTimeout(() => showLogin(), 3500);
+  
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ جارٍ الإرسال...'; }
+  
+  try {
+    // Use our custom Resend-based reset (NOT Supabase's default SMTP which has 2/hour limit)
+    const { data, error } = await sb.rpc('request_password_reset', { target_email: email });
+    
+    if (error) {
+      showAlert('forgotAlert', '❌ ' + error.message);
+      if (btn) { btn.disabled = false; btn.textContent = forgotLabel; }
+      return;
+    }
+    
+    // Always show success (security: don't reveal if email exists)
+    showAlert('forgotAlert', 
+      currentLang === 'ar' 
+        ? '✅ إذا كان لديك حساب بهذا البريد، ستصلك رسالة خلال دقائق. تحقق من صندوق الوارد ومجلد المزعج.' 
+        : '✅ If an account exists, an email will arrive shortly. Check inbox and spam.',
+      'success'
+    );
+    if (btn) { btn.textContent = '✅ تم الإرسال'; }
+    setTimeout(() => {
+      showLogin();
+      if (btn) { btn.disabled = false; btn.textContent = forgotLabel; }
+    }, 4000);
+  } catch(e) {
+    console.error('Forgot password error:', e);
+    showAlert('forgotAlert', '❌ خطأ. حاول مرة أخرى.');
+    if (btn) { btn.disabled = false; btn.textContent = forgotLabel; }
+  }
 }
 
 async function handleResetPassword() {
   const p1 = document.getElementById('resetPassword').value;
   const p2 = document.getElementById('resetPassword2').value;
+  const btn = document.querySelector('#resetForm .btn-primary');
+  const resetLabel = currentLang === 'ar' ? 'تحديث كلمة المرور' : 'Update password';
+  
   if (p1.length < 6) {
-    showAlert('resetAlert', t('passwordTooShort'));
+    showAlert('resetAlert', t('passwordTooShort') || 'كلمة المرور قصيرة جداً');
     return;
   }
   if (p1 !== p2) {
-    showAlert('resetAlert', t('passwordsDontMatch'));
+    showAlert('resetAlert', t('passwordsDontMatch') || 'كلمتا المرور غير متطابقتين');
     return;
   }
-  const { error } = await sb.auth.updateUser({ password: p1 });
-  if (error) {
-    showAlert('resetAlert', error.message);
-    return;
+  
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ جارٍ الحفظ...'; }
+  
+  try {
+    // Check if we have a reset_token in URL (from Resend email)
+    const urlParams = new URLSearchParams(window.location.search);
+    const resetToken = urlParams.get('reset_token');
+    
+    if (resetToken) {
+      // Use our custom reset flow
+      const { data, error } = await sb.rpc('confirm_password_reset', {
+        reset_token: resetToken,
+        new_password: p1
+      });
+      
+      if (error) {
+        showAlert('resetAlert', '❌ ' + error.message);
+        if (btn) { btn.disabled = false; btn.textContent = resetLabel; }
+        return;
+      }
+      
+      if (data && !data.success) {
+        showAlert('resetAlert', '❌ ' + (data.error || 'فشل تحديث كلمة المرور'));
+        if (btn) { btn.disabled = false; btn.textContent = resetLabel; }
+        return;
+      }
+      
+      showAlert('resetAlert', '✅ تم تغيير كلمة المرور بنجاح! يمكنك تسجيل الدخول الآن.', 'success');
+      // Clean URL
+      history.replaceState({}, '', window.location.pathname);
+      setTimeout(() => showLogin(), 2500);
+      return;
+    }
+    
+    // Fallback: Supabase's default flow (if user is logged in via session)
+    const { error } = await sb.auth.updateUser({ password: p1 });
+    if (error) {
+      showAlert('resetAlert', '❌ ' + error.message);
+      if (btn) { btn.disabled = false; btn.textContent = resetLabel; }
+      return;
+    }
+    showAlert('resetAlert', '✅ تم تحديث كلمة المرور', 'success');
+    history.replaceState({}, '', window.location.pathname);
+    setTimeout(async () => {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session) await onAuthSuccess(session.user);
+    }, 1500);
+  } catch(e) {
+    console.error('Reset password error:', e);
+    showAlert('resetAlert', '❌ خطأ: ' + (e.message || 'حاول مرة أخرى'));
+    if (btn) { btn.disabled = false; btn.textContent = resetLabel; }
   }
-  showAlert('resetAlert', t('passwordUpdated'), 'success');
-  // Clean URL
-  history.replaceState({}, '', window.location.pathname);
-  setTimeout(async () => {
-    const { data: { session } } = await sb.auth.getSession();
-    if (session) await onAuthSuccess(session.user);
-  }, 1500);
 }
 
 // ============================================
@@ -7463,6 +7535,19 @@ async function init() {
   const hashParams = new URLSearchParams(window.location.hash.substring(1));
   const searchParams = new URLSearchParams(window.location.search);
   const isReset = hashParams.get('reset') === 'true' || hashParams.get('type') === 'recovery';
+  
+  // Detect our custom reset_token from Resend email
+  const customResetToken = searchParams.get('reset_token');
+  if (customResetToken) {
+    // Show reset password form immediately (no auth needed - token validates)
+    document.getElementById('authScreen').classList.remove('hidden');
+    document.getElementById('appScreen').classList.add('hidden');
+    document.getElementById('loginForm')?.classList.add('hidden');
+    document.getElementById('signupForm')?.classList.add('hidden');
+    document.getElementById('forgotForm')?.classList.add('hidden');
+    document.getElementById('resetForm')?.classList.remove('hidden');
+    // Keep the URL intact so handleResetPassword can read the token
+  }
 
   // Support both ?invite_token= (new) and #invite= (old)
   const inviteToken = searchParams.get('invite_token') || hashParams.get('invite_token') || hashParams.get('invite');
