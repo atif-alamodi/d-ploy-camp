@@ -3724,11 +3724,78 @@ async function handleSignup() {
   const pendingInvite = localStorage.getItem('pending_invite');
   const searchParams = new URLSearchParams(window.location.search);
   const inviteTokenInUrl = searchParams.get('invite_token');
-  const isInviteFlow = !!(pendingInvite || inviteTokenInUrl);
+  const inviteToken = pendingInvite || inviteTokenInUrl;
+  const isInviteFlow = !!inviteToken;
 
   if (btn) { btn.disabled = true; btn.textContent = '⏳ جارٍ التسجيل...'; }
 
   try {
+    // ===== INVITE FLOW: Use direct RPC (bypasses Supabase Auth rate limit) =====
+    if (isInviteFlow) {
+      const { data, error } = await sb.rpc('signup_via_invite_token', {
+        p_token: inviteToken,
+        p_password: password,
+        p_full_name: name
+      });
+      
+      if (error) {
+        showAlert('signupAlert', '❌ ' + error.message);
+        if (btn) { btn.disabled = false; btn.textContent = signupLabel; }
+        return;
+      }
+      
+      if (!data || !data.success) {
+        // Handle "already registered" specially
+        if (data?.already_registered) {
+          showAlert('signupAlert', '✅ لديك حساب بالفعل! انتقل لتسجيل الدخول.', 'success');
+          setTimeout(() => {
+            showLogin();
+            const loginEmail = document.getElementById('loginEmail');
+            if (loginEmail) loginEmail.value = email;
+          }, 2000);
+          return;
+        }
+        showAlert('signupAlert', '❌ ' + (data?.error || 'فشل إنشاء الحساب'));
+        if (btn) { btn.disabled = false; btn.textContent = signupLabel; }
+        return;
+      }
+      
+      // Success - now sign in the user with their new password
+      showAlert('signupAlert', '🎉 تم إنشاء الحساب بنجاح! جارٍ الدخول...', 'success');
+      if (btn) { btn.textContent = '✅ تم'; }
+      
+      // Clean up
+      localStorage.removeItem('pending_invite');
+      history.replaceState({}, '', window.location.pathname);
+      
+      // Sign in with the new credentials
+      setTimeout(async () => {
+        try {
+          const { data: signInData, error: signInError } = await sb.auth.signInWithPassword({ 
+            email: data.email, 
+            password 
+          });
+          if (signInError) {
+            // Fallback: show login screen with email pre-filled
+            showLogin();
+            const loginEmail = document.getElementById('loginEmail');
+            if (loginEmail) loginEmail.value = data.email;
+            toast('✅ تم إنشاء حسابك! سجّل دخولك للمتابعة');
+            return;
+          }
+          if (signInData?.user) {
+            await onAuthSuccess(signInData.user);
+          }
+        } catch(e) {
+          console.error('Auto-login after signup failed:', e);
+          showLogin();
+          toast('✅ تم إنشاء حسابك! سجّل دخولك للمتابعة');
+        }
+      }, 1000);
+      return;
+    }
+    
+    // ===== EXTERNAL FLOW: Standard Supabase signup (needs approval) =====
     const { data, error } = await sb.auth.signUp({
       email, password,
       options: { data: { full_name: name } }
@@ -3737,29 +3804,19 @@ async function handleSignup() {
       let msg = error.message;
       if (error.message.toLowerCase().includes('already')) {
         msg = currentLang === 'ar' ? '❌ هذا البريد مسجّل مسبقاً. جرّب تسجيل الدخول.' : '❌ Email already registered. Try signing in.';
+      } else if (error.message.toLowerCase().includes('rate')) {
+        msg = currentLang === 'ar' 
+          ? '⚠️ تم تجاوز عدد التسجيلات المسموحة. حاول بعد ساعة، أو اطلب من مدير المنصة دعوة لتسجل عبرها بدون حدود.'
+          : '⚠️ Signup limit reached. Try again in an hour, or request an invite from admin.';
       }
       showAlert('signupAlert', msg);
       if (btn) { btn.disabled = false; btn.textContent = signupLabel; }
       return;
     }
     
-    // ===== INVITE FLOW: User was invited, trigger set status='active' automatically =====
-    if (isInviteFlow && data.session) {
-      // User is invited - they're auto-approved. Let them in immediately.
-      showAlert('signupAlert', '🎉 تم التسجيل بنجاح! جارٍ الدخول للمنصة...', 'success');
-      if (btn) { btn.textContent = '✅ تم'; }
-      // The auth state change will handle the redirect
-      setTimeout(async () => {
-        await onAuthSuccess(data.user);
-      }, 1000);
-      return;
-    }
-    
-    // ===== EXTERNAL FLOW: Not invited - needs admin approval =====
     showAlert('signupAlert', '✅ تم إرسال طلب التسجيل بنجاح!\n\n⏳ حسابك بانتظار موافقة مدير المنصة. ستصلك رسالة بريد إلكتروني عند الموافقة.', 'success');
     if (btn) { btn.disabled = true; btn.textContent = '✅ تم الإرسال'; }
     
-    // Sign out external user immediately - they cannot use the platform until approved
     if (data.session) {
       await sb.auth.signOut();
     }
