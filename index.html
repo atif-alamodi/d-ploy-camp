@@ -5039,11 +5039,10 @@ async function executeBulkInvite() {
   if (pendingInviteEmails.length === 0) return;
   const btn = document.getElementById('confirmSendBtn');
   btn.disabled = true;
-  btn.innerHTML = `<div class="spinner" style="width:18px; height:18px; margin:0; border-width:2px"></div> ${t('sending')}`;
+  btn.innerHTML = `<div class="spinner" style="width:18px; height:18px; margin:0; border-width:2px"></div> ${t('sending')} (قد يستغرق ${Math.ceil(pendingInviteEmails.length * 0.7)} ثانية)`;
 
   try {
     const { data: { session } } = await sb.auth.getSession();
-    const appUrl = window.location.origin + window.location.pathname;
 
     const response = await fetch(`${SUPABASE_URL}/functions/v1/send-invitation`, {
       method: 'POST',
@@ -5053,8 +5052,9 @@ async function executeBulkInvite() {
       },
       body: JSON.stringify({
         emails: pendingInviteEmails,
-        projectId: activeProject.id,
-        appUrl: appUrl
+        projectId: activeProject?.id || null,
+        projectName: activeProject?.name || 'D-Ploy Camp',
+        inviterName: currentProfile?.full_name || currentProfile?.email || 'مدير المنصة'
       })
     });
 
@@ -5069,6 +5069,11 @@ async function executeBulkInvite() {
 
     // Display results
     showInviteResults(result.results || []);
+    
+    // Auto-summary toast
+    if (result.sent > 0) {
+      toast(`✅ تم إرسال ${result.sent} دعوة بنجاح${result.failed > 0 ? ` (فشل ${result.failed})` : ''}`);
+    }
   } catch (err) {
     console.error(err);
     toast(err.message);
