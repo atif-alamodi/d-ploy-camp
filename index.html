@@ -3549,6 +3549,55 @@ async function handleResetPassword() {
 // ============================================
 // SELF-SERVICE INVITE LOOKUP (for invited users who didn't get the email)
 // ============================================
+// One-click password reset for invited users who already have accounts
+async function sendResetForInvitedUser(email, btn) {
+  if (!email) return;
+  
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '⏳ جارٍ الإرسال...';
+  }
+  
+  try {
+    const { data, error } = await sb.rpc('request_password_reset', { target_email: email });
+    
+    if (error) {
+      if (btn) {
+        btn.innerHTML = '❌ خطأ - حاول مرة أخرى';
+        btn.disabled = false;
+      }
+      toast('❌ خطأ: ' + error.message);
+      return;
+    }
+    
+    // Success
+    const alertBox = document.getElementById('loginAlert');
+    if (alertBox) {
+      alertBox.className = 'alert success show';
+      alertBox.style.display = 'block';
+      alertBox.innerHTML = `
+        <div style="text-align:center;padding:12px">
+          <div style="font-size:36px;margin-bottom:8px">📧</div>
+          <div style="font-weight:700;margin-bottom:8px;font-size:15px">تم إرسال الرابط!</div>
+          <div style="font-size:13px;color:#065f46;line-height:1.7">
+            تم إرسال رابط إنشاء كلمة المرور إلى:<br>
+            <strong style="font-family:monospace;direction:ltr;display:inline-block;margin-top:4px">${email}</strong>
+            <br><br>
+            📥 تحقق من بريدك الإلكتروني (Inbox و Spam)<br>
+            ⏰ الرابط صالح لمدة ساعة
+          </div>
+        </div>
+      `;
+    }
+    
+    toast('✅ تم إرسال الرابط بنجاح!');
+  } catch(e) {
+    console.error('Reset error:', e);
+    toast('❌ خطأ: ' + e.message);
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function resendInviteForMe() {
   const emailInput = document.getElementById('loginEmail');
   let email = (emailInput?.value || '').trim().toLowerCase();
@@ -7877,15 +7926,31 @@ async function init() {
       
       if (inviteInfo && inviteInfo.success) {
         if (inviteInfo.status === 'already_registered') {
-          // User already has account - show login with pre-filled email
+          // User already has account - auto-send password reset link
           document.getElementById('signupForm')?.classList.add('hidden');
           document.getElementById('loginForm')?.classList.remove('hidden');
           const loginEmail = document.getElementById('loginEmail');
           if (loginEmail && inviteInfo.email) loginEmail.value = inviteInfo.email;
-          showAlert('loginAlert', currentLang === 'ar'
-            ? '✅ لديك حساب بالفعل! سجّل دخولك للانضمام.'
-            : '✅ You already have an account. Sign in to join.',
-            'info');
+          
+          // Show prominent message with action button
+          const alertBox = document.getElementById('loginAlert');
+          if (alertBox) {
+            alertBox.className = 'alert success show';
+            alertBox.style.display = 'block';
+            alertBox.innerHTML = `
+              <div style="text-align:center;padding:8px">
+                <div style="font-size:24px;margin-bottom:8px">✅</div>
+                <div style="font-weight:700;margin-bottom:6px;font-size:15px">لديك حساب بالفعل!</div>
+                <div style="font-size:13px;margin-bottom:14px;color:#065f46">
+                  إذا تذكرت كلمة المرور، سجّل دخولك أدناه.<br>
+                  أو اضغط الزر التالي لإرسال رابط لإنشاء كلمة مرور جديدة:
+                </div>
+                <button onclick="sendResetForInvitedUser('${inviteInfo.email}', this)" style="background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:12px 24px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;width:100%">
+                  🔑 إرسال رابط إنشاء كلمة مرور جديدة
+                </button>
+              </div>
+            `;
+          }
         } else {
           // Show signup form pre-filled - this is the invite acceptance flow
           document.getElementById('loginForm')?.classList.add('hidden');
