@@ -4389,22 +4389,27 @@ async function loadHome() {
 
   grid.innerHTML = currentProjects.map(p => {
     const canDelete = (p.created_by === currentUser?.id) || currentProfile?.is_super_admin;
+    const safeName = (p.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
     return `
-    <div class="proj-card" data-project-id="${p.id}">
-      <div onclick="openProject('${p.id}')" style="cursor:pointer">
-        <div class="proj-card-icon" style="background:${p.color}22; color:${p.color}">${p.icon}</div>
-        <div class="proj-card-title">${escapeHTML(p.name)}</div>
-        <div class="proj-card-desc">${escapeHTML(p.description || '')}</div>
-        <div class="proj-card-meta">
-          <span>👥 ${counts[p.id]} ${t('membersCount')}</span>
-          <span>${timeAgo(p.created_at)}</span>
-        </div>
+    <div class="proj-card" data-project-id="${p.id}" onclick="openProject('${p.id}')" 
+      style="cursor:pointer;transition:transform 0.15s,box-shadow 0.15s"
+      onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 12px 32px rgba(255,107,53,0.15)'"
+      onmouseout="this.style.transform='';this.style.boxShadow=''">
+      <div class="proj-card-icon" style="background:${p.color}22; color:${p.color}">${p.icon}</div>
+      <div class="proj-card-title" style="display:flex;align-items:center;gap:6px">
+        ${escapeHTML(p.name)}
+        <span style="font-size:13px;color:#ff6b35;font-weight:600">› افتح</span>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid #f1f5f9">
+      <div class="proj-card-desc">${escapeHTML(p.description || '')}</div>
+      <div class="proj-card-meta">
+        <span>👥 ${counts[p.id]} ${t('membersCount')}</span>
+        <span>${timeAgo(p.created_at)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid #f1f5f9" onclick="event.stopPropagation()">
         <div id="reactions-project-${p.id}" style="display:flex;gap:4px;flex-wrap:wrap;flex:1"></div>
         <div style="display:flex;gap:4px">
           <button class="btn btn-ghost" style="padding:4px 10px;font-size:14px" onclick="event.stopPropagation();toggleReactionPicker(event,'project','${p.id}')" title="تفاعل سريع">😊</button>
-          ${canDelete ? `<button class="btn btn-ghost" style="padding:4px 10px;font-size:14px;color:#ef4444" onclick="event.stopPropagation();deleteProject('${p.id}','${escapeHTML(p.name).replace(/'/g, '&#39;')}')" title="حذف المشروع (للمنشئ فقط)">🗑️</button>` : ''}
+          ${canDelete ? `<button class="btn btn-ghost" style="padding:4px 10px;font-size:14px;color:#ef4444" onclick="event.stopPropagation();deleteProject('${p.id}','${safeName}')" title="حذف المشروع (للمنشئ فقط)">🗑️</button>` : ''}
         </div>
       </div>
     </div>
@@ -4570,49 +4575,66 @@ async function createProject() {
 let currentMembership = null; // current user's membership in active project
 
 async function openProject(id) {
-  document.getElementById('campfireNavLink').style.display = 'flex';
-  activeProject = currentProjects.find(p => p.id === id);
-  if (!activeProject) {
-    // Super admin can open any project
-    if (currentProfile.is_super_admin) {
-      const { data } = await sb.from('projects').select('*').eq('id', id).single();
-      if (data) activeProject = data;
-    }
+  console.log('🚀 openProject called with id:', id);
+  
+  try {
+    document.getElementById('campfireNavLink').style.display = 'flex';
+    activeProject = currentProjects.find(p => p.id === id);
     if (!activeProject) {
-      // Refresh
-      await loadProjects();
-      activeProject = currentProjects.find(p => p.id === id);
-      if (!activeProject) return;
+      console.log('Project not in currentProjects, fetching...');
+      // Super admin can open any project
+      if (currentProfile?.is_super_admin) {
+        const { data } = await sb.from('projects').select('*').eq('id', id).single();
+        if (data) activeProject = data;
+      }
+      if (!activeProject) {
+        await loadProjects();
+        activeProject = currentProjects.find(p => p.id === id);
+        if (!activeProject) {
+          toast('❌ لم نتمكن من فتح المشروع');
+          console.error('Project not found after refresh:', id);
+          return;
+        }
+      }
     }
-  }
-  // Load current user's membership
-  const { data: mem } = await sb.from('project_members')
-    .select('*').eq('project_id', id).eq('user_id', currentUser.id).maybeSingle();
-  // Super Admin gets virtual Owner membership if not already a member
-  if (!mem && currentProfile?.is_super_admin) {
-    currentMembership = {
-      id: 'super-admin-virtual',
-      project_id: id,
-      user_id: currentUser.id,
-      role: 'owner',
-      perm_invite_members: true,
-      perm_remove_members: true,
-      perm_manage_admins: true,
-      perm_mute_members: true,
-      perm_post_messages: true,
-      perm_manage_todos: true,
-      is_muted: false
-    };
-  } else {
-    currentMembership = mem;
-  }
+    console.log('✅ Active project:', activeProject.name);
+    
+    // Make sure todo detail page is hidden
+    const detailPage = document.getElementById('todoDetailPage');
+    if (detailPage) detailPage.classList.add('hidden');
+    
+    // Load current user's membership
+    const { data: mem } = await sb.from('project_members')
+      .select('*').eq('project_id', id).eq('user_id', currentUser.id).maybeSingle();
+    if (!mem && currentProfile?.is_super_admin) {
+      currentMembership = {
+        id: 'super-admin-virtual',
+        project_id: id,
+        user_id: currentUser.id,
+        role: 'owner',
+        perm_invite_members: true,
+        perm_remove_members: true,
+        perm_manage_admins: true,
+        perm_mute_members: true,
+        perm_post_messages: true,
+        perm_manage_todos: true,
+        is_muted: false
+      };
+    } else {
+      currentMembership = mem;
+    }
 
-  document.getElementById('projTitle').textContent = activeProject.name;
-  document.getElementById('projDesc').textContent = activeProject.description || '';
-  showPage('project');
-  activeTab = 'todos';
-  await loadProjectCounts();
-  await loadProjectTab('todos');
+    document.getElementById('projTitle').textContent = activeProject.name;
+    document.getElementById('projDesc').textContent = activeProject.description || '';
+    showPage('project');
+    activeTab = 'todos';
+    await loadProjectCounts();
+    await loadProjectTab('todos');
+    console.log('✅ Project opened successfully');
+  } catch (e) {
+    console.error('❌ openProject error:', e);
+    toast('❌ خطأ في فتح المشروع: ' + (e.message || 'خطأ غير معروف'));
+  }
 }
 
 // Check if current user can perform action
@@ -5389,23 +5411,47 @@ async function saveProjectTools() {
 function showProjectTab(tab) {
   activeTab = tab;
   saveNavState('project', activeProject?.id, tab);
+  
+  // Make sure we're on the project page (in case user was on todoDetailPage)
+  document.querySelectorAll('.page-content').forEach(p => p.classList.add('hidden'));
+  document.getElementById('projectPage').classList.remove('hidden');
+  
+  // Scroll to top for better UX
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  
   loadProjectTab(tab);
 }
 
 async function loadProjectTab(tab) {
   const container = document.getElementById('projectContent');
+  if (!container) {
+    console.error('❌ projectContent element not found');
+    return;
+  }
   container.innerHTML = '<div class="spinner"></div>';
-
-  if (tab === 'todos') await renderTodos(container);
-  else if (tab === 'messages') await renderMessages(container);
-  else if (tab === 'campfire') await renderCampfire(container);
-  else if (tab === 'activity') await renderActivity(container);
-  else if (tab === 'schedule') await renderSchedule(container);
-  else if (tab === 'files') await renderFiles(container);
-  else if (tab === 'checkins') await renderCheckins(container);
-  else if (tab === 'members') await renderMembers(container);
-  else if (tab === 'gantt') await renderGantt(container);
-  else if (tab === 'layers') await renderLayers(container);
+  
+  try {
+    if (tab === 'todos') await renderTodos(container);
+    else if (tab === 'messages') await renderMessages(container);
+    else if (tab === 'campfire') await renderCampfire(container);
+    else if (tab === 'activity') await renderActivity(container);
+    else if (tab === 'schedule') await renderSchedule(container);
+    else if (tab === 'files') await renderFiles(container);
+    else if (tab === 'checkins') await renderCheckins(container);
+    else if (tab === 'members') await renderMembers(container);
+    else if (tab === 'gantt') await renderGantt(container);
+    else if (tab === 'layers') await renderLayers(container);
+  } catch(e) {
+    console.error(`❌ Error in tab ${tab}:`, e);
+    container.innerHTML = `
+      <div class="section-card" style="text-align:center;padding:40px;background:#fef2f2;border:1px solid #fecaca">
+        <div style="font-size:48px;margin-bottom:12px">⚠️</div>
+        <div style="font-size:16px;font-weight:700;color:#dc2626;margin-bottom:8px">خطأ في تحميل ${tab}</div>
+        <div style="font-size:13px;color:#7f1d1d;margin-bottom:14px">${escapeHTML(e.message || 'خطأ غير معروف')}</div>
+        <button class="btn btn-primary" onclick="loadProjectTab('${tab}')">🔄 إعادة المحاولة</button>
+      </div>
+    `;
+  }
 }
 
 // ============================================
