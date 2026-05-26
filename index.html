@@ -2060,6 +2060,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
         <div class="header-actions">
           <button class="btn btn-secondary" onclick="showProjectTab('campfire')" title="Campfire - دردشة المشروع" style="padding:8px 14px; font-size:18px">🔥</button>
           <button class="btn btn-secondary" onclick="showProjectTab('activity')" title="سجل النشاط" style="padding:8px 14px; font-size:18px">📊</button>
+          <button class="btn btn-secondary" onclick="openAddProjectMembersModal()" title="إضافة أعضاء للمشروع من أعضاء المنصة" style="padding:8px 14px; font-size:18px">👥+</button>
           <button class="btn btn-ghost" onclick="showPage('home')">
             ← <span data-i18n="back">رجوع</span>
           </button>
@@ -2673,6 +2674,23 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 </div>
 
 <!-- Project Tools Settings Modal -->
+<!-- Add Project Members from Platform Modal -->
+<div class="modal-bg" id="addProjectMembersModal">
+  <div class="modal" style="max-width:620px;max-height:90vh;overflow-y:auto">
+    <h3 class="modal-title">👥 إضافة أعضاء للمشروع</h3>
+    <p style="color:#6b7280;font-size:13px;margin-bottom:14px">
+      اختر من أعضاء المنصة الموجودين لإضافتهم لهذا المشروع.<br>
+      <span style="color:#9ca3af;font-size:12px">💡 الأعضاء يحصلون تلقائياً على رؤية كل المحتوى. هذه القائمة للأعضاء الذين تريد ربطهم رسمياً بالمشروع.</span>
+    </p>
+    <input type="text" class="form-input" id="projectMembersSearch" placeholder="🔍 ابحث بالاسم..." 
+      style="margin-bottom:12px" oninput="filterAddProjectMembers()">
+    <div id="addProjectMembersList" style="display:flex;flex-direction:column;gap:6px;max-height:420px;overflow-y:auto"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('addProjectMembersModal')">إغلاق</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="projectToolsModal">
   <div class="modal" style="max-width:600px;max-height:90vh;overflow-y:auto">
     <h3 class="modal-title">⚙️ إعدادات أدوات المشروع</h3>
@@ -4432,6 +4450,162 @@ async function loadHome() {
   
   // Load active platform members
   await loadPlatformMembers();
+}
+
+// ============================================
+// ADD EXISTING PLATFORM MEMBERS TO PROJECT
+// ============================================
+let addProjectMembersCache = { all: [], existing: new Set() };
+
+async function openAddProjectMembersModal() {
+  if (!activeProject?.id) {
+    toast('❌ افتح مشروعاً أولاً');
+    return;
+  }
+  
+  // Show modal and loading state
+  openModal('addProjectMembersModal');
+  const listBox = document.getElementById('addProjectMembersList');
+  listBox.innerHTML = '<div style="padding:24px;text-align:center;color:#9ca3af"><div class="spinner" style="margin:0 auto 12px"></div>جارٍ تحميل الأعضاء...</div>';
+  
+  try {
+    // Fetch all platform members + existing project members in parallel
+    const [membersRes, projMembersRes] = await Promise.all([
+      sb.from('profiles').select('id, full_name, email, is_super_admin')
+        .or('status.eq.active,status.is.null')
+        .order('full_name'),
+      sb.from('project_members').select('user_id').eq('project_id', activeProject.id)
+    ]);
+    
+    addProjectMembersCache.all = membersRes.data || [];
+    addProjectMembersCache.existing = new Set((projMembersRes.data || []).map(m => m.user_id));
+    
+    document.getElementById('projectMembersSearch').value = '';
+    renderAddProjectMembersList();
+  } catch(e) {
+    listBox.innerHTML = '<div style="padding:24px;text-align:center;color:#ef4444">❌ خطأ في التحميل: ' + escapeHTML(e.message) + '</div>';
+  }
+}
+
+function renderAddProjectMembersList() {
+  const listBox = document.getElementById('addProjectMembersList');
+  const search = (document.getElementById('projectMembersSearch')?.value || '').toLowerCase().trim();
+  
+  let members = addProjectMembersCache.all;
+  if (search) {
+    members = members.filter(m => 
+      (m.full_name || '').toLowerCase().includes(search) || 
+      (m.email || '').toLowerCase().includes(search)
+    );
+  }
+  
+  if (members.length === 0) {
+    listBox.innerHTML = '<div style="padding:24px;text-align:center;color:#9ca3af">لا توجد نتائج</div>';
+    return;
+  }
+  
+  const gradients = [
+    'linear-gradient(135deg,#ff6b35,#f7468a)',
+    'linear-gradient(135deg,#6c4ef5,#a855f7)',
+    'linear-gradient(135deg,#10b981,#059669)',
+    'linear-gradient(135deg,#0ea5e9,#3b82f6)',
+    'linear-gradient(135deg,#f59e0b,#d97706)',
+    'linear-gradient(135deg,#ec4899,#be185d)'
+  ];
+  
+  listBox.innerHTML = members.map((m, idx) => {
+    const name = m.full_name || m.email?.split('@')[0] || '?';
+    const initial = name.charAt(0).toUpperCase();
+    const isMember = addProjectMembersCache.existing.has(m.id);
+    const gradient = gradients[idx % gradients.length];
+    
+    return `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:${isMember ? '#f0fdf4' : 'white'};border:1px solid ${isMember ? '#bbf7d0' : '#e5e7eb'};border-radius:12px;transition:all 0.15s">
+        <div style="width:36px;height:36px;background:${gradient};color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;position:relative">
+          ${initial}
+          ${m.is_super_admin ? '<span style="position:absolute;bottom:-2px;right:-2px;background:#fbbf24;color:white;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;border:1.5px solid white">👑</span>' : ''}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px;color:#1f2937;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHTML(name)}</div>
+          <div style="font-size:10px;color:#9ca3af;direction:ltr;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHTML(m.email || '')}</div>
+        </div>
+        ${isMember ? `
+          <span style="background:#dcfce7;color:#15803d;padding:4px 10px;border-radius:50px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:4px">✓ عضو</span>
+          <button onclick="removeFromProject('${m.id}')" 
+            style="background:#fee2e2;color:#dc2626;border:1px solid #fecaca;padding:6px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">🗑️ إزالة</button>
+        ` : `
+          <button onclick="addToProject('${m.id}')" 
+            style="background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:6px 14px;border-radius:50px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">+ إضافة</button>
+        `}
+      </div>
+    `;
+  }).join('');
+}
+
+function filterAddProjectMembers() {
+  renderAddProjectMembersList();
+}
+
+async function addToProject(userId) {
+  if (!activeProject?.id) return;
+  
+  try {
+    const { error } = await sb.from('project_members').insert({
+      project_id: activeProject.id,
+      user_id: userId,
+      role: 'member'
+    });
+    if (error) {
+      if (error.code === '23505') {
+        toast('⚠️ هذا العضو موجود بالفعل في المشروع');
+      } else {
+        toast('❌ ' + error.message);
+      }
+      return;
+    }
+    addProjectMembersCache.existing.add(userId);
+    renderAddProjectMembersList();
+    toast('✅ تمت الإضافة');
+    
+    // Send notification to the added member
+    try {
+      await sb.from('notifications').insert({
+        user_id: userId,
+        title: '👋 تمت إضافتك لمشروع',
+        body: `تمت إضافتك لمشروع "${activeProject.name}" بواسطة ${currentProfile?.full_name || 'عضو'}`,
+        related_type: 'project',
+        related_id: activeProject.id
+      });
+    } catch(e) {}
+    
+    // Refresh project counts and members tab if open
+    if (typeof loadProjectCounts === 'function') await loadProjectCounts();
+    if (activeTab === 'members') await loadProjectTab('members');
+  } catch(e) {
+    toast('❌ ' + e.message);
+  }
+}
+
+async function removeFromProject(userId) {
+  if (!activeProject?.id) return;
+  if (!confirm('إزالة هذا العضو من المشروع؟')) return;
+  
+  try {
+    const { error } = await sb.from('project_members')
+      .delete()
+      .eq('project_id', activeProject.id)
+      .eq('user_id', userId);
+    if (error) { toast('❌ ' + error.message); return; }
+    
+    addProjectMembersCache.existing.delete(userId);
+    renderAddProjectMembersList();
+    toast('✅ تمت الإزالة');
+    
+    if (typeof loadProjectCounts === 'function') await loadProjectCounts();
+    if (activeTab === 'members') await loadProjectTab('members');
+  } catch(e) {
+    toast('❌ ' + e.message);
+  }
 }
 
 // ============================================
