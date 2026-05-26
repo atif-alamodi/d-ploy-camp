@@ -3032,8 +3032,30 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 
 <script>
 // ============================================
+// ============================================
 // CONFIG
 // ============================================
+
+// ============================================
+// PRE-FLIGHT CHECK: Ensure Supabase library loaded before anything else
+// ============================================
+if (typeof supabase === 'undefined' || !supabase.createClient) {
+  console.error('❌ Supabase library failed to load. Reloading in 2s...');
+  document.body.innerHTML = `
+    <div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#fff7ed;font-family:'Cairo',sans-serif;direction:rtl;text-align:center;padding:20px">
+      <div style="max-width:480px;background:white;border-radius:24px;padding:40px;box-shadow:0 20px 60px rgba(0,0,0,0.1)">
+        <div style="font-size:48px;margin-bottom:16px">🏕️</div>
+        <h2 style="margin:0 0 12px;color:#1f2937">D-Ploy Camp</h2>
+        <p style="color:#6b7280;margin-bottom:20px">جاري إعادة المحاولة...</p>
+        <div style="width:40px;height:40px;border:4px solid #f1f5f9;border-top-color:#ff6b35;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto"></div>
+      </div>
+    </div>
+    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+  `;
+  setTimeout(() => location.reload(), 2000);
+  throw new Error('Supabase not loaded');
+}
+
 // Global error protection
 window.onerror = function(msg, src, line, col, err) {
   console.error('App Error:', msg, 'at line', line, err);
@@ -3049,6 +3071,20 @@ const SUPABASE_KEY = 'sb_publishable_PwL_jLvBp9MX9n3rxz-38A_o1RcO_2b';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ============================================
+// SAFE GLOBAL HELPERS - never throw, always return safe defaults
+// ============================================
+window.safeGet = function(obj, path, def = null) {
+  try {
+    return path.split('.').reduce((o, k) => (o == null ? null : o[k]), obj) ?? def;
+  } catch(e) { return def; }
+};
+
+window.safeCall = async function(fn, ...args) {
+  try { return await fn(...args); }
+  catch(e) { console.warn('safeCall caught:', e); return null; }
+};
+
+// ============================================
 // GLOBAL ERROR HANDLING
 // Catches all uncaught errors and unhandled promise rejections from 156 async fns
 // without try/catch, so failures surface to the user instead of being silent.
@@ -3057,7 +3093,7 @@ window.addEventListener('error', function(ev) {
   console.error('[Global Error]', ev.error || ev.message, ev.filename + ':' + ev.lineno);
   // Show toast only for real user-facing errors, not script load issues
   if (ev.error && typeof toast === 'function' && !String(ev.message).includes('Script error')) {
-    toast('⚠️ ' + (currentLang === 'ar' ? 'حدث خطأ غير متوقع' : 'An unexpected error occurred'));
+    try { toast('⚠️ ' + (currentLang === 'ar' ? 'حدث خطأ غير متوقع' : 'An unexpected error occurred')); } catch(e) {}
   }
 });
 
@@ -3066,9 +3102,11 @@ window.addEventListener('unhandledrejection', function(ev) {
   const msg = ev.reason?.message || ev.reason?.error_description || String(ev.reason || '');
   // Filter out network noise and auth-redirect errors
   if (msg && !msg.includes('NetworkError') && !msg.includes('Failed to fetch') && typeof toast === 'function') {
-    const arMsg = 'حدث خطأ: ' + msg.slice(0, 100);
-    const enMsg = 'Error: ' + msg.slice(0, 100);
-    toast('⚠️ ' + (currentLang === 'ar' ? arMsg : enMsg));
+    try {
+      const arMsg = 'حدث خطأ: ' + msg.slice(0, 100);
+      const enMsg = 'Error: ' + msg.slice(0, 100);
+      toast('⚠️ ' + (currentLang === 'ar' ? arMsg : enMsg));
+    } catch(e) {}
   }
   ev.preventDefault();
 });
@@ -4385,50 +4423,68 @@ async function onAuthSuccess(user) {
 // PROJECTS
 // ============================================
 async function loadProjects() {
-  // ALL authenticated users see ALL projects (new behavior)
-  const { data, error } = await sb.from('projects').select('*').eq('archived', false).order('created_at', { ascending: false });
-  if (error) {
-    console.error('loadProjects error:', error);
+  try {
+    // ALL authenticated users see ALL projects (new behavior)
+    const { data, error } = await sb.from('projects').select('*').eq('archived', false).order('created_at', { ascending: false });
+    if (error) {
+      console.error('loadProjects error:', error);
+      currentProjects = [];
+      // Still try to render an empty state
+      const listEl = document.getElementById('projectsList');
+      if (listEl) listEl.innerHTML = `<div style="padding:10px;font-size:12px;color:#ef4444">⚠️ خطأ في التحميل</div>`;
+      return;
+    }
+    currentProjects = data || [];
+
+    // Render sidebar (defensive)
+    const listEl = document.getElementById('projectsList');
+    if (listEl) {
+      if (currentProjects.length === 0) {
+        listEl.innerHTML = `<div style="padding:10px; font-size:12px; color:var(--text-muted)">${t('noProjects')}</div>`;
+      } else {
+        listEl.innerHTML = currentProjects.map(p => `
+          <div class="project-item" onclick="openProject('${p.id}')">
+            <div class="project-icon" style="background:${p.color}22">${p.icon || '📁'}</div>
+            <span>${escapeHTML(p.name || 'مشروع')}</span>
+          </div>
+        `).join('');
+      }
+    }
+
+    // Update stats (defensive)
+    const statEl = document.getElementById('statProjects');
+    if (statEl) statEl.textContent = currentProjects.length;
+    
+    try { await loadStats(); } catch(e) { console.warn('loadStats failed:', e); }
+  } catch(e) {
+    console.error('loadProjects crashed:', e);
     currentProjects = [];
-    return;
   }
-  currentProjects = data || [];
-
-  // Render sidebar
-  const listEl = document.getElementById('projectsList');
-  if (currentProjects.length === 0) {
-    listEl.innerHTML = `<div style="padding:10px; font-size:12px; color:var(--text-muted)">${t('noProjects')}</div>`;
-  } else {
-    listEl.innerHTML = currentProjects.map(p => `
-      <div class="project-item" onclick="openProject('${p.id}')">
-        <div class="project-icon" style="background:${p.color}22">${p.icon}</div>
-        <span>${escapeHTML(p.name)}</span>
-      </div>
-    `).join('');
-  }
-
-  // Update stats
-  document.getElementById('statProjects').textContent = currentProjects.length;
-  await loadStats();
 }
 
 async function loadStats() {
-  if (!currentUser) return;
-  const { count: openCount } = await sb
-    .from('todos').select('*', { count: 'exact', head: true })
-    .eq('assigned_to', currentUser.id)
-    .eq('completed', false);
-  const { count: doneCount } = await sb
-    .from('todos').select('*', { count: 'exact', head: true })
-    .eq('assigned_to', currentUser.id)
-    .eq('completed', true);
-  document.getElementById('statTodos').textContent = openCount || 0;
-  document.getElementById('statCompleted').textContent = doneCount || 0;
+  try {
+    if (!currentUser) return;
+    const [openRes, doneRes] = await Promise.all([
+      sb.from('todos').select('*', { count: 'exact', head: true })
+        .eq('assigned_to', currentUser.id).eq('completed', false),
+      sb.from('todos').select('*', { count: 'exact', head: true })
+        .eq('assigned_to', currentUser.id).eq('completed', true)
+    ]);
+    const todosEl = document.getElementById('statTodos');
+    const doneEl = document.getElementById('statCompleted');
+    if (todosEl) todosEl.textContent = openRes.count || 0;
+    if (doneEl) doneEl.textContent = doneRes.count || 0;
+  } catch(e) {
+    console.warn('loadStats failed:', e);
+  }
 }
 
 async function loadHome() {
   const grid = document.getElementById('projectsGrid');
-  if (currentProjects.length === 0) {
+  if (!grid) return;
+  
+  if (!currentProjects || currentProjects.length === 0) {
     grid.innerHTML = `
       <div class="empty-state" style="grid-column: 1/-1">
         <div class="empty-icon">🚀</div>
@@ -4442,11 +4498,15 @@ async function loadHome() {
     return;
   }
 
-  // Get member counts
+  // Get member counts (defensive - one bad project doesn't crash the rest)
   const counts = {};
   for (const p of currentProjects) {
-    const { count } = await sb.from('project_members').select('*', { count: 'exact', head: true }).eq('project_id', p.id);
-    counts[p.id] = count || 0;
+    try {
+      const { count } = await sb.from('project_members').select('*', { count: 'exact', head: true }).eq('project_id', p.id);
+      counts[p.id] = count || 0;
+    } catch(e) {
+      counts[p.id] = 0;
+    }
   }
 
   grid.innerHTML = currentProjects.map(p => {
