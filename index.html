@@ -1956,14 +1956,10 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
         <span class="nav-icon">➕</span>
         <span data-i18n="newProject">مشروع جديد</span>
       </div>
-      <div class="nav-item" id="campfireNavLink" style="display:none" onclick="showProjectCampfire()">
-        <span class="nav-icon">🔥</span>
-        <span>Campfire</span>
-      </div>
       <div class="nav-item" onclick="toggleNotificationsPanel()" style="position:relative">
         <span class="nav-icon">🔔</span>
         <span>الإشعارات</span>
-        <span id="notifBadge" style="display:none;position:absolute;top:8px;${'right'};right:12px;background:#ef4444;color:white;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;min-width:18px;text-align:center"></span>
+        <span id="notifBadge" style="display:none;position:absolute;top:8px;left:12px;background:#ef4444;color:white;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;min-width:18px;text-align:center"></span>
       </div>
       <div class="nav-item hidden" id="adminPanelLink" data-page="adminPanel" onclick="showPage('adminPanel')" style="position:relative">
         <span class="nav-icon">👑</span>
@@ -1972,7 +1968,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
     </div>
 
     <div class="nav-section">
-      <div class="nav-section-title" data-i18n="myProjects">مشاريعي</div>
+      <div class="nav-section-title">المشاريع</div>
       <div class="projects-list" id="projectsList">
         <div style="padding:10px; font-size:12px; color:var(--text-muted)" data-i18n="loadingProjects">جارٍ تحميل المشاريع...</div>
       </div>
@@ -4795,9 +4791,6 @@ async function openProject(id) {
       container.innerHTML = '<div class="spinner" style="margin:40px auto"></div><div style="text-align:center;color:#9ca3af;margin-top:14px">جارٍ فتح المشروع...</div>';
     }
     
-    const campfireNav = document.getElementById('campfireNavLink');
-    if (campfireNav) campfireNav.style.display = 'flex';
-    
     // Find project in cache or fetch
     activeProject = currentProjects.find(p => p.id === id);
     if (!activeProject) {
@@ -5509,13 +5502,8 @@ async function saveProgress() {
   
   if (!todoId) return;
   
-  // If progress = 100, auto-mark completed. If was 100 and now less, reopen.
+  // Only update progress - do NOT auto-complete. Members must explicitly check the box.
   const updateData = { progress };
-  if (progress === 100) {
-    updateData.completed = true;
-  } else {
-    updateData.completed = false;
-  }
   
   try {
     const { error } = await sb.from('todos').update(updateData).eq('id', todoId);
@@ -5961,11 +5949,30 @@ function renderTodoCard(td, assignees) {
             </div>
           </div>
           <div id="commentsList-${td.id}" style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto;margin-bottom:10px"></div>
+          
+          <!-- Formatting toolbar -->
+          <div style="display:flex;gap:4px;margin-bottom:6px;padding:6px;background:white;border-radius:10px 10px 0 0;border:1px solid #e5e7eb;border-bottom:none">
+            <button type="button" onclick="event.stopPropagation();insertFormat('${td.id}','bold')" 
+              style="background:transparent;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-weight:900;font-size:13px" 
+              onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="تسميك">𝐁</button>
+            <button type="button" onclick="event.stopPropagation();insertFormat('${td.id}','italic')" 
+              style="background:transparent;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-style:italic;font-size:13px" 
+              onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="مائل">𝐼</button>
+            <button type="button" onclick="event.stopPropagation();insertFormat('${td.id}','bullet')" 
+              style="background:transparent;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:13px" 
+              onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="نقاط">• قائمة</button>
+            <button type="button" onclick="event.stopPropagation();insertFormat('${td.id}','number')" 
+              style="background:transparent;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:13px" 
+              onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="ترقيم">1. ترقيم</button>
+            <span style="flex:1"></span>
+            <span style="font-size:10px;color:#9ca3af;align-self:center">Enter للإرسال • Shift+Enter لسطر جديد</span>
+          </div>
+          
           <div style="display:flex;gap:6px;align-items:flex-end">
             <textarea id="commentInput-${td.id}" placeholder="اكتب تعليقاً... كل المشاركين سيصلهم إشعار" 
-              style="flex:1;padding:10px 14px;border:1px solid #e5e7eb;border-radius:14px;font-family:inherit;font-size:13px;resize:none;min-height:40px;max-height:120px;background:white"
+              style="flex:1;padding:10px 14px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 14px 14px;font-family:inherit;font-size:13px;resize:vertical;min-height:60px;max-height:300px;background:white;line-height:1.6"
               onclick="event.stopPropagation()"
-              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();postInlineComment('${td.id}','${activeProject.id}')}"></textarea>
+              onkeydown="handleCommentKeydown(event, '${td.id}', '${activeProject.id}')"></textarea>
             <button onclick="event.stopPropagation();postInlineComment('${td.id}','${activeProject.id}')" 
               style="background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:10px 18px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">
               📤 إرسال
@@ -5980,19 +5987,69 @@ function renderTodoCard(td, assignees) {
 
 
 // ============================================
-// INLINE COMMENTS UNDER TODOS (always available)
+// COMMENT FORMATTING HELPERS
 // ============================================
-async function toggleInlineComments(todoId) {
-  const box = document.getElementById('inlineComments-' + todoId);
-  if (!box) return;
-  
-  if (box.style.display === 'none') {
-    box.style.display = 'block';
-    await loadInlineComments(todoId);
-  } else {
-    box.style.display = 'none';
+function handleCommentKeydown(event, todoId, projectId) {
+  // Shift+Enter = newline (default behavior - do nothing)
+  // Enter alone = submit
+  if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
+    event.preventDefault();
+    postInlineComment(todoId, projectId);
   }
+  // Shift+Enter passes through naturally for newline
 }
+
+function insertFormat(todoId, format) {
+  const ta = document.getElementById('commentInput-' + todoId);
+  if (!ta) return;
+  ta.focus();
+  
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const selected = ta.value.substring(start, end);
+  const before = ta.value.substring(0, start);
+  const after = ta.value.substring(end);
+  
+  let newText = '';
+  let cursorPos = start;
+  
+  if (format === 'bold') {
+    newText = before + '**' + (selected || 'نص') + '**' + after;
+    cursorPos = start + 2 + (selected.length || 3);
+  } else if (format === 'italic') {
+    newText = before + '*' + (selected || 'نص') + '*' + after;
+    cursorPos = start + 1 + (selected.length || 3);
+  } else if (format === 'bullet') {
+    // Add bullet to start of line(s)
+    const lines = (selected || 'عنصر').split('\n');
+    const bulleted = lines.map(l => '• ' + l).join('\n');
+    newText = before + (before && !before.endsWith('\n') ? '\n' : '') + bulleted + (after && !after.startsWith('\n') ? '\n' : '') + after;
+    cursorPos = start + bulleted.length + 2;
+  } else if (format === 'number') {
+    const lines = (selected || 'عنصر').split('\n');
+    const numbered = lines.map((l, i) => `${i + 1}. ${l}`).join('\n');
+    newText = before + (before && !before.endsWith('\n') ? '\n' : '') + numbered + (after && !after.startsWith('\n') ? '\n' : '') + after;
+    cursorPos = start + numbered.length + 2;
+  }
+  
+  ta.value = newText;
+  ta.setSelectionRange(cursorPos, cursorPos);
+  ta.focus();
+}
+
+// Convert markdown-light to HTML for display
+function formatCommentText(text) {
+  if (!text) return '';
+  let html = escapeHTML(text);
+  // Bold: **text** → <strong>text</strong>
+  html = html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  // Italic: *text* → <em>text</em>
+  html = html.replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '<em>$1</em>');
+  // Preserve newlines
+  html = html.replace(/\n/g, '<br>');
+  return html;
+}
+
 
 async function loadInlineComments(todoId) {
   const listBox = document.getElementById('commentsList-' + todoId);
@@ -6051,7 +6108,7 @@ async function loadInlineComments(todoId) {
         <div style="flex:1;max-width:75%">
           <div style="background:${isMine ? '#fff7ed' : 'white'};border:1px solid ${isMine ? '#fed7aa' : '#e5e7eb'};border-radius:12px;padding:8px 12px;position:relative">
             <div style="font-weight:600;font-size:11px;color:#ff6b35;margin-bottom:2px">${escapeHTML(name)}</div>
-            <div style="font-size:13px;line-height:1.6;color:#1f2937;word-wrap:break-word">${escapeHTML(c.content)}</div>
+            <div style="font-size:13px;line-height:1.7;color:#1f2937;word-wrap:break-word;white-space:pre-wrap">${formatCommentText(c.content)}</div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:4px">
               <div style="font-size:10px;color:#9ca3af">${editedBadge}${time}</div>
               <div style="display:flex;gap:2px">
@@ -6194,10 +6251,7 @@ async function postInlineComment(todoId, projectId) {
     // Log activity
     try { await logActivity('علّق على مهمة', 'todo', content.substring(0, 30)); } catch(e) {}
     
-    // Send notifications to ALL stakeholders: task assignees + project members
-    try { 
-      await notifyTodoStakeholders(todoId, projectId, content); 
-    } catch(e) { console.warn('Notification fan-out failed:', e); }
+    // Notifications are handled by DB trigger trg_notify_todo_comment - no JS needed
     
     // Auto-scroll to bottom
     const listBox = document.getElementById('commentsList-' + todoId);
@@ -6519,7 +6573,7 @@ async function loadMessageComments(messageId) {
         <div style="flex:1;max-width:75%">
           <div style="background:${isMine ? '#fff7ed' : 'white'};border:1px solid ${isMine ? '#fed7aa' : '#e5e7eb'};border-radius:12px;padding:8px 12px">
             <div style="font-weight:600;font-size:11px;color:#ff6b35;margin-bottom:2px">${escapeHTML(name)}</div>
-            <div style="font-size:13px;line-height:1.6;color:#1f2937;word-wrap:break-word;white-space:pre-wrap">${escapeHTML(c.content)}</div>
+            <div style="font-size:13px;line-height:1.7;color:#1f2937;word-wrap:break-word;white-space:pre-wrap">${formatCommentText(c.content)}</div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:4px">
               <div style="font-size:10px;color:#9ca3af">${editedBadge}${time}</div>
               <div style="display:flex;gap:2px">
@@ -7001,11 +7055,10 @@ async function renderMembers(container) {
       <div class="section-header">
         <h3 class="section-title"><span class="section-icon" style="background:#ede9fe">👥</span> ${t('members')}</h3>
         <div style="display:flex; gap:8px; flex-wrap:wrap">
-          ${currentProfile?.is_super_admin ? `<button class="btn btn-primary" onclick="showInviteModal()" title="إضافة أعضاء جدد للمنصة (للمدير فقط)">✉️ دعوة للمنصة</button>` : ''}
           ${!isOwner && currentMembership ? `<button class="btn btn-secondary" onclick="leaveProject()">🚪 ${t('leaveProject')}</button>` : ''}
         </div>
       </div>
-      ${!currentProfile?.is_super_admin ? '<p style="color:#9ca3af;font-size:12px;margin-bottom:14px">💡 دعوة أعضاء جدد للمنصة متاحة فقط من قبل مدير المنصة (لوحة الإدارة)</p>' : ''}
+      <p style="color:#9ca3af;font-size:12px;margin-bottom:14px">💡 لإضافة أعضاء جدد للمشروع من أعضاء المنصة، استخدم زر <strong>👥+</strong> في رأس المشروع. لدعوة عضو جديد للمنصة بأكملها، استخدم لوحة الإدارة.</p>
   `;
 
   html += (members || []).map(m => {
