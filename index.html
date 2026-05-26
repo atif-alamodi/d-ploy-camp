@@ -6644,7 +6644,10 @@ async function loadMessageComments(messageId) {
             <div style="font-size:13px;line-height:1.7;color:#1f2937;word-wrap:break-word;white-space:pre-wrap">${formatCommentText(c.content)}</div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:4px">
               <div style="font-size:10px;color:#9ca3af">${editedBadge}${time}</div>
-              <div style="display:flex;gap:2px">
+              <div style="display:flex;gap:2px;align-items:center">
+                <button onclick="event.stopPropagation();toggleReactionPicker(event,'message_comment','${c.id}')" 
+                  style="background:transparent;border:none;font-size:13px;cursor:pointer;opacity:0.6;padding:2px 4px;border-radius:50%" 
+                  onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="تفاعل بالإيموجي">😊</button>
                 ${canModify ? `
                   <button onclick="editMessageComment('${c.id}','${messageId}','${safeContent}')" 
                     style="background:transparent;border:none;font-size:11px;cursor:pointer;opacity:0.5;padding:2px" title="تعديل">✏️</button>
@@ -6653,11 +6656,31 @@ async function loadMessageComments(messageId) {
                 ` : ''}
               </div>
             </div>
+            <div id="reactions-message_comment-${c.id}" style="display:flex;gap:3px;flex-wrap:wrap;margin-top:4px"></div>
           </div>
         </div>
       </div>
     `;
   }).join('');
+  
+  // Load reactions for all message comments
+  setTimeout(async () => {
+    try {
+      const { data: reactions } = await sb.rpc('get_reactions_for_messages', {
+        p_message_type: 'message_comment',
+        p_message_ids: comments.map(c => c.id)
+      });
+      const reactionsByComment = {};
+      (reactions || []).forEach(r => {
+        if (!reactionsByComment[r.message_id]) reactionsByComment[r.message_id] = [];
+        reactionsByComment[r.message_id].push(r);
+      });
+      comments.forEach(c => {
+        const box = document.getElementById(`reactions-message_comment-${c.id}`);
+        if (box) box.innerHTML = renderReactionsRow('message_comment', c.id, reactionsByComment[c.id] || []);
+      });
+    } catch(e) { console.log('Load msg comment reactions:', e); }
+  }, 100);
 }
 
 async function postMessageComment(messageId) {
@@ -9948,20 +9971,20 @@ function renderCampfireMsg(m) {
       <div style="display:flex;flex-direction:column;${isMine ? 'align-items:flex-end' : 'align-items:flex-start'};gap:4px;max-width:75%">
         <div class="campfire-bubble" style="position:relative">
           ${!isMine ? `<div class="campfire-bubble-name">${escapeHTML(name)}</div>` : ''}
-          ${m.content ? `<div class="campfire-bubble-text">${escapeHTML(m.content)}</div>` : ''}
+          ${m.content ? `<div class="campfire-bubble-text" style="white-space:pre-wrap;line-height:1.6">${escapeHTML(m.content)}</div>` : ''}
           ${attHtml}
           <div class="campfire-bubble-time">${editedBadge}${time}</div>
-          <div style="position:absolute;top:-10px;${isMine ? 'left:-12px' : 'right:-12px'};display:flex;gap:4px">
+          <div style="position:absolute;top:-12px;${isMine ? 'left:-8px' : 'right:-8px'};display:flex;gap:3px">
             <button onclick="event.stopPropagation();toggleReactionPicker(event,'campfire','${m.id}')" 
-                    style="background:#fff;border:1px solid #e5e7eb;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,0.08);display:none;align-items:center;justify-content:center" 
-                    class="msg-react-btn" title="إضافة تفاعل">😊</button>
+                    style="background:#fff;border:1px solid #e5e7eb;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:inline-flex;align-items:center;justify-content:center;line-height:1" 
+                    title="إضافة تفاعل">😊</button>
             ${canModify ? `
               <button onclick="event.stopPropagation();editCampfireMessage('${m.id}', \`${(m.content || '').replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" 
-                      style="background:#fff;border:1px solid #e5e7eb;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:12px;box-shadow:0 2px 6px rgba(0,0,0,0.08);display:none;align-items:center;justify-content:center" 
-                      class="msg-react-btn" title="تعديل">✏️</button>
+                      style="background:#fff;border:1px solid #e5e7eb;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:11px;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:inline-flex;align-items:center;justify-content:center" 
+                      title="تعديل">✏️</button>
               <button onclick="event.stopPropagation();deleteCampfireMessage('${m.id}')" 
-                      style="background:#fff;border:1px solid #fecaca;color:#ef4444;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:12px;box-shadow:0 2px 6px rgba(0,0,0,0.08);display:none;align-items:center;justify-content:center" 
-                      class="msg-react-btn" title="حذف">🗑️</button>
+                      style="background:#fff;border:1px solid #fecaca;color:#ef4444;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:11px;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:inline-flex;align-items:center;justify-content:center" 
+                      title="حذف">🗑️</button>
             ` : ''}
           </div>
         </div>
