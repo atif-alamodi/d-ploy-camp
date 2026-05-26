@@ -1811,6 +1811,10 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 <!-- Toast -->
 <div id="toast" class="toast"></div>
 
+<!-- Universal @mention floating dropdown -->
+<div id="mentionDropdown" style="display:none;position:fixed;background:white;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,0.18);max-height:260px;overflow-y:auto;min-width:240px;max-width:340px;z-index:99999;padding:6px">
+</div>
+
 <!-- Lang toggle -->
 <button class="lang-toggle" id="langToggle">🌐 EN</button>
 
@@ -5006,6 +5010,9 @@ async function openProject(id) {
     }
     console.log('✅ Active project:', activeProject.name);
     
+    // Reset @mention cache so it reloads with this project's members
+    try { resetMentionCache(); } catch(e) {}
+    
     // Make sure todo detail page is hidden
     const detailPage = document.getElementById('todoDetailPage');
     if (detailPage) detailPage.classList.add('hidden');
@@ -6157,7 +6164,7 @@ function renderTodoCard(td, assignees) {
             <span style="font-size:10px;color:#9ca3af;align-self:center;padding:0 6px">Shift+Enter = سطر جديد</span>
           </div>
           
-          <textarea id="commentInput-${td.id}" placeholder="اكتب تعليقاً... (Shift+Enter للسطر الجديد، Enter للإرسال)" 
+          <textarea id="commentInput-${td.id}" placeholder="اكتب تعليقاً... استخدم @ للإشارة لعضو • Shift+Enter سطر جديد • Enter للإرسال" 
             style="width:100%;padding:10px 14px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 14px 14px;font-family:inherit;font-size:13px;resize:vertical;min-height:80px;max-height:300px;background:white;line-height:1.7;box-sizing:border-box"
             onclick="event.stopPropagation()"></textarea>
           <div style="display:flex;justify-content:flex-end;margin-top:8px">
@@ -6548,6 +6555,9 @@ async function postInlineComment(todoId, projectId) {
     return;
   }
   
+  // Capture mentioned user IDs BEFORE clearing
+  const mentionedIds = (input.dataset.mentions || '').split(',').filter(Boolean);
+  
   input.disabled = true;
   
   try {
@@ -6566,6 +6576,7 @@ async function postInlineComment(todoId, projectId) {
     }
     
     input.value = '';
+    input.dataset.mentions = ''; // clear mentions tracking
     input.disabled = false;
     input.focus();
     
@@ -6575,7 +6586,10 @@ async function postInlineComment(todoId, projectId) {
     // Log activity
     try { await logActivity('علّق على مهمة', 'todo', content.substring(0, 30)); } catch(e) {}
     
-    // Notifications are handled by DB trigger trg_notify_todo_comment - no JS needed
+    // Send @mention notifications (in addition to the auto trigger for stakeholders)
+    if (mentionedIds.length > 0) {
+      try { await sendMentionNotifications(mentionedIds, 'todo_comment', todoId, content); } catch(e) { console.warn('mention notify:', e); }
+    }
     
     // Auto-scroll to bottom
     const listBox = document.getElementById('commentsList-' + todoId);
@@ -6584,6 +6598,38 @@ async function postInlineComment(todoId, projectId) {
     toast('❌ ' + e.message);
     input.disabled = false;
   }
+}
+
+// Send notifications to @mentioned users
+async function sendMentionNotifications(userIds, contextType, contextId, content) {
+  if (!userIds || userIds.length === 0) return;
+  
+  const senderName = currentProfile?.full_name || 'عضو';
+  const projectName = activeProject?.name || 'مشروع';
+  const shortContent = (content || '').substring(0, 100);
+  
+  const contextLabels = {
+    todo_comment: 'تعليق على مهمة',
+    msg_comment: 'تعليق على إعلان',
+    message: 'إعلان',
+    campfire: 'محادثة Campfire'
+  };
+  
+  const notifs = userIds
+    .filter(uid => uid && uid !== currentUser?.id) // don't notify self
+    .map(uid => ({
+      user_id: uid,
+      title: `📣 ${senderName} ذكرك في ${contextLabels[contextType] || 'محادثة'}`,
+      body: `في ${projectName}: ${shortContent}`,
+      related_type: contextType,
+      related_id: contextId
+    }));
+  
+  if (notifs.length === 0) return;
+  
+  try {
+    await sb.from('notifications').insert(notifs);
+  } catch(e) { console.warn('Mention notifications failed:', e); }
 }
 
 // Auto-load comment counts for all visible todos
@@ -6860,7 +6906,7 @@ async function renderMessages(container) {
               <span style="font-size:10px;color:#9ca3af;align-self:center;padding:0 6px">Shift+Enter = سطر جديد</span>
             </div>
             
-            <textarea id="msgCommentInput-${m.id}" placeholder="اكتب تعليقاً... (Shift+Enter للسطر الجديد، Enter للإرسال)" 
+            <textarea id="msgCommentInput-${m.id}" placeholder="اكتب تعليقاً... استخدم @ للإشارة لعضو • Shift+Enter سطر جديد • Enter للإرسال" 
               style="width:100%;padding:10px 14px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 14px 14px;font-family:inherit;font-size:13px;resize:vertical;min-height:70px;max-height:300px;background:white;line-height:1.7;box-sizing:border-box"></textarea>
             <div style="display:flex;justify-content:flex-end;margin-top:8px">
               <button onclick="postMessageComment('${m.id}')" 
@@ -6971,6 +7017,9 @@ async function postMessageComment(messageId) {
   if (!content) { input.focus(); return; }
   if (amIMuted()) { toast('⚠️ حسابك مكتوم'); return; }
   
+  // Capture @mentions before clearing
+  const mentionedIds = (input.dataset.mentions || '').split(',').filter(Boolean);
+  
   input.disabled = true;
   try {
     const { error } = await sb.from('message_comments').insert({
@@ -6980,12 +7029,18 @@ async function postMessageComment(messageId) {
     });
     if (error) { toast('❌ ' + error.message); input.disabled = false; return; }
     input.value = '';
-    input.style.height = 'auto'; // reset height
+    input.dataset.mentions = '';
+    input.style.height = 'auto';
     input.disabled = false;
     input.focus();
     
     // Reload just THIS message's comments (not the whole tab - that would erase the input)
     await loadMessageComments(messageId);
+    
+    // Send mention notifications
+    if (mentionedIds.length > 0) {
+      try { await sendMentionNotifications(mentionedIds, 'msg_comment', messageId, content); } catch(e) {}
+    }
     
     // Update the count label in place (no tab reload)
     try {
@@ -9798,22 +9853,14 @@ async function deleteTodoAttachment(todoId, index) {
 
 
 // ============================================
-// @MENTION SYSTEM
+// LEGACY MENTION VARS (replaced by Universal system below)
 // ============================================
-let mentionMembers = [];
-let mentionActive = false;
-let mentionQuery = '';
-let mentionIndex = 0;
+// Note: mentionActive, mentionMembers, mentionQuery, mentionIndex
+// are declared in the Universal @Mention System block below.
 
+// Legacy function kept for compat - now does nothing (handled by universal)
 async function loadMentionMembers() {
-  const { data } = await sb.from('project_members')
-    .select('user_id, profile:user_id(full_name, email)')
-    .eq('project_id', activeProject.id);
-  mentionMembers = (data || []).map(m => ({
-    id: m.user_id,
-    name: m.profile?.full_name || m.profile?.email || 'مستخدم',
-    email: m.profile?.email
-  }));
+  // No-op - handled lazily by loadMentionMembersForContext()
 }
 
 function autoResizeCampfire(el) {
@@ -9822,22 +9869,17 @@ function autoResizeCampfire(el) {
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
 
-// Global keydown listener for campfire textarea (more reliable than inline handler)
+// Global keydown listener for campfire textarea (Enter to send)
 if (!window.__campfireKeyListenerInstalled) {
   window.__campfireKeyListenerInstalled = true;
   document.addEventListener('keydown', function(e) {
     const el = e.target;
     if (!el || el.id !== 'campfireInput') return;
     
-    // Check if mention dropdown is open - let handleCampfireKey deal with arrows
-    const dd = document.getElementById('mentionDropdown');
-    if (typeof mentionActive !== 'undefined' && mentionActive && dd && dd.style.display !== 'none') {
-      // Delegate to the existing mention logic
-      handleCampfireKey(e);
-      return;
-    }
+    // If mention dropdown is active, let universal handler take precedence
+    if (mentionActive) return;
     
-    // Shift+Enter = newline (default - do nothing, let it through)
+    // Shift+Enter = newline (default behavior)
     if (e.key === 'Enter' && e.shiftKey) return;
     
     // Plain Enter = send
@@ -9848,67 +9890,291 @@ if (!window.__campfireKeyListenerInstalled) {
   });
 }
 
+// Legacy keyhandler stub
 function handleCampfireKey(event) {
-  const dd = document.getElementById('mentionDropdown');
-  if (mentionActive && dd.style.display !== 'none') {
-    const items = dd.querySelectorAll('.mention-item');
-    if (event.key === 'ArrowDown') { event.preventDefault(); mentionIndex = Math.min(mentionIndex+1, items.length-1); items.forEach((el,i) => el.classList.toggle('active', i===mentionIndex)); return; }
-    if (event.key === 'ArrowUp') { event.preventDefault(); mentionIndex = Math.max(mentionIndex-1, 0); items.forEach((el,i) => el.classList.toggle('active', i===mentionIndex)); return; }
-    if (event.key === 'Enter' && items.length > 0) { event.preventDefault(); items[mentionIndex]?.click(); return; }
-    if (event.key === 'Escape') { closeMentionDropdown(); return; }
-  }
-  if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendCampfireMsg(); }
+  // No-op now - universal handler covers everything
 }
 
-function handleCampfireInput(event) {
-  const input = event.target;
-  const val = input.value;
-  const cursor = input.selectionStart;
+// ============================================
+// UNIVERSAL @MENTION SYSTEM
+// Works on ANY textarea: campfire, todo comments, message comments
+// ============================================
+let mentionActive = false;
+let mentionIndex = 0;
+let mentionQuery = '';
+let mentionMembers = []; // current list of candidates
+let mentionFilteredMembers = []; // filtered by query
+let mentionTargetTextarea = null; // which textarea triggered
+let mentionContext = null; // 'campfire', 'todo_comment', 'msg_comment'
+let mentionContextId = null; // todo id, message id, etc.
+
+// Load members for current context (project members or task assignees)
+async function loadMentionMembersForContext() {
+  try {
+    if (!activeProject?.id) {
+      mentionMembers = [];
+      return;
+    }
+    // Get project members (these are the people who can be @mentioned)
+    const { data: pm } = await sb.from('project_members')
+      .select('user_id, profile:user_id(id, full_name, email)')
+      .eq('project_id', activeProject.id);
+    
+    mentionMembers = (pm || [])
+      .filter(m => m.profile)
+      .map(m => ({
+        id: m.profile.id,
+        name: m.profile.full_name || m.profile.email?.split('@')[0] || 'عضو',
+        email: m.profile.email
+      }));
+    
+    // Add active project's super admins (always mentionable) if not already there
+    if (mentionMembers.length === 0) {
+      // fallback - load all platform members
+      const { data: profiles } = await sb.from('profiles')
+        .select('id, full_name, email')
+        .or('status.eq.active,status.is.null')
+        .limit(50);
+      mentionMembers = (profiles || []).map(p => ({
+        id: p.id,
+        name: p.full_name || p.email?.split('@')[0] || 'عضو',
+        email: p.email
+      }));
+    }
+  } catch(e) {
+    console.warn('loadMentionMembersForContext:', e);
+    mentionMembers = [];
+  }
+}
+
+// Detect @ in any textarea
+function detectMentionInTextarea(ta) {
+  if (!ta) return null;
+  const val = ta.value;
+  const cursor = ta.selectionStart;
   const before = val.substring(0, cursor);
-  const match = before.match(/@(\w*)$/);
-
-  if (match) {
-    mentionActive = true;
-    mentionQuery = match[1].toLowerCase();
-    mentionIndex = 0;
-    const filtered = mentionMembers.filter(m => m.name.toLowerCase().includes(mentionQuery) || m.email?.toLowerCase().includes(mentionQuery));
-    showMentionDropdown(filtered);
-  } else {
-    closeMentionDropdown();
-  }
+  
+  // Match @ followed by zero or more word characters (supporting Arabic letters)
+  // Must be at start or after whitespace/newline
+  const match = before.match(/(^|[\s\n])@([\u0600-\u06FFa-zA-Z0-9_]*)$/);
+  if (!match) return null;
+  
+  return {
+    query: match[2].toLowerCase(),
+    startOffset: before.length - match[2].length - 1 // position of @ char
+  };
 }
 
-function showMentionDropdown(members) {
+function showUniversalMentionDropdown(ta) {
   const dd = document.getElementById('mentionDropdown');
-  if (!members.length) { closeMentionDropdown(); return; }
+  if (!dd) return;
+  
+  if (!mentionFilteredMembers.length) {
+    dd.style.display = 'none';
+    mentionActive = false;
+    return;
+  }
+  
+  // Position dropdown near cursor (below textarea, aligned to start)
+  const rect = ta.getBoundingClientRect();
+  dd.style.top = (rect.bottom + 4) + 'px';
+  // Use right alignment for RTL
+  dd.style.right = (window.innerWidth - rect.right) + 'px';
+  dd.style.left = 'auto';
   dd.style.display = 'block';
-  dd.innerHTML = members.map((m, i) => `
-    <div class="mention-item ${i===0?'active':''}" onclick="insertMention('${m.id}','${escapeHTML(m.name)}')">
-      <div class="avatar" style="width:28px;height:28px;font-size:11px;flex-shrink:0">${m.name.charAt(0).toUpperCase()}</div>
-      <span class="mention-name">@${escapeHTML(m.name)}</span>
-    </div>
-  `).join('');
+  mentionActive = true;
+  
+  dd.innerHTML = mentionFilteredMembers.slice(0, 8).map((m, i) => {
+    const initial = (m.name || '?').charAt(0).toUpperCase();
+    const active = i === mentionIndex;
+    return `
+      <div class="mention-item ${active ? 'active' : ''}" 
+        data-mention-index="${i}"
+        style="display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer;border-radius:10px;${active ? 'background:#fff7ed;border:1px solid #fed7aa' : ''}"
+        onmouseover="this.style.background='#fff7ed'"
+        onmouseout="this.style.background='${active ? '#fff7ed' : 'transparent'}'"
+        onclick="insertUniversalMention('${m.id}', '${(m.name || '').replace(/'/g, '\\u0027')}')">
+        <div style="width:28px;height:28px;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0">${initial}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:#1f2937;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@${escapeHTML(m.name)}</div>
+          <div style="font-size:10px;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:ltr">${escapeHTML(m.email || '')}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 function closeMentionDropdown() {
   mentionActive = false;
   const dd = document.getElementById('mentionDropdown');
   if (dd) dd.style.display = 'none';
+  mentionTargetTextarea = null;
+}
+
+async function handleMentionDetect(ta) {
+  if (!ta) return;
+  const detected = detectMentionInTextarea(ta);
+  
+  if (!detected) {
+    closeMentionDropdown();
+    return;
+  }
+  
+  // Load members if needed
+  if (mentionMembers.length === 0) {
+    await loadMentionMembersForContext();
+  }
+  
+  mentionTargetTextarea = ta;
+  mentionQuery = detected.query;
+  mentionFilteredMembers = mentionMembers.filter(m => 
+    (m.name || '').toLowerCase().includes(mentionQuery) || 
+    (m.email || '').toLowerCase().includes(mentionQuery)
+  );
+  mentionIndex = 0;
+  
+  showUniversalMentionDropdown(ta);
+}
+
+function insertUniversalMention(userId, name) {
+  const ta = mentionTargetTextarea;
+  if (!ta) { closeMentionDropdown(); return; }
+  
+  const cursor = ta.selectionStart;
+  const val = ta.value;
+  const before = val.substring(0, cursor);
+  const after = val.substring(cursor);
+  
+  // Replace @query with @name (use the name as-is, no space encoding)
+  const newBefore = before.replace(/@([\u0600-\u06FFa-zA-Z0-9_]*)$/, '@' + name + ' ');
+  ta.value = newBefore + after;
+  ta.focus();
+  
+  const newCursorPos = newBefore.length;
+  ta.setSelectionRange(newCursorPos, newCursorPos);
+  
+  // Store mentioned user IDs on the textarea dataset for notification on send
+  if (!ta.dataset.mentions) ta.dataset.mentions = '';
+  const existing = ta.dataset.mentions.split(',').filter(Boolean);
+  if (!existing.includes(userId)) {
+    existing.push(userId);
+    ta.dataset.mentions = existing.join(',');
+  }
+  
+  // Trigger input event so any listeners react
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  closeMentionDropdown();
+}
+
+// Navigate dropdown with arrows
+function navigateMentionDropdown(direction) {
+  if (!mentionActive) return false;
+  const count = mentionFilteredMembers.slice(0, 8).length;
+  if (count === 0) return false;
+  
+  if (direction === 'down') {
+    mentionIndex = (mentionIndex + 1) % count;
+  } else if (direction === 'up') {
+    mentionIndex = (mentionIndex - 1 + count) % count;
+  }
+  
+  // Re-render with new active item
+  showUniversalMentionDropdown(mentionTargetTextarea);
+  return true;
+}
+
+function selectActiveMention() {
+  if (!mentionActive) return false;
+  const m = mentionFilteredMembers[mentionIndex];
+  if (!m) return false;
+  insertUniversalMention(m.id, m.name);
+  return true;
+}
+
+// Universal input listener - attached once, watches ALL textareas
+if (!window.__universalMentionListenerInstalled) {
+  window.__universalMentionListenerInstalled = true;
+  
+  document.addEventListener('input', function(e) {
+    const ta = e.target;
+    if (!ta || ta.tagName !== 'TEXTAREA') return;
+    
+    // Only handle textareas that support mentions
+    if (!ta.id || (
+      !ta.id.startsWith('commentInput-') &&
+      !ta.id.startsWith('msgCommentInput-') &&
+      ta.id !== 'campfireInput'
+    )) return;
+    
+    handleMentionDetect(ta);
+  });
+  
+  // Arrow keys + Enter + Escape in mention dropdown
+  document.addEventListener('keydown', function(e) {
+    if (!mentionActive) return;
+    const ta = e.target;
+    if (!ta || ta.tagName !== 'TEXTAREA') return;
+    if (ta !== mentionTargetTextarea) return;
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      navigateMentionDropdown('down');
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      navigateMentionDropdown('up');
+      return;
+    }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      selectActiveMention();
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeMentionDropdown();
+      return;
+    }
+  }, true); // capture phase to intercept BEFORE submit handlers
+  
+  // Close dropdown if user clicks elsewhere
+  document.addEventListener('click', function(e) {
+    if (!mentionActive) return;
+    const dd = document.getElementById('mentionDropdown');
+    if (dd && !dd.contains(e.target) && e.target !== mentionTargetTextarea) {
+      closeMentionDropdown();
+    }
+  });
+  
+  // Reload mention members when changing project
+  // (mentionMembers gets repopulated lazily on next @)
+}
+
+// Reset mention cache when project changes
+function resetMentionCache() {
+  mentionMembers = [];
+  closeMentionDropdown();
+}
+
+// ============================================
+// LEGACY CAMPFIRE MENTION FUNCTIONS (kept for compatibility)
+// ============================================
+
+function handleCampfireInput(event) {
+  // Now handled by universal mention listener
+  // Keep this stub for backward compat with inline oninput handlers
+}
+
+function showMentionDropdown(members) {
+  // Legacy - rerouted to universal
+  if (mentionTargetTextarea) showUniversalMentionDropdown(mentionTargetTextarea);
 }
 
 function insertMention(userId, name) {
-  const input = document.getElementById('campfireInput');
-  const cursor = input.selectionStart;
-  const val = input.value;
-  const before = val.substring(0, cursor);
-  const after = val.substring(cursor);
-  const newBefore = before.replace(/@\w*$/, '@' + name + ' ');
-  input.value = newBefore + after;
-  input.focus();
-  // Store mentioned user for notification
-  if (!input.dataset.mentions) input.dataset.mentions = '';
-  input.dataset.mentions += userId + ',';
-  closeMentionDropdown();
+  // Legacy - reroute
+  insertUniversalMention(userId, name);
 }
 
 // ============================================
@@ -10384,24 +10650,11 @@ async function sendCampfireMsg() {
     return;
   }
 
-  // Send notifications to mentioned users
+  // Send notifications to mentioned users (uses unified helper)
   if (mentionedIds.length > 0 && newMsg) {
-    const senderName = currentProfile?.full_name || 'أحد الأعضاء';
-    for (const uid of mentionedIds) {
-      if (uid === currentUser.id) continue;
-      // In-app notification
-      await sb.from('notifications').insert({
-        user_id: uid,
-        project_id: activeProject.id,
-        type: 'mention',
-        title: `@${senderName} أشار إليك`,
-        body: msgContent.substring(0, 100)
-      });
-      // Email notification via Edge Function
-      sendMentionEmail(uid, senderName, msgContent, activeProject.name);
-    }
+    try { await sendMentionNotifications(mentionedIds, 'campfire', newMsg.id, msgContent); } catch(e) {}
   }
-
+  
   await logActivity('أرسل رسالة في Campfire', 'campfire', msgContent.substring(0,30));
 }
 
@@ -10902,7 +11155,7 @@ async function showTodoDetailPage(todoId) {
       </div>
       <div id="commentsList-${todo.id}" style="display:flex;flex-direction:column;gap:10px;max-height:500px;overflow-y:auto;margin-bottom:16px;padding:4px"></div>
       <div style="display:flex;gap:6px;align-items:flex-end;border-top:1px solid #f1f5f9;padding-top:14px">
-        <textarea id="commentInput-${todo.id}" placeholder="اكتب تعليقاً... (اضغط Enter للإرسال، Shift+Enter لسطر جديد)" 
+        <textarea id="commentInput-${todo.id}" placeholder="اكتب تعليقاً... استخدم @ للإشارة لعضو • Enter للإرسال • Shift+Enter سطر جديد" 
           style="flex:1;padding:10px 14px;border:1px solid #e5e7eb;border-radius:14px;font-family:inherit;font-size:14px;resize:none;min-height:42px;max-height:120px;background:white"
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();postInlineComment('${todo.id}','${activeProject.id}')}"></textarea>
         <button onclick="postInlineComment('${todo.id}','${activeProject.id}')" 
