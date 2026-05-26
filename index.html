@@ -2958,6 +2958,28 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 </div>
 
 <!-- Manage Member Modal -->
+<!-- Move To Another Project Modal -->
+<div class="modal-bg" id="moveToProjectModal">
+  <div class="modal" style="max-width:520px;max-height:85vh;overflow-y:auto">
+    <h3 class="modal-title">📦 نقل إلى مشروع آخر</h3>
+    <p style="color:#6b7280;font-size:13px;margin-bottom:14px" id="moveItemDescription">
+      اختر المشروع المستهدف. سيتم نقل العنصر مع كل تعليقاته ومرفقاته.
+    </p>
+    <input type="hidden" id="moveItemId">
+    <input type="hidden" id="moveItemType">
+    <input type="hidden" id="moveItemSourceProjectId">
+    
+    <input type="text" class="form-input" id="moveProjectsSearch" placeholder="🔍 ابحث عن مشروع..." 
+      style="margin-bottom:12px" oninput="filterMoveTargetProjects()">
+    
+    <div id="moveTargetProjectsList" style="display:flex;flex-direction:column;gap:6px;max-height:380px;overflow-y:auto"></div>
+    
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="btn btn-ghost" onclick="closeModal('moveToProjectModal')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="manageMemberModal">
   <div class="modal">
     <h3 class="modal-title" data-i18n="manageMember">إدارة العضو</h3>
@@ -4446,6 +4468,152 @@ async function loadHome() {
   
   // Load active platform members
   await loadPlatformMembers();
+}
+
+// ============================================
+// MOVE TODOS/MESSAGES BETWEEN PROJECTS
+// Only creator OR super_admin can move
+// ============================================
+let moveTargetProjectsCache = [];
+
+async function openMoveTodoModal(todoId, todoTitle, todoCreatedBy) {
+  // Permission check on client (server enforces too)
+  const canMove = currentProfile?.is_super_admin || todoCreatedBy === currentUser?.id;
+  if (!canMove) {
+    toast('⚠️ فقط منشئ المهمة أو المدير يستطيع نقلها');
+    return;
+  }
+  
+  document.getElementById('moveItemId').value = todoId;
+  document.getElementById('moveItemType').value = 'todo';
+  document.getElementById('moveItemSourceProjectId').value = activeProject?.id || '';
+  document.getElementById('moveItemDescription').innerHTML = 
+    `<strong>المهمة:</strong> ${escapeHTML(todoTitle)}<br>اختر المشروع المستهدف. ستُنقل المهمة مع تعليقاتها ومرفقاتها.`;
+  document.getElementById('moveProjectsSearch').value = '';
+  
+  openModal('moveToProjectModal');
+  await loadMoveTargetProjects();
+}
+
+async function openMoveMessageModal(messageId, messageTitle, messageCreatedBy) {
+  const canMove = currentProfile?.is_super_admin || messageCreatedBy === currentUser?.id;
+  if (!canMove) {
+    toast('⚠️ فقط منشئ الإعلان أو المدير يستطيع نقله');
+    return;
+  }
+  
+  document.getElementById('moveItemId').value = messageId;
+  document.getElementById('moveItemType').value = 'message';
+  document.getElementById('moveItemSourceProjectId').value = activeProject?.id || '';
+  document.getElementById('moveItemDescription').innerHTML = 
+    `<strong>الإعلان:</strong> ${escapeHTML(messageTitle)}<br>اختر المشروع المستهدف. ستُنقل الرسالة مع كل تعليقاتها.`;
+  document.getElementById('moveProjectsSearch').value = '';
+  
+  openModal('moveToProjectModal');
+  await loadMoveTargetProjects();
+}
+
+async function loadMoveTargetProjects() {
+  const listBox = document.getElementById('moveTargetProjectsList');
+  listBox.innerHTML = '<div style="padding:24px;text-align:center;color:#9ca3af"><div class="spinner" style="margin:0 auto 12px"></div>جارٍ تحميل المشاريع...</div>';
+  
+  try {
+    const { data, error } = await sb.rpc('get_target_projects_for_move');
+    if (error) throw error;
+    moveTargetProjectsCache = data || [];
+    renderMoveTargetProjects();
+  } catch(e) {
+    listBox.innerHTML = `<div style="padding:20px;text-align:center;color:#ef4444">❌ ${escapeHTML(e.message || 'خطأ')}</div>`;
+  }
+}
+
+function renderMoveTargetProjects() {
+  const listBox = document.getElementById('moveTargetProjectsList');
+  const search = (document.getElementById('moveProjectsSearch')?.value || '').toLowerCase().trim();
+  const sourceId = document.getElementById('moveItemSourceProjectId').value;
+  
+  let projects = moveTargetProjectsCache.filter(p => p.id !== sourceId); // exclude source
+  if (search) {
+    projects = projects.filter(p => (p.name || '').toLowerCase().includes(search));
+  }
+  
+  if (projects.length === 0) {
+    listBox.innerHTML = '<div style="padding:24px;text-align:center;color:#9ca3af">لا توجد مشاريع أخرى متاحة</div>';
+    return;
+  }
+  
+  listBox.innerHTML = projects.map(p => {
+    const safeName = (p.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    return `
+      <button onclick="confirmMoveItem('${p.id}', '${safeName}')" 
+        style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:white;border:1.5px solid #e5e7eb;border-radius:12px;cursor:pointer;text-align:right;font-family:inherit;width:100%;transition:all 0.15s"
+        onmouseover="this.style.borderColor='#ff6b35';this.style.background='#fff7ed';this.style.transform='translateX(-2px)'"
+        onmouseout="this.style.borderColor='#e5e7eb';this.style.background='white';this.style.transform=''">
+        <div style="width:38px;height:38px;background:${p.color}22;color:${p.color};border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${p.icon || '📁'}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:14px;color:#1f2937">${escapeHTML(p.name)}</div>
+          <div style="font-size:11px;color:#9ca3af">انقر للنقل إلى هذا المشروع ←</div>
+        </div>
+        <span style="color:#ff6b35;font-size:18px">›</span>
+      </button>
+    `;
+  }).join('');
+}
+
+function filterMoveTargetProjects() {
+  renderMoveTargetProjects();
+}
+
+async function confirmMoveItem(targetProjectId, targetProjectName) {
+  const itemId = document.getElementById('moveItemId').value;
+  const itemType = document.getElementById('moveItemType').value;
+  
+  if (!confirm(`نقل إلى مشروع "${targetProjectName}"؟\n\nسيتم نقل العنصر مع كل تعليقاته ومرفقاته. كل المعنيين سيصلهم إشعار.`)) {
+    return;
+  }
+  
+  try {
+    let result;
+    if (itemType === 'todo') {
+      result = await sb.rpc('move_todo_to_project', { 
+        p_todo_id: itemId, 
+        p_target_project_id: targetProjectId 
+      });
+    } else {
+      result = await sb.rpc('move_message_to_project', { 
+        p_message_id: itemId, 
+        p_target_project_id: targetProjectId 
+      });
+    }
+    
+    if (result.error) {
+      toast('❌ ' + result.error.message);
+      return;
+    }
+    
+    const data = result.data || {};
+    if (!data.success) {
+      toast('❌ ' + (data.error || 'فشل النقل'));
+      return;
+    }
+    
+    closeModal('moveToProjectModal');
+    toast(`✅ تم النقل إلى "${targetProjectName}"`);
+    
+    // Refresh current tab
+    if (typeof loadProjectTab === 'function' && activeTab) {
+      try { await loadProjectTab(activeTab); } catch(e) {}
+    }
+    
+    // Close detail page if open (since item is gone)
+    const detailPage = document.getElementById('todoDetailPage');
+    if (detailPage && !detailPage.classList.contains('hidden')) {
+      detailPage.classList.add('hidden');
+      document.getElementById('projectPage')?.classList.remove('hidden');
+    }
+  } catch(e) {
+    toast('❌ ' + e.message);
+  }
 }
 
 // ============================================
@@ -6543,6 +6711,7 @@ async function renderMessages(container) {
           <div style="display:flex;gap:4px">
             <button class="btn btn-ghost" onclick="toggleReactionPicker(event,'message','${m.id}')" style="padding:6px" title="تفاعل">😊</button>
             ${canModify ? `
+              <button class="btn btn-ghost" onclick="openMoveMessageModal('${m.id}', \`${safeTitle}\`, '${m.created_by}')" style="padding:6px" title="نقل لمشروع آخر">📦</button>
               <button class="btn btn-ghost" onclick="editMessage('${m.id}', \`${safeTitle}\`, \`${safeContent}\`)" style="padding:6px" title="تعديل">✏️</button>
               <button class="btn btn-ghost" onclick="deleteMessage('${m.id}')" style="padding:6px;color:#ef4444" title="حذف">🗑️</button>
             ` : ''}
@@ -10558,6 +10727,9 @@ async function showTodoDetailPage(todoId) {
           <h2 style="margin:0 0 4px;font-size:24px;font-weight:900;${todo.completed ? 'text-decoration:line-through;color:#9ca3af' : 'color:#1f2937'}">${escapeHTML(todo.title)}</h2>
           ${todo.description ? `<p style="margin:8px 0 0;color:#6b7280;font-size:14px;line-height:1.7">${escapeHTML(todo.description)}</p>` : ''}
         </div>
+        ${(currentProfile?.is_super_admin || todo.created_by === currentUser?.id) ? 
+          `<button class="btn btn-ghost" onclick="openMoveTodoModal('${todo.id}', \`${(todo.title || '').replace(/`/g, '\\`')}\`, '${todo.created_by}')" 
+            style="padding:8px;font-size:18px" title="نقل المهمة لمشروع آخر">📦</button>` : ''}
         <button class="btn btn-ghost" onclick="toggleReactionPicker(event,'todo','${todo.id}')" style="padding:8px;font-size:18px" title="تفاعل">😊</button>
       </div>
       
