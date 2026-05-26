@@ -3044,6 +3044,31 @@ const SUPABASE_KEY = 'sb_publishable_PwL_jLvBp9MX9n3rxz-38A_o1RcO_2b';
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ============================================
+// GLOBAL ERROR HANDLING
+// Catches all uncaught errors and unhandled promise rejections from 156 async fns
+// without try/catch, so failures surface to the user instead of being silent.
+// ============================================
+window.addEventListener('error', function(ev) {
+  console.error('[Global Error]', ev.error || ev.message, ev.filename + ':' + ev.lineno);
+  // Show toast only for real user-facing errors, not script load issues
+  if (ev.error && typeof toast === 'function' && !String(ev.message).includes('Script error')) {
+    toast('⚠️ ' + (currentLang === 'ar' ? 'حدث خطأ غير متوقع' : 'An unexpected error occurred'));
+  }
+});
+
+window.addEventListener('unhandledrejection', function(ev) {
+  console.error('[Unhandled Promise Rejection]', ev.reason);
+  const msg = ev.reason?.message || ev.reason?.error_description || String(ev.reason || '');
+  // Filter out network noise and auth-redirect errors
+  if (msg && !msg.includes('NetworkError') && !msg.includes('Failed to fetch') && typeof toast === 'function') {
+    const arMsg = 'حدث خطأ: ' + msg.slice(0, 100);
+    const enMsg = 'Error: ' + msg.slice(0, 100);
+    toast('⚠️ ' + (currentLang === 'ar' ? arMsg : enMsg));
+  }
+  ev.preventDefault();
+});
+
 let currentUser = null;
 let currentProfile = null;
 let currentProjects = [];
@@ -5647,13 +5672,7 @@ async function uploadTodoAttachments(todoId, files) {
   }
 }
 
-async function handleTodoFileDrop(event, todoId) {
-  event.preventDefault();
-  event.stopPropagation();
-  const files = Array.from(event.dataTransfer?.files || []);
-  if (files.length === 0) return;
-  await uploadTodoAttachments(todoId, files);
-}
+// NOTE: handleTodoFileDrop defined later with dropzone styling cleanup
 
 // ============================================
 // PROGRESS EDITOR
@@ -7701,39 +7720,7 @@ async function leaveProject() {
   showPage('home');
 }
 
-async function deleteProject() {
-  const projName = activeProject?.name || '';
-  const msg = currentLang === 'ar' 
-    ? `⚠️ حذف مشروع "${projName}" نهائياً؟ لا يمكن التراجع عن هذه العملية!`
-    : `⚠️ Delete project "${projName}" permanently? This cannot be undone!`;
-  if (!confirm(msg)) return;
-
-  // Delete related data first
-  const pid = activeProject.id;
-  await sb.from('todo_lists').delete().eq('project_id', pid);
-  await sb.from('todos').delete().eq('project_id', pid);
-  await sb.from('messages').delete().eq('project_id', pid);
-  await sb.from('project_members').delete().eq('project_id', pid);
-  await sb.from('campfire_messages').delete().eq('project_id', pid);
-  await sb.from('activity_log').delete().eq('project_id', pid);
-
-  const { error } = await sb.from('projects').delete().eq('id', pid);
-  if (error) { 
-    toast((currentLang === 'ar' ? 'خطأ في الحذف: ' : 'Delete error: ') + error.message); 
-    return; 
-  }
-  toast(currentLang === 'ar' ? '🗑️ تم حذف المشروع نهائياً' : '🗑️ Project deleted');
-  activeProject = null;
-  // Clear saved nav state for this project
-  const savedState = localStorage.getItem('dpNavState');
-  if (savedState) {
-    const s = JSON.parse(savedState);
-    if (s.projectId === pid) localStorage.removeItem('dpNavState');
-  }
-  await loadProjects();
-  await loadHome();
-  showPage('home');
-}
+// NOTE: deleteProject(projectId, projectName) defined earlier with double-check by name + cascade
 
 // ============================================
 // BULK INVITE SYSTEM
@@ -10600,12 +10587,7 @@ async function markNotifRead(id) {
   await loadNotifications();
 }
 
-async function markAllNotificationsRead() {
-  await sb.from('notifications').update({ read: true }).eq('user_id', currentUser.id).eq('read', false);
-  notifCount = 0;
-  const badge = document.getElementById('notifBadge');
-  if (badge) badge.style.display = 'none';
-}
+// NOTE: markAllNotificationsRead defined earlier (uses read_at column, full implementation)
 
 // ============================================
 // TODO COMMENTS
