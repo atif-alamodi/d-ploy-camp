@@ -6553,20 +6553,37 @@ async function renderMessages(container) {
         
         <div id="reactions-message-${m.id}" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">${renderReactionsRow('message', m.id, msgReactions)}</div>
         
-        <!-- Comments section (always visible like Basecamp) -->
-        <div style="border-top:1px solid #f1f5f9;padding-top:12px;margin-top:8px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <div style="font-size:12px;color:#6b7280;font-weight:700">💬 ${commentCount > 0 ? commentCount + ' تعليق' : 'لا توجد تعليقات بعد'}</div>
-            <button onclick="toggleMessageComments('${m.id}')" id="msgCommentToggle-${m.id}" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;padding:4px 12px;border-radius:50px;font-size:11px;font-weight:700;cursor:pointer">${commentCount > 0 ? 'عرض التعليقات' : '+ تعليق'}</button>
+        <!-- Comments section - ALWAYS visible like Basecamp -->
+        <div style="border-top:1px solid #f1f5f9;padding-top:14px;margin-top:8px">
+          <div style="font-size:12px;color:#6b7280;font-weight:700;margin-bottom:10px">
+            💬 <span id="msgCommentCountLabel-${m.id}">${commentCount > 0 ? commentCount + ' تعليق' : 'لا توجد تعليقات بعد - كن أول من يعلق!'}</span>
           </div>
-          <div id="msgComments-${m.id}" style="display:none">
-            <div id="msgCommentsList-${m.id}" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;margin-bottom:10px"></div>
-            <div style="display:flex;gap:6px;align-items:flex-end">
-              <textarea id="msgCommentInput-${m.id}" placeholder="اكتب تعليقاً..." 
-                style="flex:1;padding:8px 12px;border:1px solid #e5e7eb;border-radius:12px;font-family:inherit;font-size:13px;resize:none;min-height:36px;max-height:100px;background:white"
-                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();postMessageComment('${m.id}')}"></textarea>
+          <div id="msgComments-${m.id}">
+            <div id="msgCommentsList-${m.id}" style="display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto;margin-bottom:12px"></div>
+            
+            <!-- Formatting toolbar -->
+            <div style="display:flex;gap:2px;padding:6px;background:white;border:1px solid #e5e7eb;border-radius:10px 10px 0 0;border-bottom:none;flex-wrap:wrap">
+              <button type="button" onclick="event.preventDefault();fmtMsgComment('${m.id}','bold')" 
+                style="background:transparent;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-weight:900" 
+                onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="تسميك (Ctrl+B)">𝐁</button>
+              <button type="button" onclick="event.preventDefault();fmtMsgComment('${m.id}','italic')" 
+                style="background:transparent;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-style:italic" 
+                onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="مائل (Ctrl+I)">𝐼</button>
+              <button type="button" onclick="event.preventDefault();fmtMsgComment('${m.id}','bullet')" 
+                style="background:transparent;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:13px" 
+                onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="قائمة نقاط">• نقاط</button>
+              <button type="button" onclick="event.preventDefault();fmtMsgComment('${m.id}','number')" 
+                style="background:transparent;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:13px" 
+                onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="ترقيم">1. ترقيم</button>
+              <span style="flex:1"></span>
+              <span style="font-size:10px;color:#9ca3af;align-self:center;padding:0 6px">Shift+Enter = سطر جديد</span>
+            </div>
+            
+            <textarea id="msgCommentInput-${m.id}" placeholder="اكتب تعليقاً... (Shift+Enter للسطر الجديد، Enter للإرسال)" 
+              style="width:100%;padding:10px 14px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 14px 14px;font-family:inherit;font-size:13px;resize:vertical;min-height:70px;max-height:300px;background:white;line-height:1.7;box-sizing:border-box"></textarea>
+            <div style="display:flex;justify-content:flex-end;margin-top:8px">
               <button onclick="postMessageComment('${m.id}')" 
-                style="background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:8px 16px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">📤 إرسال</button>
+                style="background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:8px 20px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer">📤 إرسال التعليق</button>
             </div>
           </div>
         </div>
@@ -6575,6 +6592,13 @@ async function renderMessages(container) {
   }
   html += `</div>`;
   container.innerHTML = html;
+  
+  // Auto-load comments for ALL messages (always visible, like Basecamp)
+  if (messages && messages.length > 0) {
+    messages.forEach(m => {
+      try { loadMessageComments(m.id); } catch(e) {}
+    });
+  }
 }
 
 // Toggle and load comments for a message board post
@@ -6652,17 +6676,92 @@ async function postMessageComment(messageId) {
     });
     if (error) { toast('❌ ' + error.message); input.disabled = false; return; }
     input.value = '';
+    input.style.height = 'auto'; // reset height
     input.disabled = false;
     input.focus();
+    
+    // Reload just THIS message's comments (not the whole tab - that would erase the input)
     await loadMessageComments(messageId);
-    // Update count
-    if (activeTab === 'messages') {
-      setTimeout(() => loadProjectTab('messages'), 200);
-    }
+    
+    // Update the count label in place (no tab reload)
+    try {
+      const { count } = await sb.from('message_comments')
+        .select('*', { count: 'exact', head: true })
+        .eq('message_id', messageId);
+      const label = document.getElementById('msgCommentCountLabel-' + messageId);
+      if (label) label.textContent = (count || 0) > 0 ? `${count} تعليق` : 'لا توجد تعليقات بعد - كن أول من يعلق!';
+    } catch(e) {}
+    
+    // Auto-scroll comments list to bottom
+    const list = document.getElementById('msgCommentsList-' + messageId);
+    if (list) list.scrollTop = list.scrollHeight;
   } catch(e) {
     toast('❌ ' + e.message);
     input.disabled = false;
   }
+}
+
+// Format helper for message comments
+function fmtMsgComment(messageId, format) {
+  const ta = document.getElementById('msgCommentInput-' + messageId);
+  if (!ta) return;
+  ta.focus();
+  const start = ta.selectionStart, end = ta.selectionEnd;
+  const selected = ta.value.substring(start, end);
+  const before = ta.value.substring(0, start);
+  const after = ta.value.substring(end);
+  let newText = '';
+  let cursorPos = start;
+  
+  if (format === 'bold') {
+    newText = before + '**' + (selected || 'نص') + '**' + after;
+    cursorPos = start + 2 + (selected.length || 3);
+  } else if (format === 'italic') {
+    newText = before + '*' + (selected || 'نص') + '*' + after;
+    cursorPos = start + 1 + (selected.length || 3);
+  } else if (format === 'bullet') {
+    const lines = (selected || 'عنصر').split('\n');
+    const bulleted = lines.map(l => '• ' + l).join('\n');
+    newText = before + (before && !before.endsWith('\n') ? '\n' : '') + bulleted + after;
+    cursorPos = start + bulleted.length + 2;
+  } else if (format === 'number') {
+    const lines = (selected || 'عنصر').split('\n');
+    const numbered = lines.map((l, i) => `${i + 1}. ${l}`).join('\n');
+    newText = before + (before && !before.endsWith('\n') ? '\n' : '') + numbered + after;
+    cursorPos = start + numbered.length + 2;
+  }
+  ta.value = newText;
+  ta.setSelectionRange(cursorPos, cursorPos);
+  ta.focus();
+}
+
+// Global keydown listener for message comment textareas
+if (!window.__msgCommentKeyListenerInstalled) {
+  window.__msgCommentKeyListenerInstalled = true;
+  document.addEventListener('keydown', function(e) {
+    const ta = e.target;
+    if (!ta || ta.tagName !== 'TEXTAREA' || !ta.id || !ta.id.startsWith('msgCommentInput-')) return;
+    
+    const messageId = ta.id.replace('msgCommentInput-', '');
+    
+    // Ctrl/Cmd + B = bold
+    if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+      e.preventDefault();
+      fmtMsgComment(messageId, 'bold');
+      return;
+    }
+    // Ctrl/Cmd + I = italic
+    if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+      e.preventDefault();
+      fmtMsgComment(messageId, 'italic');
+      return;
+    }
+    // Enter alone = submit ; Shift+Enter = newline (default - do nothing)
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      postMessageComment(messageId);
+    }
+  });
 }
 
 // Old function kept as alias for backward compat
