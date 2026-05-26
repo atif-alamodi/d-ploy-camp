@@ -5857,19 +5857,17 @@ function renderTodoCard(td, assignees) {
     ? `${formatDate(td.start_date)} → ${formatDate(td.due_date)}`
     : (td.due_date ? '🏁 ' + formatDate(td.due_date) : (td.start_date ? '▶️ ' + formatDate(td.start_date) : ''));
   
-  // Render assignee avatars (multi-assign)
+  // Assignee avatars
   let assigneesHtml = '';
   if (assignees && assignees.length > 0) {
-    assigneesHtml = `
-      <div style="display:inline-flex;gap:-4px;align-items:center;flex-wrap:wrap;gap:2px">
-        ${assignees.slice(0, 4).map(a => {
-          const name = a.profile?.full_name || '?';
-          const initial = name.charAt(0).toUpperCase();
-          return `<span title="${escapeHTML(name)}" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border-radius:50%;font-size:10px;font-weight:700;border:2px solid white;margin-${currentLang === 'ar' ? 'left' : 'right'}:-6px">${initial}</span>`;
-        }).join('')}
-        ${assignees.length > 4 ? `<span style="background:#f3f4f6;color:#6b7280;border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;border:2px solid white;margin-${currentLang === 'ar' ? 'left' : 'right'}:-6px">+${assignees.length - 4}</span>` : ''}
-      </div>
-    `;
+    assigneesHtml = `<div style="display:inline-flex;gap:2px;align-items:center;flex-wrap:wrap">` +
+      assignees.slice(0, 4).map(a => {
+        const name = a.profile?.full_name || '?';
+        const initial = name.charAt(0).toUpperCase();
+        return `<span title="${escapeHTML(name)}" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border-radius:50%;font-size:10px;font-weight:700;border:2px solid white;margin-${currentLang === 'ar' ? 'left' : 'right'}:-6px">${initial}</span>`;
+      }).join('') +
+      (assignees.length > 4 ? `<span style="background:#f3f4f6;color:#6b7280;border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;border:2px solid white;margin-${currentLang === 'ar' ? 'left' : 'right'}:-6px">+${assignees.length - 4}</span>` : '') +
+      `</div>`;
   } else if (td.assigned_profile) {
     const name = td.assigned_profile.full_name;
     const initial = name.charAt(0).toUpperCase();
@@ -5890,16 +5888,17 @@ function renderTodoCard(td, assignees) {
     </div>
   ` : '';
   
+  const canDeleteTodo = (td.created_by === currentUser?.id) || currentProfile?.is_super_admin;
+  
   return `
     <div class="todo-item ${td.completed ? 'completed' : ''}" 
       ondragover="event.preventDefault();this.style.borderColor='var(--primary)';this.style.background='var(--primary-light)'"
       ondragleave="this.style.borderColor='';this.style.background=''"
       ondrop="handleTodoFileDrop(event,'${td.id}')">
-      <div class="todo-checkbox ${td.completed ? 'checked' : ''}" onclick="event.stopPropagation();toggleTodo('${td.id}', ${!td.completed})">${td.completed ? '✓' : ''}</div>
+      <div class="todo-checkbox ${td.completed ? 'checked' : ''}" onclick="event.stopPropagation();toggleTodo('${td.id}', ${!td.completed})" title="${td.completed ? 'إعادة فتح المهمة' : 'إكمال المهمة'}">${td.completed ? '✓' : ''}</div>
       <div class="todo-content">
-        <div class="todo-title" onclick="showTodoDetailPage('${td.id}')" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;cursor:pointer;color:#1f2937;transition:color 0.15s" 
-          onmouseover="this.style.color='#ff6b35'" onmouseout="this.style.color='#1f2937'"
-          title="انقر لفتح المهمة والتفاعل معها">
+        <div class="todo-title" onclick="showTodoDetailPage('${td.id}')" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;cursor:pointer" 
+          onmouseover="this.style.color='#ff6b35'" onmouseout="this.style.color=''">
           <span style="font-weight:700">${escapeHTML(td.title)}</span>
           ${td.completed ? `<span style="font-size:10px;background:#dcfce7;color:#16a34a;padding:2px 8px;border-radius:8px">✓ مكتملة</span>` : ''}
           <span style="font-size:11px;color:#ff6b35;font-weight:600">› افتح</span>
@@ -5911,11 +5910,10 @@ function renderTodoCard(td, assignees) {
             👥+ تعيين
           </button>
           <span class="priority-badge priority-${td.priority}">${t(td.priority)}</span>
-          ${hasSchedule ? `<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer" onclick="showProjectTab('gantt')" title="انقر للذهاب إلى المخطط الزمني">📅 ${dateText}</span>` : ''}
-          ${hasLayer ? `<span style="background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer" onclick="showProjectTab('layers')" title="انقر للذهاب إلى الجدولة الطبقية">🎯 طبقة ${td.layer_number}</span>` : ''}
-          ${!hasSchedule && !hasLayer ? `<span style="background:#f3f4f6;color:#9ca3af;padding:2px 8px;border-radius:10px;font-size:11px;cursor:pointer" onclick="showTodoDetail('${td.id}')" title="أضف تواريخ وطبقة لتظهر في الجداول">⚙️ أضف جدولة</span>` : ''}
+          ${hasSchedule ? `<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer" onclick="event.stopPropagation();showProjectTab('gantt')" title="المخطط الزمني">📅 ${dateText}</span>` : ''}
+          ${hasLayer ? `<span style="background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer" onclick="event.stopPropagation();showProjectTab('layers')" title="الجدولة الطبقية">🎯 طبقة ${td.layer_number}</span>` : ''}
           <button onclick="event.stopPropagation();openAttachmentUpload('${td.id}')" 
-            style="background:#f0fdf4;color:#15803d;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #bbf7d0;display:inline-flex;align-items:center;gap:4px">
+            style="background:#f0fdf4;color:#15803d;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #bbf7d0">
             📎 ${attachments.length > 0 ? attachments.length + ' مرفق' : 'إضافة مرفق'}
           </button>
         </div>
@@ -5941,46 +5939,49 @@ function renderTodoCard(td, assignees) {
           </div>
         ` : ''}
         <div id="reactions-todo-${td.id}" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px"></div>
-        <!-- Comments are ALWAYS visible (Basecamp-style) -->
-        <div id="inlineComments-${td.id}" style="margin-top:14px;padding:14px;background:#fafaf9;border-radius:14px;border:1px solid #f1f5f9">
+        
+        <!-- COMMENTS BOX - ALWAYS OPEN -->
+        <div class="todo-comments-wrap" style="margin-top:14px;padding:14px;background:#fafaf9;border-radius:14px;border:1px solid #e5e7eb" onclick="event.stopPropagation()">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <div style="font-size:12px;color:#6b7280;font-weight:700;display:flex;align-items:center;gap:6px">
+            <div style="font-size:12px;color:#374151;font-weight:700;display:flex;align-items:center;gap:6px">
               💬 <span id="commentCount-${td.id}">التعليقات</span>
             </div>
+            <button onclick="event.stopPropagation();toggleReactionPicker(event,'todo','${td.id}')" 
+              style="background:transparent;border:none;font-size:16px;cursor:pointer;opacity:0.6" 
+              onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="تفاعل بالإيموجي">😊</button>
           </div>
           <div id="commentsList-${td.id}" style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto;margin-bottom:10px"></div>
           
           <!-- Formatting toolbar -->
-          <div style="display:flex;gap:4px;margin-bottom:6px;padding:6px;background:white;border-radius:10px 10px 0 0;border:1px solid #e5e7eb;border-bottom:none">
-            <button type="button" onclick="event.stopPropagation();insertFormat('${td.id}','bold')" 
-              style="background:transparent;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-weight:900;font-size:13px" 
-              onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="تسميك">𝐁</button>
-            <button type="button" onclick="event.stopPropagation();insertFormat('${td.id}','italic')" 
-              style="background:transparent;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-style:italic;font-size:13px" 
-              onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="مائل">𝐼</button>
-            <button type="button" onclick="event.stopPropagation();insertFormat('${td.id}','bullet')" 
-              style="background:transparent;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:13px" 
-              onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="نقاط">• قائمة</button>
-            <button type="button" onclick="event.stopPropagation();insertFormat('${td.id}','number')" 
-              style="background:transparent;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:13px" 
+          <div style="display:flex;gap:2px;padding:6px;background:white;border:1px solid #e5e7eb;border-radius:10px 10px 0 0;border-bottom:none;flex-wrap:wrap">
+            <button type="button" onclick="event.preventDefault();event.stopPropagation();fmtComment('${td.id}','bold')" 
+              style="background:transparent;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-weight:900" 
+              onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="تسميك (Ctrl+B)">𝐁</button>
+            <button type="button" onclick="event.preventDefault();event.stopPropagation();fmtComment('${td.id}','italic')" 
+              style="background:transparent;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-style:italic" 
+              onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="مائل (Ctrl+I)">𝐼</button>
+            <button type="button" onclick="event.preventDefault();event.stopPropagation();fmtComment('${td.id}','bullet')" 
+              style="background:transparent;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:13px" 
+              onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="قائمة نقاط">• نقاط</button>
+            <button type="button" onclick="event.preventDefault();event.stopPropagation();fmtComment('${td.id}','number')" 
+              style="background:transparent;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:13px" 
               onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="ترقيم">1. ترقيم</button>
             <span style="flex:1"></span>
-            <span style="font-size:10px;color:#9ca3af;align-self:center">Enter للإرسال • Shift+Enter لسطر جديد</span>
+            <span style="font-size:10px;color:#9ca3af;align-self:center;padding:0 6px">Shift+Enter = سطر جديد</span>
           </div>
           
-          <div style="display:flex;gap:6px;align-items:flex-end">
-            <textarea id="commentInput-${td.id}" placeholder="اكتب تعليقاً... كل المشاركين سيصلهم إشعار" 
-              style="flex:1;padding:10px 14px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 14px 14px;font-family:inherit;font-size:13px;resize:vertical;min-height:60px;max-height:300px;background:white;line-height:1.6"
-              onclick="event.stopPropagation()"
-              onkeydown="handleCommentKeydown(event, '${td.id}', '${activeProject.id}')"></textarea>
-            <button onclick="event.stopPropagation();postInlineComment('${td.id}','${activeProject.id}')" 
-              style="background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:10px 18px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">
-              📤 إرسال
+          <textarea id="commentInput-${td.id}" placeholder="اكتب تعليقاً... (Shift+Enter للسطر الجديد، Enter للإرسال)" 
+            style="width:100%;padding:10px 14px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 14px 14px;font-family:inherit;font-size:13px;resize:vertical;min-height:80px;max-height:300px;background:white;line-height:1.7;box-sizing:border-box"
+            onclick="event.stopPropagation()"></textarea>
+          <div style="display:flex;justify-content:flex-end;margin-top:8px">
+            <button onclick="event.stopPropagation();submitComment('${td.id}','${activeProject.id}')" 
+              style="background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:8px 20px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer">
+              📤 إرسال التعليق
             </button>
           </div>
         </div>
       </div>
-      ${(td.created_by === currentUser?.id || currentProfile?.is_super_admin) ? `<button class="btn btn-ghost" style="padding:6px;color:#ef4444;align-self:flex-start" onclick="event.stopPropagation();deleteTodo('${td.id}')" title="حذف (للمنشئ فقط)">🗑️</button>` : ''}
+      ${canDeleteTodo ? `<button class="btn btn-ghost" style="padding:6px;color:#ef4444;align-self:flex-start" onclick="event.stopPropagation();deleteTodo('${td.id}')" title="حذف (للمنشئ فقط)">🗑️</button>` : ''}
     </div>
   `;
 }
@@ -5989,14 +5990,57 @@ function renderTodoCard(td, assignees) {
 // ============================================
 // COMMENT FORMATTING HELPERS
 // ============================================
+
+// Bridge: new clean name for the submit function used by the rebuilt card
+function submitComment(todoId, projectId) {
+  return postInlineComment(todoId, projectId);
+}
+
+// Bridge: alias for fmtComment used by toolbar buttons
+function fmtComment(todoId, format) {
+  return insertFormat(todoId, format);
+}
+
+// Global keydown listener for ALL comment textareas (one-time setup)
+// This is the bulletproof way - works even if onkeydown attribute fails
+if (!window.__commentKeyListenerInstalled) {
+  window.__commentKeyListenerInstalled = true;
+  document.addEventListener('keydown', function(e) {
+    const ta = e.target;
+    // Only target comment textareas
+    if (!ta || ta.tagName !== 'TEXTAREA' || !ta.id || !ta.id.startsWith('commentInput-')) return;
+    
+    const todoId = ta.id.replace('commentInput-', '');
+    
+    // Ctrl/Cmd + B = bold
+    if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+      e.preventDefault();
+      insertFormat(todoId, 'bold');
+      return;
+    }
+    // Ctrl/Cmd + I = italic
+    if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+      e.preventDefault();
+      insertFormat(todoId, 'italic');
+      return;
+    }
+    // Enter alone = submit ; Shift+Enter = newline (default)
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      // Find project id from activeProject
+      const projectId = activeProject?.id;
+      if (projectId) postInlineComment(todoId, projectId);
+    }
+    // Shift+Enter: do NOT preventDefault, let the textarea insert newline naturally
+  });
+}
+
 function handleCommentKeydown(event, todoId, projectId) {
-  // Shift+Enter = newline (default behavior - do nothing)
-  // Enter alone = submit
+  // Kept for backward compat - actual logic now in global listener above
   if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
     event.preventDefault();
     postInlineComment(todoId, projectId);
   }
-  // Shift+Enter passes through naturally for newline
 }
 
 function insertFormat(todoId, format) {
