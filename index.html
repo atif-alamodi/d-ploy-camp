@@ -1739,7 +1739,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 .campfire-bubble-time { font-size:10px; color:var(--text-muted); margin-top:4px; }
 .campfire-msg.mine .campfire-bubble-time { color:rgba(255,255,255,0.7); }
 .campfire-input-row { display:flex; gap:8px; align-items:center; }
-.campfire-input { flex:1; padding:12px 16px; border:1.5px solid var(--border); border-radius:var(--radius-xl); font-size:14px; font-family:inherit; outline:none; transition:border-color 0.2s; background:white; }
+.campfire-input { flex:1; padding:12px 16px; border:1.5px solid var(--border); border-radius:var(--radius-xl); font-size:14px; font-family:inherit; outline:none; transition:border-color 0.2s; background:white; min-height:44px; line-height:1.5; }
 .campfire-input:focus { border-color:var(--primary); }
 .campfire-send-btn { width:44px; height:44px; border-radius:50%; background:var(--gradient-warm); border:none; cursor:pointer; font-size:18px; display:flex; align-items:center; justify-content:center; transition:transform 0.2s; flex-shrink:0; }
 .campfire-send-btn:hover { transform:scale(1.1); }
@@ -9468,6 +9468,38 @@ async function loadMentionMembers() {
   }));
 }
 
+function autoResizeCampfire(el) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+// Global keydown listener for campfire textarea (more reliable than inline handler)
+if (!window.__campfireKeyListenerInstalled) {
+  window.__campfireKeyListenerInstalled = true;
+  document.addEventListener('keydown', function(e) {
+    const el = e.target;
+    if (!el || el.id !== 'campfireInput') return;
+    
+    // Check if mention dropdown is open - let handleCampfireKey deal with arrows
+    const dd = document.getElementById('mentionDropdown');
+    if (typeof mentionActive !== 'undefined' && mentionActive && dd && dd.style.display !== 'none') {
+      // Delegate to the existing mention logic
+      handleCampfireKey(e);
+      return;
+    }
+    
+    // Shift+Enter = newline (default - do nothing, let it through)
+    if (e.key === 'Enter' && e.shiftKey) return;
+    
+    // Plain Enter = send
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      sendCampfireMsg();
+    }
+  });
+}
+
 function handleCampfireKey(event) {
   const dd = document.getElementById('mentionDropdown');
   if (mentionActive && dd.style.display !== 'none') {
@@ -9730,9 +9762,10 @@ async function renderCampfire(container) {
           <div class="campfire-empty">🔥<div>ابدأ المحادثة...</div></div>
         </div>
         <div class="campfire-input-row">
-          <input class="campfire-input" id="campfireInput" placeholder="اكتب رسالة... (استخدم @ للإشارة لعضو)"
-            onkeydown="handleCampfireKey(event)"
-            oninput="handleCampfireInput(event)">
+          <textarea class="campfire-input" id="campfireInput" placeholder="اكتب رسالة... (Shift+Enter سطر جديد، Enter للإرسال)"
+            rows="1"
+            style="resize:none;overflow-y:auto;max-height:120px;line-height:1.6"
+            oninput="autoResizeCampfire(this);handleCampfireInput(event)"></textarea>
           <button class="campfire-send-btn" onclick="pickImagesForCampfire()" title="إرفاق صورة أو ملف" style="background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0">📎</button>
           <button class="campfire-send-btn" onclick="sendCampfireMsg()">🔥</button>
         </div>
@@ -9959,6 +9992,10 @@ async function sendCampfireMsg() {
   const msgContent = input.value.trim();
   if (!msgContent) return;
   input.value = '';
+  // Reset textarea height after clearing
+  if (input.tagName === 'TEXTAREA') {
+    input.style.height = 'auto';
+  }
   input.focus();
 
   // Optimistically show message immediately
