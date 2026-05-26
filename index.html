@@ -2032,6 +2032,22 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
       </div>
 
       <div id="projectsGrid" class="card-grid"></div>
+      
+      <!-- Active Members Section -->
+      <div style="margin-top:32px">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">👥 أعضاء المنصة الفعّالون</h2>
+            <div class="page-subtitle" id="activeMembersSub">جارٍ التحميل...</div>
+          </div>
+          <div class="header-actions">
+            <input type="text" class="form-input" id="membersSearchInput" placeholder="🔍 ابحث بالاسم..." 
+              style="padding:8px 14px;font-size:13px;border-radius:50px;max-width:240px"
+              oninput="filterPlatformMembers()">
+          </div>
+        </div>
+        <div id="platformMembersGrid" class="card-grid"></div>
+      </div>
     </div>
 
     <!-- Project page -->
@@ -4411,6 +4427,101 @@ async function loadHome() {
       if (box) box.innerHTML = renderReactionsRow('project', p.id, reactionsByProj[p.id] || []);
     });
   } catch(e) { console.log('Load project reactions:', e); }
+  
+  // Load active platform members
+  await loadPlatformMembers();
+}
+
+// ============================================
+// PLATFORM MEMBERS (active members list on home)
+// ============================================
+let allPlatformMembersCache = [];
+
+async function loadPlatformMembers() {
+  const grid = document.getElementById('platformMembersGrid');
+  const sub = document.getElementById('activeMembersSub');
+  if (!grid) return;
+  
+  // Fetch all profiles that have an auth account (truly active members)
+  const { data: members, error } = await sb.from('profiles')
+    .select('id, full_name, email, is_super_admin, status, source, created_at')
+    .or('status.eq.active,status.is.null')
+    .order('created_at', { ascending: true });
+  
+  if (error) { 
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#9ca3af;padding:20px">⚠️ تعذّر تحميل الأعضاء</div>';
+    return; 
+  }
+  
+  allPlatformMembersCache = members || [];
+  
+  if (sub) {
+    const adminCount = allPlatformMembersCache.filter(m => m.is_super_admin).length;
+    sub.textContent = `${allPlatformMembersCache.length} عضو فعّال • ${adminCount} مدير`;
+  }
+  
+  renderPlatformMembers(allPlatformMembersCache);
+}
+
+function renderPlatformMembers(members) {
+  const grid = document.getElementById('platformMembersGrid');
+  if (!grid) return;
+  
+  if (!members || members.length === 0) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#9ca3af;padding:30px"><div style="font-size:42px">👥</div>لا توجد نتائج</div>';
+    return;
+  }
+  
+  // Beautiful gradient palette for avatars
+  const gradients = [
+    'linear-gradient(135deg,#ff6b35,#f7468a)',
+    'linear-gradient(135deg,#6c4ef5,#a855f7)',
+    'linear-gradient(135deg,#10b981,#059669)',
+    'linear-gradient(135deg,#0ea5e9,#3b82f6)',
+    'linear-gradient(135deg,#f59e0b,#d97706)',
+    'linear-gradient(135deg,#ec4899,#be185d)',
+    'linear-gradient(135deg,#14b8a6,#0d9488)',
+    'linear-gradient(135deg,#8b5cf6,#7c3aed)'
+  ];
+  
+  grid.innerHTML = members.map((m, idx) => {
+    const name = m.full_name || m.email?.split('@')[0] || 'عضو';
+    const initial = name.charAt(0).toUpperCase();
+    const isAdmin = m.is_super_admin;
+    const isMe = m.id === currentUser?.id;
+    const gradient = gradients[idx % gradients.length];
+    const sourceLabel = m.source === 'invited' ? '📨 مدعو' : (m.source === 'external' ? '🌐 مسجل ذاتياً' : '');
+    
+    return `
+      <div style="background:white;border-radius:18px;padding:18px;box-shadow:0 1px 4px rgba(0,0,0,0.06);border:1px solid #f1f5f9;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;transition:transform 0.15s,box-shadow 0.15s;cursor:default"
+        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(255,107,53,0.12)'"
+        onmouseout="this.style.transform='';this.style.boxShadow='0 1px 4px rgba(0,0,0,0.06)'">
+        <div style="width:64px;height:64px;background:${gradient};color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:24px;box-shadow:0 4px 12px rgba(0,0,0,0.1);position:relative">
+          ${initial}
+          ${isAdmin ? '<span style="position:absolute;bottom:-2px;right:-2px;background:#fbbf24;color:white;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;border:2px solid white" title="مدير المنصة">👑</span>' : ''}
+        </div>
+        <div style="font-weight:700;font-size:14px;color:#1f2937;line-height:1.4;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          ${escapeHTML(name)}
+          ${isMe ? ' <span style="font-size:10px;color:#ff6b35">(أنت)</span>' : ''}
+        </div>
+        <div style="font-size:10px;color:#9ca3af;direction:ltr;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHTML(m.email || '')}">${escapeHTML(m.email || '')}</div>
+        ${sourceLabel ? `<div style="font-size:10px;background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:8px">${sourceLabel}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function filterPlatformMembers() {
+  const q = (document.getElementById('membersSearchInput')?.value || '').toLowerCase().trim();
+  if (!q) {
+    renderPlatformMembers(allPlatformMembersCache);
+    return;
+  }
+  const filtered = allPlatformMembersCache.filter(m => 
+    (m.full_name || '').toLowerCase().includes(q) || 
+    (m.email || '').toLowerCase().includes(q)
+  );
+  renderPlatformMembers(filtered);
 }
 
 let selectedIcon = '📚';
