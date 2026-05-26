@@ -5801,6 +5801,11 @@ async function renderTodos(container) {
     
     // Also load comment counts
     try { await refreshTodoCommentCounts(todos.map(t => t.id)); } catch(e) {}
+    
+    // Auto-load comments for each todo since they are now always visible
+    todos.forEach(td => {
+      try { loadInlineComments(td.id); } catch(e) {}
+    });
   }
 }
 
@@ -5921,10 +5926,6 @@ function renderTodoCard(td, assignees) {
           ${hasSchedule ? `<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer" onclick="showProjectTab('gantt')" title="انقر للذهاب إلى المخطط الزمني">📅 ${dateText}</span>` : ''}
           ${hasLayer ? `<span style="background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer" onclick="showProjectTab('layers')" title="انقر للذهاب إلى الجدولة الطبقية">🎯 طبقة ${td.layer_number}</span>` : ''}
           ${!hasSchedule && !hasLayer ? `<span style="background:#f3f4f6;color:#9ca3af;padding:2px 8px;border-radius:10px;font-size:11px;cursor:pointer" onclick="showTodoDetail('${td.id}')" title="أضف تواريخ وطبقة لتظهر في الجداول">⚙️ أضف جدولة</span>` : ''}
-          <button onclick="event.stopPropagation();toggleInlineComments('${td.id}')" id="commentToggle-${td.id}" 
-            style="background:#fff7ed;color:#c2410c;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #fed7aa;display:inline-flex;align-items:center;gap:4px">
-            💬 <span id="commentCount-${td.id}">تعليقات</span>
-          </button>
           <button onclick="event.stopPropagation();openAttachmentUpload('${td.id}')" 
             style="background:#f0fdf4;color:#15803d;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #bbf7d0;display:inline-flex;align-items:center;gap:4px">
             📎 ${attachments.length > 0 ? attachments.length + ' مرفق' : 'إضافة مرفق'}
@@ -5952,22 +5953,27 @@ function renderTodoCard(td, assignees) {
           </div>
         ` : ''}
         <div id="reactions-todo-${td.id}" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px"></div>
-        <div id="inlineComments-${td.id}" style="display:none;margin-top:12px;padding:12px;background:#fafaf9;border-radius:12px;border:1px solid #f1f5f9">
-          <div id="commentsList-${td.id}" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;margin-bottom:10px"></div>
+        <!-- Comments are ALWAYS visible (Basecamp-style) -->
+        <div id="inlineComments-${td.id}" style="margin-top:14px;padding:14px;background:#fafaf9;border-radius:14px;border:1px solid #f1f5f9">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div style="font-size:12px;color:#6b7280;font-weight:700;display:flex;align-items:center;gap:6px">
+              💬 <span id="commentCount-${td.id}">التعليقات</span>
+            </div>
+          </div>
+          <div id="commentsList-${td.id}" style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto;margin-bottom:10px"></div>
           <div style="display:flex;gap:6px;align-items:flex-end">
-            <textarea id="commentInput-${td.id}" placeholder="اكتب تعليقاً..." 
-              style="flex:1;padding:8px 12px;border:1px solid #e5e7eb;border-radius:12px;font-family:inherit;font-size:13px;resize:none;min-height:36px;max-height:100px;background:white"
+            <textarea id="commentInput-${td.id}" placeholder="اكتب تعليقاً... كل المشاركين سيصلهم إشعار" 
+              style="flex:1;padding:10px 14px;border:1px solid #e5e7eb;border-radius:14px;font-family:inherit;font-size:13px;resize:none;min-height:40px;max-height:120px;background:white"
+              onclick="event.stopPropagation()"
               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();postInlineComment('${td.id}','${activeProject.id}')}"></textarea>
-            <button onclick="postInlineComment('${td.id}','${activeProject.id}')" 
-              style="background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:8px 16px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">
+            <button onclick="event.stopPropagation();postInlineComment('${td.id}','${activeProject.id}')" 
+              style="background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:10px 18px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">
               📤 إرسال
             </button>
           </div>
         </div>
       </div>
-      <button class="btn btn-ghost" style="padding:6px" title="تفاعل سريع" onclick="event.stopPropagation();toggleReactionPicker(event,'todo','${td.id}')">😊</button>
-      <button class="btn btn-ghost" style="padding:6px" title="تفاصيل كاملة" onclick="event.stopPropagation();showTodoDetailPage('${td.id}')">📋</button>
-      ${(td.created_by === currentUser?.id || currentProfile?.is_super_admin) ? `<button class="btn btn-ghost" style="padding:6px;color:#ef4444" onclick="event.stopPropagation();deleteTodo('${td.id}')" title="حذف (للمنشئ فقط)">🗑️</button>` : ''}
+      ${(td.created_by === currentUser?.id || currentProfile?.is_super_admin) ? `<button class="btn btn-ghost" style="padding:6px;color:#ef4444;align-self:flex-start" onclick="event.stopPropagation();deleteTodo('${td.id}')" title="حذف (للمنشئ فقط)">🗑️</button>` : ''}
     </div>
   `;
 }
@@ -5992,14 +5998,32 @@ async function loadInlineComments(todoId) {
   const listBox = document.getElementById('commentsList-' + todoId);
   if (!listBox) return;
   
-  const { data: comments, error } = await sb.from('todo_comments')
-    .select('*, profile:user_id(full_name)')
-    .eq('todo_id', todoId)
-    .order('created_at', { ascending: true });
-  
-  if (error) {
-    listBox.innerHTML = '<div style="color:#dc2626;font-size:12px;text-align:center;padding:8px">خطأ في تحميل التعليقات</div>';
-    return;
+  // Try with join first, fallback to simple fetch if it fails
+  let comments = [];
+  try {
+    const result = await sb.from('todo_comments')
+      .select('*, profile:user_id(full_name)')
+      .eq('todo_id', todoId)
+      .order('created_at', { ascending: true });
+    if (result.error) {
+      console.warn('Comments join failed, falling back:', result.error);
+      const simple = await sb.from('todo_comments').select('*').eq('todo_id', todoId).order('created_at');
+      comments = simple.data || [];
+      // Manually fetch profiles
+      if (comments.length > 0) {
+        const userIds = [...new Set(comments.map(c => c.user_id))];
+        const { data: profiles } = await sb.from('profiles').select('id, full_name').in('id', userIds);
+        const profileMap = {};
+        (profiles || []).forEach(p => profileMap[p.id] = p);
+        comments.forEach(c => c.profile = profileMap[c.user_id]);
+      }
+    } else {
+      comments = result.data || [];
+    }
+  } catch(e) {
+    console.error('Comments fetch error:', e);
+    const simple = await sb.from('todo_comments').select('*').eq('todo_id', todoId).order('created_at');
+    comments = simple.data || [];
   }
   
   // Update count badge
@@ -6071,6 +6095,63 @@ async function loadInlineComments(todoId) {
   }, 100);
 }
 
+// Send notifications to ALL stakeholders of a task: assignees + project members
+async function notifyTodoStakeholders(todoId, projectId, commentContent) {
+  if (!todoId || !projectId) return;
+  
+  try {
+    // Get task info (title + creator + assigned_to)
+    const { data: todo } = await sb.from('todos')
+      .select('title, assigned_to, created_by')
+      .eq('id', todoId).maybeSingle();
+    if (!todo) return;
+    
+    // Get task assignees (multi-assign)
+    const { data: assignees } = await sb.from('todo_assignees')
+      .select('user_id').eq('todo_id', todoId);
+    
+    // Get project members
+    const { data: projMembers } = await sb.from('project_members')
+      .select('user_id').eq('project_id', projectId);
+    
+    // Get project name
+    const { data: project } = await sb.from('projects').select('name').eq('id', projectId).maybeSingle();
+    const projName = project?.name || 'مشروع';
+    
+    // Collect all unique user IDs (assignees + project members + task creator + primary assigned)
+    const recipientIds = new Set();
+    (assignees || []).forEach(a => recipientIds.add(a.user_id));
+    (projMembers || []).forEach(m => recipientIds.add(m.user_id));
+    if (todo.assigned_to) recipientIds.add(todo.assigned_to);
+    if (todo.created_by) recipientIds.add(todo.created_by);
+    
+    // Exclude the commenter (don't notify yourself)
+    recipientIds.delete(currentUser.id);
+    
+    if (recipientIds.size === 0) return;
+    
+    // Build notification payload
+    const commenterName = currentProfile?.full_name || 'عضو';
+    const taskTitle = todo.title || 'مهمة';
+    const shortContent = (commentContent || '').substring(0, 100);
+    
+    const notifications = Array.from(recipientIds).map(uid => ({
+      user_id: uid,
+      title: `💬 تعليق جديد من ${commenterName}`,
+      body: `على مهمة "${taskTitle}" في "${projName}": ${shortContent}`,
+      related_type: 'todo_comment',
+      related_id: todoId
+    }));
+    
+    // Bulk insert notifications
+    const { error } = await sb.from('notifications').insert(notifications);
+    if (error) console.warn('Notifications insert error:', error);
+  } catch(e) {
+    console.warn('notifyTodoStakeholders error:', e);
+  }
+}
+
+
 async function postInlineComment(todoId, projectId) {
   const input = document.getElementById('commentInput-' + todoId);
   if (!input) return;
@@ -6112,6 +6193,11 @@ async function postInlineComment(todoId, projectId) {
     
     // Log activity
     try { await logActivity('علّق على مهمة', 'todo', content.substring(0, 30)); } catch(e) {}
+    
+    // Send notifications to ALL stakeholders: task assignees + project members
+    try { 
+      await notifyTodoStakeholders(todoId, projectId, content); 
+    } catch(e) { console.warn('Notification fan-out failed:', e); }
     
     // Auto-scroll to bottom
     const listBox = document.getElementById('commentsList-' + todoId);
