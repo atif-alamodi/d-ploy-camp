@@ -6192,14 +6192,18 @@ if (!window.__commentKeyListenerInstalled) {
       insertFormat(todoId, 'italic');
       return;
     }
-    // Enter alone = submit ; Shift+Enter = newline (default)
+    // Shift+Enter = smart list continuation (or normal newline if not in a list)
+    if (e.key === 'Enter' && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (handleSmartListEnter(ta, e)) return; // handled by smart logic
+      // Otherwise let default behavior happen (newline)
+      return;
+    }
+    // Enter alone = submit
     if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
-      // Find project id from activeProject
       const projectId = activeProject?.id;
       if (projectId) postInlineComment(todoId, projectId);
     }
-    // Shift+Enter: do NOT preventDefault, let the textarea insert newline naturally
   });
 }
 
@@ -6211,8 +6215,8 @@ function handleCommentKeydown(event, todoId, projectId) {
   }
 }
 
-function insertFormat(todoId, format) {
-  const ta = document.getElementById('commentInput-' + todoId);
+// Unified format applier - works on any textarea element
+function applyFormat(ta, format) {
   if (!ta) return;
   ta.focus();
   
@@ -6222,31 +6226,120 @@ function insertFormat(todoId, format) {
   const before = ta.value.substring(0, start);
   const after = ta.value.substring(end);
   
-  let newText = '';
-  let cursorPos = start;
-  
-  if (format === 'bold') {
-    newText = before + '**' + (selected || 'نص') + '**' + after;
-    cursorPos = start + 2 + (selected.length || 3);
-  } else if (format === 'italic') {
-    newText = before + '*' + (selected || 'نص') + '*' + after;
-    cursorPos = start + 1 + (selected.length || 3);
-  } else if (format === 'bullet') {
-    // Add bullet to start of line(s)
-    const lines = (selected || 'عنصر').split('\n');
-    const bulleted = lines.map(l => '• ' + l).join('\n');
-    newText = before + (before && !before.endsWith('\n') ? '\n' : '') + bulleted + (after && !after.startsWith('\n') ? '\n' : '') + after;
-    cursorPos = start + bulleted.length + 2;
-  } else if (format === 'number') {
-    const lines = (selected || 'عنصر').split('\n');
-    const numbered = lines.map((l, i) => `${i + 1}. ${l}`).join('\n');
-    newText = before + (before && !before.endsWith('\n') ? '\n' : '') + numbered + (after && !after.startsWith('\n') ? '\n' : '') + after;
-    cursorPos = start + numbered.length + 2;
+  if (format === 'bold' || format === 'italic') {
+    const mark = format === 'bold' ? '**' : '*';
+    if (selected) {
+      // Wrap selected text
+      ta.value = before + mark + selected + mark + after;
+      ta.setSelectionRange(start + mark.length, end + mark.length);
+    } else {
+      // No selection - insert markers and place cursor between them, no placeholder
+      ta.value = before + mark + mark + after;
+      const pos = start + mark.length;
+      ta.setSelectionRange(pos, pos);
+    }
+    return;
   }
   
-  ta.value = newText;
-  ta.setSelectionRange(cursorPos, cursorPos);
-  ta.focus();
+  if (format === 'bullet' || format === 'number') {
+    // Find the start of the current line
+    let lineStart = start;
+    while (lineStart > 0 && ta.value[lineStart - 1] !== '\n') lineStart--;
+    
+    if (selected) {
+      // Add markers to start of each selected line
+      const selectedLines = selected.split('\n');
+      const transformed = selectedLines.map((line, i) => {
+        if (format === 'bullet') return '• ' + line;
+        return `${i + 1}. ${line}`;
+      }).join('\n');
+      ta.value = before + transformed + after;
+      ta.setSelectionRange(start, start + transformed.length);
+    } else {
+      // No selection - insert marker at start of current line and put cursor at end
+      const lineBefore = ta.value.substring(0, lineStart);
+      const lineAfter = ta.value.substring(lineStart);
+      const marker = format === 'bullet' ? '• ' : '1. ';
+      ta.value = lineBefore + marker + lineAfter;
+      const newPos = start + marker.length;
+      ta.setSelectionRange(newPos, newPos);
+    }
+    return;
+  }
+}
+
+// Smart Enter inside textarea - continue lists automatically on Shift+Enter
+function handleSmartListEnter(ta, event) {
+  // Only for Shift+Enter (newline)
+  if (!event.shiftKey || event.key !== 'Enter') return false;
+  
+  const start = ta.selectionStart;
+  const value = ta.value;
+  
+  // Find current line
+  let lineStart = start;
+  while (lineStart > 0 && value[lineStart - 1] !== '\n') lineStart--;
+  const currentLine = value.substring(lineStart, start);
+  
+  // Match bullet: starts with "• " followed by optional content
+  const bulletMatch = currentLine.match(/^(\s*)(•\s)(.*)$/);
+  if (bulletMatch) {
+    const indent = bulletMatch[1];
+    const content = bulletMatch[3];
+    
+    if (content.trim() === '') {
+      // Empty bullet - end the list (remove marker, just insert newline)
+      event.preventDefault();
+      const before = value.substring(0, lineStart);
+      const after = value.substring(start);
+      ta.value = before + '\n' + after;
+      const newPos = lineStart + 1;
+      ta.setSelectionRange(newPos, newPos);
+      return true;
+    }
+    
+    // Continue bullet on next line
+    event.preventDefault();
+    const insert = '\n' + indent + '• ';
+    ta.value = value.substring(0, start) + insert + value.substring(start);
+    const newPos = start + insert.length;
+    ta.setSelectionRange(newPos, newPos);
+    return true;
+  }
+  
+  // Match number: "1. ", "2. ", etc.
+  const numberMatch = currentLine.match(/^(\s*)(\d+)\.\s(.*)$/);
+  if (numberMatch) {
+    const indent = numberMatch[1];
+    const num = parseInt(numberMatch[2], 10);
+    const content = numberMatch[3];
+    
+    if (content.trim() === '') {
+      // Empty numbered item - end the list
+      event.preventDefault();
+      const before = value.substring(0, lineStart);
+      const after = value.substring(start);
+      ta.value = before + '\n' + after;
+      const newPos = lineStart + 1;
+      ta.setSelectionRange(newPos, newPos);
+      return true;
+    }
+    
+    // Continue numbering on next line
+    event.preventDefault();
+    const insert = `\n${indent}${num + 1}. `;
+    ta.value = value.substring(0, start) + insert + value.substring(start);
+    const newPos = start + insert.length;
+    ta.setSelectionRange(newPos, newPos);
+    return true;
+  }
+  
+  return false; // not in a list - let default Shift+Enter behavior happen
+}
+
+function insertFormat(todoId, format) {
+  const ta = document.getElementById('commentInput-' + todoId);
+  applyFormat(ta, format);
 }
 
 // Convert markdown-light to HTML for display
@@ -6893,38 +6986,10 @@ async function postMessageComment(messageId) {
   }
 }
 
-// Format helper for message comments
+// Format helper for message comments (uses unified applyFormat)
 function fmtMsgComment(messageId, format) {
   const ta = document.getElementById('msgCommentInput-' + messageId);
-  if (!ta) return;
-  ta.focus();
-  const start = ta.selectionStart, end = ta.selectionEnd;
-  const selected = ta.value.substring(start, end);
-  const before = ta.value.substring(0, start);
-  const after = ta.value.substring(end);
-  let newText = '';
-  let cursorPos = start;
-  
-  if (format === 'bold') {
-    newText = before + '**' + (selected || 'نص') + '**' + after;
-    cursorPos = start + 2 + (selected.length || 3);
-  } else if (format === 'italic') {
-    newText = before + '*' + (selected || 'نص') + '*' + after;
-    cursorPos = start + 1 + (selected.length || 3);
-  } else if (format === 'bullet') {
-    const lines = (selected || 'عنصر').split('\n');
-    const bulleted = lines.map(l => '• ' + l).join('\n');
-    newText = before + (before && !before.endsWith('\n') ? '\n' : '') + bulleted + after;
-    cursorPos = start + bulleted.length + 2;
-  } else if (format === 'number') {
-    const lines = (selected || 'عنصر').split('\n');
-    const numbered = lines.map((l, i) => `${i + 1}. ${l}`).join('\n');
-    newText = before + (before && !before.endsWith('\n') ? '\n' : '') + numbered + after;
-    cursorPos = start + numbered.length + 2;
-  }
-  ta.value = newText;
-  ta.setSelectionRange(cursorPos, cursorPos);
-  ta.focus();
+  applyFormat(ta, format);
 }
 
 // Global keydown listener for message comment textareas
@@ -6948,7 +7013,12 @@ if (!window.__msgCommentKeyListenerInstalled) {
       fmtMsgComment(messageId, 'italic');
       return;
     }
-    // Enter alone = submit ; Shift+Enter = newline (default - do nothing)
+    // Shift+Enter = smart list continuation (or normal newline if not in list)
+    if (e.key === 'Enter' && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (handleSmartListEnter(ta, e)) return;
+      return; // let default newline happen
+    }
+    // Enter alone = submit
     if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
       postMessageComment(messageId);
