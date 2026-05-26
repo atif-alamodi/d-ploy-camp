@@ -4574,27 +4574,77 @@ async function createProject() {
 
 let currentMembership = null; // current user's membership in active project
 
+// ============================================
+// Event delegation fallback for project cards
+// In case onclick attribute fails for any reason
+// ============================================
+document.addEventListener('click', function(e) {
+  // Check if click was inside a project card
+  const projCard = e.target.closest('.proj-card');
+  if (projCard) {
+    // Skip if click was on a button or reactions inside the card
+    if (e.target.closest('button') || e.target.closest('[id^="reactions-project-"]')) {
+      return;
+    }
+    const projectId = projCard.getAttribute('data-project-id');
+    if (projectId && typeof openProject === 'function') {
+      console.log('🎯 Event delegation: opening project', projectId);
+      openProject(projectId);
+    }
+  }
+}, true); // Use capture phase to catch before any other handlers
+
 async function openProject(id) {
   console.log('🚀 openProject called with id:', id);
   
   try {
-    document.getElementById('campfireNavLink').style.display = 'flex';
+    // Defensive: ensure required globals exist
+    if (!sb || !currentUser) {
+      console.error('❌ Missing globals: sb or currentUser');
+      toast('❌ يجب تسجيل الدخول أولاً');
+      return;
+    }
+    
+    if (!id) {
+      console.error('❌ No project id provided');
+      toast('❌ معرف المشروع مفقود');
+      return;
+    }
+    
+    // Show project page immediately (so user sees instant feedback)
+    document.querySelectorAll('.page-content').forEach(p => p.classList.add('hidden'));
+    const projectPage = document.getElementById('projectPage');
+    if (projectPage) {
+      projectPage.classList.remove('hidden');
+    }
+    
+    // Show loading
+    const container = document.getElementById('projectContent');
+    if (container) {
+      container.innerHTML = '<div class="spinner" style="margin:40px auto"></div><div style="text-align:center;color:#9ca3af;margin-top:14px">جارٍ فتح المشروع...</div>';
+    }
+    
+    const campfireNav = document.getElementById('campfireNavLink');
+    if (campfireNav) campfireNav.style.display = 'flex';
+    
+    // Find project in cache or fetch
     activeProject = currentProjects.find(p => p.id === id);
     if (!activeProject) {
-      console.log('Project not in currentProjects, fetching...');
-      // Super admin can open any project
-      if (currentProfile?.is_super_admin) {
-        const { data } = await sb.from('projects').select('*').eq('id', id).single();
-        if (data) activeProject = data;
+      console.log('Project not in cache, fetching from DB...');
+      const { data, error } = await sb.from('projects').select('*').eq('id', id).maybeSingle();
+      if (error) {
+        console.error('Error fetching project:', error);
+      }
+      if (data) {
+        activeProject = data;
+        // Add to cache
+        if (!currentProjects.find(p => p.id === id)) {
+          currentProjects.push(data);
+        }
       }
       if (!activeProject) {
-        await loadProjects();
-        activeProject = currentProjects.find(p => p.id === id);
-        if (!activeProject) {
-          toast('❌ لم نتمكن من فتح المشروع');
-          console.error('Project not found after refresh:', id);
-          return;
-        }
+        toast('❌ لم نتمكن من فتح المشروع');
+        return;
       }
     }
     console.log('✅ Active project:', activeProject.name);
@@ -4603,33 +4653,46 @@ async function openProject(id) {
     const detailPage = document.getElementById('todoDetailPage');
     if (detailPage) detailPage.classList.add('hidden');
     
-    // Load current user's membership
-    const { data: mem } = await sb.from('project_members')
-      .select('*').eq('project_id', id).eq('user_id', currentUser.id).maybeSingle();
-    if (!mem && currentProfile?.is_super_admin) {
-      currentMembership = {
-        id: 'super-admin-virtual',
-        project_id: id,
-        user_id: currentUser.id,
-        role: 'owner',
-        perm_invite_members: true,
-        perm_remove_members: true,
-        perm_manage_admins: true,
-        perm_mute_members: true,
-        perm_post_messages: true,
-        perm_manage_todos: true,
-        is_muted: false
-      };
-    } else {
-      currentMembership = mem;
+    // Load current user's membership (don't block if it fails)
+    try {
+      const { data: mem } = await sb.from('project_members')
+        .select('*').eq('project_id', id).eq('user_id', currentUser.id).maybeSingle();
+      if (!mem && currentProfile?.is_super_admin) {
+        currentMembership = {
+          id: 'super-admin-virtual',
+          project_id: id,
+          user_id: currentUser.id,
+          role: 'owner',
+          perm_invite_members: true,
+          perm_remove_members: true,
+          perm_manage_admins: true,
+          perm_mute_members: true,
+          perm_post_messages: true,
+          perm_manage_todos: true,
+          is_muted: false
+        };
+      } else {
+        currentMembership = mem;
+      }
+    } catch(memErr) {
+      console.warn('Membership fetch failed (non-blocking):', memErr);
+      currentMembership = null;
     }
 
-    document.getElementById('projTitle').textContent = activeProject.name;
-    document.getElementById('projDesc').textContent = activeProject.description || '';
-    showPage('project');
+    const titleEl = document.getElementById('projTitle');
+    if (titleEl) titleEl.textContent = activeProject.name;
+    const descEl = document.getElementById('projDesc');
+    if (descEl) descEl.textContent = activeProject.description || '';
+    
+    // Save navigation state
+    try { saveNavState('project', activeProject.id, 'todos'); } catch(e) {}
+    
     activeTab = 'todos';
-    await loadProjectCounts();
-    await loadProjectTab('todos');
+    
+    // Load counts and todos (don't fail if one fails)
+    try { await loadProjectCounts(); } catch(e) { console.warn('loadProjectCounts failed:', e); }
+    try { await loadProjectTab('todos'); } catch(e) { console.warn('loadProjectTab failed:', e); }
+    
     console.log('✅ Project opened successfully');
   } catch (e) {
     console.error('❌ openProject error:', e);
