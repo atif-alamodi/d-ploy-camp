@@ -2060,9 +2060,6 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
         <div class="header-actions">
           <button class="btn btn-secondary" onclick="showProjectTab('campfire')" title="Campfire - دردشة المشروع" style="padding:8px 14px; font-size:18px">🔥</button>
           <button class="btn btn-secondary" onclick="showProjectTab('activity')" title="سجل النشاط" style="padding:8px 14px; font-size:18px">📊</button>
-          <button class="btn btn-secondary" onclick="showInviteModal()" title="دعوة عضو">
-            ✉️
-          </button>
           <button class="btn btn-ghost" onclick="showPage('home')">
             ← <span data-i18n="back">رجوع</span>
           </button>
@@ -2468,8 +2465,8 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 
 <div class="modal-bg" id="inviteModal">
   <div class="modal" style="max-width: 620px">
-    <h3 class="modal-title" data-i18n="inviteTitle">دعوة أعضاء إلى المشروع</h3>
-    <p class="modal-subtitle" data-i18n="inviteSub">أرسل دعوات بالإيميل (فردياً، متعدداً، أو من ملف Excel)</p>
+    <h3 class="modal-title">✉️ دعوة أعضاء جدد إلى المنصة</h3>
+    <p class="modal-subtitle">سيتم إنشاء حسابات للمدعوين على منصة D-Ploy Camp. الأعضاء سيرون كل المشاريع المتاحة.</p>
 
     <div class="alert" id="inviteAlert"></div>
 
@@ -6744,11 +6741,11 @@ async function renderMembers(container) {
       <div class="section-header">
         <h3 class="section-title"><span class="section-icon" style="background:#ede9fe">👥</span> ${t('members')}</h3>
         <div style="display:flex; gap:8px; flex-wrap:wrap">
-          ${canInvite ? `<button class="btn btn-primary" onclick="showInviteModal()">✉️ ${t('invite')}</button>` : ''}
+          ${currentProfile?.is_super_admin ? `<button class="btn btn-primary" onclick="showInviteModal()" title="إضافة أعضاء جدد للمنصة (للمدير فقط)">✉️ دعوة للمنصة</button>` : ''}
           ${!isOwner && currentMembership ? `<button class="btn btn-secondary" onclick="leaveProject()">🚪 ${t('leaveProject')}</button>` : ''}
-          ${(isOwner || currentProfile?.is_super_admin) ? `<button class="btn btn-danger" onclick="deleteProject()">🗑️ ${t('deleteProject')}</button>` : ''}
         </div>
       </div>
+      ${!currentProfile?.is_super_admin ? '<p style="color:#9ca3af;font-size:12px;margin-bottom:14px">💡 دعوة أعضاء جدد للمنصة متاحة فقط من قبل مدير المنصة (لوحة الإدارة)</p>' : ''}
   `;
 
   html += (members || []).map(m => {
