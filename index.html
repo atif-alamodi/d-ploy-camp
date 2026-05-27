@@ -2341,6 +2341,34 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
       <div class="section-card">
         <div class="section-header">
           <h3 class="section-title">
+            <span class="section-icon" style="background:#fff7ed">🔔</span>
+            <span data-i18n="pushNotifications">إشعارات الجهاز</span>
+          </h3>
+        </div>
+
+        <div class="alert alert-info" style="margin-bottom:20px">
+          <span data-i18n="pushNotificationsInfo">فعّل الإشعارات لتصلك تنبيهات الـ mentions والمهام حتى لو كان التطبيق مغلقاً. يجب تفعيلها على كل جهاز تستخدمه.</span>
+        </div>
+
+        <div id="pushStatusBox" style="padding:18px; background:var(--bg-elevated); border-radius:var(--radius); margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+          <div>
+            <div style="font-weight:700;font-size:15px;margin-bottom:4px" id="pushStatusTitle">جارٍ التحقق...</div>
+            <div style="color:var(--text-muted);font-size:13px" id="pushStatusDesc">—</div>
+          </div>
+          <button type="button" class="btn btn-primary" id="pushToggleBtn" onclick="handlePushToggle()" style="display:none">
+            🔔 <span id="pushToggleLabel">تفعيل</span>
+          </button>
+        </div>
+
+        <div id="pushDeviceList" style="display:none">
+          <div style="font-size:13px;color:var(--text-muted);margin-bottom:8px;font-weight:600">الأجهزة المُفعّل عليها الإشعارات:</div>
+          <div id="pushDevicesItems"></div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <h3 class="section-title">
             <span class="section-icon" style="background:#f0fdf4">👤</span>
             <span data-i18n="profileInfo">معلومات الملف الشخصي</span>
           </h3>
@@ -3121,10 +3149,14 @@ window.addEventListener('unhandledrejection', function(ev) {
 // SERVICE WORKER REGISTRATION (PWA + Push)
 // Enables: offline shell, install on home screen, push notifications
 // ============================================
+const VAPID_PUBLIC_KEY = 'BF04BQs29U62fSsSOLVArYKAvY9kmn0Lm-Qi-Glv5849zsnVcVpA9zmjLsJLgZx7JAv7us_jMHGaduqMm3W1Gaw';
+let swRegistration = null;
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('service-worker.js', { scope: './' })
       .then(reg => {
+        swRegistration = reg;
         console.log('[SW] registered, scope:', reg.scope);
         
         // Listen for messages from SW (e.g., notification clicks)
@@ -3143,6 +3175,237 @@ if ('serviceWorker' in navigator) {
       })
       .catch(err => console.warn('[SW] registration failed:', err));
   });
+}
+
+// ============================================
+// WEB PUSH HELPERS
+// ============================================
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  return window.btoa(binary);
+}
+
+// Check if push is supported on this browser
+function pushSupported() {
+  return ('serviceWorker' in navigator) && 
+         ('PushManager' in window) && 
+         (typeof Notification !== 'undefined');
+}
+
+// Get current push subscription state for the user
+async function getPushState() {
+  if (!pushSupported()) return { supported: false, subscribed: false, permission: 'unsupported' };
+  if (!swRegistration) {
+    try { swRegistration = await navigator.serviceWorker.ready; } catch(e) { return { supported: false }; }
+  }
+  const sub = await swRegistration.pushManager.getSubscription();
+  return {
+    supported: true,
+    subscribed: !!sub,
+    permission: Notification.permission,
+    endpoint: sub?.endpoint
+  };
+}
+
+// Subscribe this device to push notifications
+async function subscribeToPush() {
+  if (!pushSupported()) {
+    toast(currentLang === 'ar' ? '⚠️ المتصفح لا يدعم الإشعارات' : '⚠️ Browser does not support push');
+    return false;
+  }
+  if (!currentUser?.id) return false;
+  
+  try {
+    // Make sure SW is ready
+    if (!swRegistration) {
+      swRegistration = await navigator.serviceWorker.ready;
+    }
+    
+    // Request permission if not granted
+    if (Notification.permission !== 'granted') {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') {
+        toast(currentLang === 'ar' ? '❌ تم رفض الإذن. فعّله من إعدادات المتصفح' : '❌ Permission denied. Enable in browser settings');
+        return false;
+      }
+    }
+    
+    // Subscribe via PushManager
+    let subscription = await swRegistration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await swRegistration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+    
+    // Extract keys
+    const p256dh = arrayBufferToBase64(subscription.getKey('p256dh'));
+    const authKey = arrayBufferToBase64(subscription.getKey('auth'));
+    const deviceLabel = navigator.userAgentData?.platform || 
+                        (navigator.userAgent.match(/iPhone|iPad|Android|Mac|Windows|Linux/)?.[0] || 'Device');
+    
+    // Save to DB (upsert by endpoint)
+    const { error } = await sb.from('push_subscriptions').upsert({
+      user_id: currentUser.id,
+      endpoint: subscription.endpoint,
+      p256dh: p256dh,
+      auth: authKey,
+      user_agent: (navigator.userAgent || '').substring(0, 500),
+      device_label: deviceLabel,
+      last_used_at: new Date().toISOString(),
+      failure_count: 0
+    }, { onConflict: 'endpoint' });
+    
+    if (error) {
+      console.error('[Push] save subscription failed:', error);
+      return false;
+    }
+    
+    toast(currentLang === 'ar' ? '✅ تم تفعيل الإشعارات على هذا الجهاز' : '✅ Push notifications enabled');
+    return true;
+  } catch (err) {
+    console.error('[Push] subscribe failed:', err);
+    toast(currentLang === 'ar' ? '❌ فشل تفعيل الإشعارات: ' + err.message : '❌ Failed: ' + err.message);
+    return false;
+  }
+}
+
+// Unsubscribe this device from push notifications
+async function unsubscribeFromPush() {
+  if (!swRegistration) {
+    try { swRegistration = await navigator.serviceWorker.ready; } catch(e) { return false; }
+  }
+  try {
+    const sub = await swRegistration.pushManager.getSubscription();
+    if (sub) {
+      const endpoint = sub.endpoint;
+      await sub.unsubscribe();
+      // Remove from DB
+      await sb.from('push_subscriptions').delete().eq('endpoint', endpoint);
+      toast(currentLang === 'ar' ? '🔕 تم إيقاف الإشعارات على هذا الجهاز' : '🔕 Push disabled');
+    }
+    return true;
+  } catch (err) {
+    console.error('[Push] unsubscribe failed:', err);
+    return false;
+  }
+}
+
+// Toggle: convenient single function
+async function togglePushSubscription() {
+  const state = await getPushState();
+  if (state.subscribed) {
+    return await unsubscribeFromPush();
+  } else {
+    return await subscribeToPush();
+  }
+}
+
+// ============================================
+// PUSH NOTIFICATIONS UI (Settings page)
+// ============================================
+async function handlePushToggle() {
+  const btn = document.getElementById('pushToggleBtn');
+  if (btn) { btn.disabled = true; }
+  const success = await togglePushSubscription();
+  if (btn) { btn.disabled = false; }
+  if (success) await refreshPushStatusUI();
+}
+
+async function refreshPushStatusUI() {
+  const titleEl = document.getElementById('pushStatusTitle');
+  const descEl = document.getElementById('pushStatusDesc');
+  const btnEl = document.getElementById('pushToggleBtn');
+  const labelEl = document.getElementById('pushToggleLabel');
+  const devListBox = document.getElementById('pushDeviceList');
+  const devItems = document.getElementById('pushDevicesItems');
+  
+  if (!titleEl) return; // Settings page not in DOM
+  
+  const state = await getPushState();
+  
+  if (!state.supported) {
+    titleEl.textContent = currentLang === 'ar' ? '❌ غير مدعوم' : '❌ Not supported';
+    descEl.textContent = currentLang === 'ar' ? 'هذا المتصفح أو الجهاز لا يدعم الإشعارات. جرّب Chrome أو Edge.' : 'This browser does not support push notifications.';
+    if (btnEl) btnEl.style.display = 'none';
+    return;
+  }
+  
+  if (state.permission === 'denied') {
+    titleEl.textContent = currentLang === 'ar' ? '🚫 الإذن مرفوض' : '🚫 Permission denied';
+    descEl.textContent = currentLang === 'ar' ? 'الإذن مرفوض في إعدادات المتصفح. افتح إعدادات الموقع وسماح الإشعارات.' : 'Permission denied. Open browser site settings and allow notifications.';
+    if (btnEl) btnEl.style.display = 'none';
+    return;
+  }
+  
+  if (state.subscribed) {
+    titleEl.textContent = currentLang === 'ar' ? '✅ الإشعارات مُفعّلة' : '✅ Notifications enabled';
+    descEl.textContent = currentLang === 'ar' ? 'ستصلك إشعارات حتى لو كان التطبيق مغلقاً.' : 'You will receive notifications even when app is closed.';
+    if (btnEl) { btnEl.style.display = 'inline-flex'; btnEl.className = 'btn btn-ghost'; }
+    if (labelEl) labelEl.textContent = currentLang === 'ar' ? 'إيقاف على هذا الجهاز' : 'Disable on this device';
+  } else {
+    titleEl.textContent = currentLang === 'ar' ? '🔕 الإشعارات غير مُفعّلة' : '🔕 Notifications not enabled';
+    descEl.textContent = currentLang === 'ar' ? 'فعّل الإشعارات لتصلك تنبيهات في الوقت الفعلي.' : 'Enable to receive real-time push notifications.';
+    if (btnEl) { btnEl.style.display = 'inline-flex'; btnEl.className = 'btn btn-primary'; }
+    if (labelEl) labelEl.textContent = currentLang === 'ar' ? 'تفعيل الإشعارات' : 'Enable notifications';
+  }
+  
+  // Show list of devices subscribed
+  if (currentUser?.id && devListBox && devItems) {
+    try {
+      const { data: devices } = await sb.from('push_subscriptions')
+        .select('id, device_label, user_agent, created_at, last_used_at, endpoint')
+        .eq('user_id', currentUser.id)
+        .order('last_used_at', { ascending: false });
+      
+      if (devices && devices.length > 0) {
+        devListBox.style.display = 'block';
+        devItems.innerHTML = devices.map(d => {
+          const isThisDevice = d.endpoint === state.endpoint;
+          const label = escapeHTML(d.device_label || 'Device');
+          const ua = escapeHTML((d.user_agent || '').substring(0, 60));
+          const lastUsed = d.last_used_at ? new Date(d.last_used_at).toLocaleDateString(currentLang === 'ar' ? 'ar-SA' : 'en-US') : '';
+          return `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border-radius:10px;margin-bottom:6px;gap:10px">
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:600;font-size:13px">${label} ${isThisDevice ? '<span style="color:#22c55e;font-size:11px">(هذا الجهاز)</span>' : ''}</div>
+                <div style="font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ua}</div>
+                <div style="font-size:11px;color:var(--text-muted)">آخر استخدام: ${lastUsed}</div>
+              </div>
+              ${!isThisDevice ? `<button onclick="removePushDevice('${d.id}')" class="btn btn-ghost" style="padding:6px 10px;font-size:12px;color:#ef4444">🗑️</button>` : ''}
+            </div>
+          `;
+        }).join('');
+      } else {
+        devListBox.style.display = 'none';
+      }
+    } catch(e) { console.warn('list devices:', e); }
+  }
+}
+
+async function removePushDevice(deviceId) {
+  if (!confirm(currentLang === 'ar' ? 'إيقاف الإشعارات على هذا الجهاز؟' : 'Disable notifications on this device?')) return;
+  try {
+    await sb.from('push_subscriptions').delete().eq('id', deviceId);
+    toast(currentLang === 'ar' ? '🗑️ تم الإيقاف' : '🗑️ Removed');
+    await refreshPushStatusUI();
+  } catch(e) {
+    toast('❌ ' + e.message);
+  }
 }
 
 let currentUser = null;
@@ -4345,6 +4608,8 @@ async function loadAccountSettings() {
     const firstLetter = (currentProfile.full_name || currentProfile.email).charAt(0).toUpperCase();
     document.getElementById('profileAvatar').textContent = firstLetter;
   }
+  // Refresh push notification status
+  try { await refreshPushStatusUI(); } catch(e) {}
 }
 
 async function onAuthSuccess(user) {
@@ -6739,6 +7004,7 @@ async function sendMentionNotifications(userIds, contextType, contextId, content
     const { data: { session } } = await sb.auth.getSession();
     if (session?.access_token) {
       targetIds.forEach(uid => {
+        // Email notification
         fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
           method: 'POST',
           headers: {
@@ -6756,9 +7022,26 @@ async function sendMentionNotifications(userIds, contextType, contextId, content
             contextId
           })
         }).catch(() => { /* silent fail - in-app notif still works */ });
+        
+        // Web Push notification (works even if app is closed)
+        fetch(`${SUPABASE_URL}/functions/v1/send-push`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            targetUserId: uid,
+            title: `${titlePrefix} ${senderName} ${verb}`,
+            message: shortContent,
+            url: `https://atif-alamodi.github.io/d-ploy-camp/?project=${activeProject?.id || ''}`,
+            tag: 'mention-' + contextId,
+            requireInteraction: isAllMention
+          })
+        }).catch(() => { /* silent fail */ });
       });
     }
-  } catch(e) { /* silent - email is secondary to in-app */ }
+  } catch(e) { /* silent - email/push are secondary to in-app */ }
 }
 
 // Auto-load comment counts for all visible todos
