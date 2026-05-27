@@ -3,6 +3,27 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- ============================================ -->
+<!-- SECURITY HEADERS -->
+<!-- These mitigate XSS, clickjacking, and data leaks -->
+<!-- ============================================ -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+  font-src 'self' https://fonts.gstatic.com data:;
+  img-src 'self' data: blob: https: ;
+  connect-src 'self' https://liwpqggtvstqwxobhsfs.supabase.co wss://liwpqggtvstqwxobhsfs.supabase.co https://api.resend.com;
+  frame-ancestors 'none';
+  base-uri 'self';
+  form-action 'self';
+  object-src 'none';
+  upgrade-insecure-requests;
+">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=()">
 <meta name="theme-color" content="#ff6b35">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -3157,8 +3178,6 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('service-worker.js', { scope: './' })
       .then(reg => {
         swRegistration = reg;
-        console.log('[SW] registered, scope:', reg.scope);
-        
         // Listen for messages from SW (e.g., notification clicks)
         navigator.serviceWorker.addEventListener('message', (event) => {
           if (event.data?.type === 'notification-click') {
@@ -4852,7 +4871,7 @@ async function loadHome() {
       const box = document.getElementById(`reactions-project-${p.id}`);
       if (box) box.innerHTML = renderReactionsRow('project', p.id, reactionsByProj[p.id] || []);
     });
-  } catch(e) { console.log('Load project reactions:', e); }
+  } catch(e) { if(window.DPLOY_DEBUG) console.log('Load project reactions:', e); }
   
   // Load active platform members
   await loadPlatformMembers();
@@ -5311,14 +5330,13 @@ document.addEventListener('click', function(e) {
     }
     const projectId = projCard.getAttribute('data-project-id');
     if (projectId && typeof openProject === 'function') {
-      console.log('🎯 Event delegation: opening project', projectId);
+      
       openProject(projectId);
     }
   }
 }, true); // Use capture phase to catch before any other handlers
 
 async function openProject(id) {
-  console.log('🚀 openProject called with id:', id);
   
   try {
     // Defensive: ensure required globals exist
@@ -5350,7 +5368,7 @@ async function openProject(id) {
     // Find project in cache or fetch
     activeProject = currentProjects.find(p => p.id === id);
     if (!activeProject) {
-      console.log('Project not in cache, fetching from DB...');
+      
       const { data, error } = await sb.from('projects').select('*').eq('id', id).maybeSingle();
       if (error) {
         console.error('Error fetching project:', error);
@@ -5367,7 +5385,6 @@ async function openProject(id) {
         return;
       }
     }
-    console.log('✅ Active project:', activeProject.name);
     
     // Reset @mention cache so it reloads with this project's members
     try { resetMentionCache(); } catch(e) {}
@@ -5416,7 +5433,7 @@ async function openProject(id) {
     try { await loadProjectCounts(); } catch(e) { console.warn('loadProjectCounts failed:', e); }
     try { await loadProjectTab('todos'); } catch(e) { console.warn('loadProjectTab failed:', e); }
     
-    console.log('✅ Project opened successfully');
+    
   } catch (e) {
     console.error('❌ openProject error:', e);
     toast('❌ خطأ في فتح المشروع: ' + (e.message || 'خطأ غير معروف'));
@@ -5523,7 +5540,7 @@ async function applyProjectToolSettings() {
         card.style.display = enabled ? '' : 'none';
       }
     });
-  } catch(e) { console.log('Apply tool settings:', e); }
+  } catch(e) { if(window.DPLOY_DEBUG) console.log('Apply tool settings:', e); }
 }
 
 // ============================================
@@ -6260,7 +6277,6 @@ async function renderTodos(container) {
     todos = simple.data || [];
   }
   
-  console.log('Loaded lists:', lists?.length, 'todos:', todos?.length, 'for project', activeProject.id);
   
   // Fetch multi-assignees for all todos
   let assigneesByTodo = {};
@@ -6338,7 +6354,7 @@ async function renderTodos(container) {
         const box = document.getElementById(`reactions-todo-${td.id}`);
         if (box) box.innerHTML = renderReactionsRow('todo', td.id, reactionsByTodo[td.id] || []);
       });
-    } catch(e) { console.log('Load todo reactions:', e); }
+    } catch(e) { if(window.DPLOY_DEBUG) console.log('Load todo reactions:', e); }
     
     // Also load comment counts
     try { await refreshTodoCommentCounts(todos.map(t => t.id)); } catch(e) {}
@@ -7418,7 +7434,7 @@ async function loadMessageComments(messageId) {
         const box = document.getElementById(`reactions-message_comment-${c.id}`);
         if (box) box.innerHTML = renderReactionsRow('message_comment', c.id, reactionsByComment[c.id] || []);
       });
-    } catch(e) { console.log('Load msg comment reactions:', e); }
+    } catch(e) { if(window.DPLOY_DEBUG) console.log('Load msg comment reactions:', e); }
   }, 100);
 }
 
@@ -10674,7 +10690,6 @@ function playNotificationSound() {
     o1.start(ctx.currentTime);
     o1.stop(ctx.currentTime + 0.3);
   } catch(e) {
-    console.log('Audio not available');
   }
 }
 
@@ -10898,7 +10913,7 @@ async function renderCampfire(container) {
   `;
   await loadCampfireMessages();
   subscribeCampfire();
-  try { subscribeMessages(); } catch(e) { console.log('Realtime messages:', e); }
+  try { subscribeMessages(); } catch(e) { if(window.DPLOY_DEBUG) console.log('Realtime messages:', e); }
 }
 
 async function loadCampfireMessages() {
@@ -10930,7 +10945,7 @@ async function loadCampfireMessages() {
       reactionsByMsg[r.message_id].push(r);
     });
     msgs.forEach(m => { m.reactions = reactionsByMsg[m.id] || []; });
-  } catch(e) { console.log('Load reactions:', e); }
+  } catch(e) { if(window.DPLOY_DEBUG) console.log('Load reactions:', e); }
 
   box.innerHTML = msgs.map(m => renderCampfireMsg(m)).join('');
   box.scrollTop = box.scrollHeight;
@@ -11091,7 +11106,7 @@ async function refreshReactionsForMessage(messageType, messageId) {
     if (container) {
       container.innerHTML = renderReactionsRow(messageType, messageId, data || []);
     }
-  } catch(e) { console.log('Refresh reactions:', e); }
+  } catch(e) { if(window.DPLOY_DEBUG) console.log('Refresh reactions:', e); }
 }
 
 // Helper to add CSS for hover reveal of reaction button
@@ -11378,7 +11393,7 @@ async function loadTodoComments(todoId) {
           const box = document.getElementById(`reactions-todo_comment-${c.id}`);
           if (box) box.innerHTML = renderReactionsRow('todo_comment', c.id, reactionsByComment[c.id] || []);
         });
-      } catch(e) { console.log('Load comment reactions:', e); }
+      } catch(e) { if(window.DPLOY_DEBUG) console.log('Load comment reactions:', e); }
     }, 100);
   }
   
