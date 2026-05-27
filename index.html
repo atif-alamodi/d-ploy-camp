@@ -2037,7 +2037,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
     <div class="sidebar-header">
       <div class="sidebar-brand-icon">🏕️</div>
       <div class="sidebar-brand">D-Ploy</div>
-      <div class="notif-bell" onclick="toggleNotifDropdown()" title="الإشعارات">
+      <div class="notif-bell" onclick="toggleNotifDropdown()" data-i18n-title="notifications" title="الإشعارات">
         🔔
         <span class="notif-badge" id="notifBadge" style="display:none">0</span>
       </div>
@@ -2049,7 +2049,9 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
         <input 
           type="search" 
           id="globalSearchInput"
+          data-i18n-placeholder="searchPlaceholder"
           placeholder="🔍 بحث في كل شيء..."
+          data-i18n-aria-label="globalSearch"
           aria-label="بحث شامل"
           autocomplete="off"
           oninput="handleGlobalSearch(this.value)"
@@ -2075,7 +2077,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
       </div>
       <div class="nav-item" onclick="toggleNotificationsPanel()" style="position:relative">
         <span class="nav-icon">🔔</span>
-        <span>الإشعارات</span>
+        <span data-i18n="notifications">الإشعارات</span>
         <span id="notifBadge" style="display:none;position:absolute;top:8px;left:12px;background:#ef4444;color:white;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;min-width:18px;text-align:center"></span>
       </div>
       <div class="nav-item hidden" id="adminPanelLink" data-page="adminPanel" onclick="showPage('adminPanel')" style="position:relative">
@@ -2085,7 +2087,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
     </div>
 
     <div class="nav-section">
-      <div class="nav-section-title">المشاريع</div>
+      <div class="nav-section-title" data-i18n="projectsHeader">المشاريع</div>
       <div class="projects-list" id="projectsList">
         <div style="padding:10px; font-size:12px; color:var(--text-muted)" data-i18n="loadingProjects">جارٍ تحميل المشاريع...</div>
       </div>
@@ -2150,11 +2152,11 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
       <div style="margin-top:32px">
         <div class="page-header">
           <div>
-            <h2 class="page-title">👥 أعضاء المنصة الفعّالون</h2>
-            <div class="page-subtitle" id="activeMembersSub">جارٍ التحميل...</div>
+            <h2 class="page-title" data-i18n="activeMembers">👥 أعضاء المنصة الفعّالون</h2>
+            <div class="page-subtitle" id="activeMembersSub" data-i18n="loading">جارٍ التحميل...</div>
           </div>
           <div class="header-actions">
-            <input type="text" class="form-input" id="membersSearchInput" placeholder="🔍 ابحث بالاسم..." 
+            <input type="text" class="form-input" id="membersSearchInput" data-i18n-placeholder="searchByName" placeholder="🔍 ابحث بالاسم..." 
               style="padding:8px 14px;font-size:13px;border-radius:50px;max-width:240px"
               oninput="filterPlatformMembers()">
           </div>
@@ -2171,9 +2173,9 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
           <div class="page-subtitle" id="projDesc">—</div>
         </div>
         <div class="header-actions">
-          <button class="btn btn-secondary" onclick="showProjectTab('campfire')" title="Campfire - دردشة المشروع" style="padding:8px 14px; font-size:18px">🔥</button>
-          <button class="btn btn-secondary" onclick="showProjectTab('activity')" title="سجل النشاط" style="padding:8px 14px; font-size:18px">📊</button>
-          <button class="btn btn-secondary" onclick="openAddProjectMembersModal()" title="إضافة أعضاء للمشروع من أعضاء المنصة" style="padding:8px 14px; font-size:18px">👥+</button>
+          <button class="btn btn-secondary" onclick="showProjectTab('campfire')" data-i18n-title="campfireTooltip" title="Campfire - دردشة المشروع" style="padding:8px 14px; font-size:18px">🔥</button>
+          <button class="btn btn-secondary" onclick="showProjectTab('activity')" data-i18n-title="activityTooltip" title="سجل النشاط" style="padding:8px 14px; font-size:18px">📊</button>
+          <button class="btn btn-secondary" onclick="openAddProjectMembersModal()" data-i18n-title="addMembersTooltip" title="إضافة أعضاء للمشروع من أعضاء المنصة" style="padding:8px 14px; font-size:18px">👥+</button>
           <button class="btn btn-ghost" onclick="showPage('home')">
             ← <span data-i18n="back">رجوع</span>
           </button>
@@ -2181,8 +2183,8 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
       </div>
 
       <div style="display:flex;justify-content:flex-end;margin-bottom:12px;gap:8px">
-        <button class="btn btn-ghost" style="padding:8px 14px;font-size:13px;background:#fff;border:1px solid #e5e7eb;border-radius:50px" onclick="openProjectToolsModal()" title="اختر الأدوات المتاحة في هذا المشروع">
-          ⚙️ إعدادات الأدوات
+        <button class="btn btn-ghost" style="padding:8px 14px;font-size:13px;background:#fff;border:1px solid #e5e7eb;border-radius:50px" onclick="openProjectToolsModal()" data-i18n-title="toolSettingsTooltip" title="اختر الأدوات المتاحة في هذا المشروع">
+          ⚙️ <span data-i18n="toolSettings">إعدادات الأدوات</span>
         </button>
       </div>
 
@@ -2222,21 +2224,21 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
           <div class="tool-card-title">Campfire</div>
           <div class="tool-card-count" id="campfireCount">0</div>
         </div>
-        <div class="tool-card" data-tool="gantt" onclick="showProjectTab('gantt')" title="عرض زمني للمهام مرتبة حسب تواريخ البداية والنهاية - يساعد على تتبع المواعيد">
+        <div class="tool-card" data-tool="gantt" onclick="showProjectTab('gantt')" data-i18n-title="ganttTooltip" title="عرض زمني للمهام مرتبة حسب تواريخ البداية والنهاية - يساعد على تتبع المواعيد">
           <div class="tool-card-icon" style="background:#fef3c7">📅</div>
-          <div class="tool-card-title">المخطط الزمني</div>
+          <div class="tool-card-title" data-i18n="ganttChart">المخطط الزمني</div>
           <div class="tool-card-count" style="font-size:11px;color:#92400e;font-weight:600">Gantt</div>
-          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4">يعرض المهام حسب تواريخها — اضبط البداية والنهاية في المهمة لتظهر هنا</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4" data-i18n="ganttHint">يعرض المهام حسب تواريخها — اضبط البداية والنهاية في المهمة لتظهر هنا</div>
         </div>
-        <div class="tool-card" data-tool="layers" onclick="showProjectTab('layers')" title="ترتيب المهام في طبقات (مراحل) - مثل: تحليل → تصميم → تطوير → اختبار">
+        <div class="tool-card" data-tool="layers" onclick="showProjectTab('layers')" data-i18n-title="layersTooltip" title="ترتيب المهام في طبقات (مراحل) - مثل: تحليل → تصميم → تطوير → اختبار">
           <div class="tool-card-icon" style="background:#e0e7ff">🎯</div>
-          <div class="tool-card-title">الجدولة الطبقية</div>
+          <div class="tool-card-title" data-i18n="layeredScheduling">الجدولة الطبقية</div>
           <div class="tool-card-count" id="layersCount">0</div>
-          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4">تجزئة المشروع إلى طبقات/مراحل — اضبط رقم الطبقة في المهمة</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4" data-i18n="layersHint">تجزئة المشروع إلى طبقات/مراحل — اضبط رقم الطبقة في المهمة</div>
         </div>
         <div class="tool-card" data-tool="activity" onclick="showProjectTab('activity')">
           <div class="tool-card-icon" style="background:#f0fdf4">📊</div>
-          <div class="tool-card-title">النشاط</div>
+          <div class="tool-card-title" data-i18n="activity">النشاط</div>
           <div class="tool-card-count" id="activityCount"></div>
         </div>
       </div>
@@ -3557,6 +3559,31 @@ const translations = {
     myProjects: 'مشاريعي',
     loadingProjects: 'جارٍ تحميل المشاريع...',
     projects: 'مشاريع',
+    projectsHeader: 'المشاريع',
+    notifications: 'الإشعارات',
+    searchPlaceholder: '🔍 بحث في كل شيء...',
+    globalSearch: 'بحث شامل',
+    noResults: 'لا توجد نتائج',
+    resultsCount: 'نتيجة',
+    typeTodo: 'مهمة',
+    typeMessage: 'رسالة',
+    typeProject: 'مشروع',
+    typeFile: 'ملف',
+    ganttChart: 'المخطط الزمني',
+    layeredScheduling: 'الجدولة الطبقية',
+    activity: 'النشاط',
+    ganttHint: 'يعرض المهام حسب تواريخها — اضبط البداية والنهاية في المهمة لتظهر هنا',
+    layersHint: 'تجزئة المشروع إلى طبقات/مراحل — اضبط رقم الطبقة في المهمة',
+    ganttTooltip: 'عرض زمني للمهام مرتبة حسب تواريخ البداية والنهاية - يساعد على تتبع المواعيد',
+    layersTooltip: 'ترتيب المهام في طبقات (مراحل) - مثل: تحليل، تصميم، تطوير، اختبار',
+    campfireTooltip: 'Campfire - دردشة المشروع',
+    activityTooltip: 'سجل النشاط',
+    addMembersTooltip: 'إضافة أعضاء للمشروع من أعضاء المنصة',
+    toolSettings: 'إعدادات الأدوات',
+    toolSettingsTooltip: 'اختر الأدوات المتاحة في هذا المشروع',
+    activeMembers: '👥 أعضاء المنصة الفعّالون',
+    loading: 'جارٍ التحميل...',
+    searchByName: '🔍 ابحث بالاسم...',
     openTodos: 'مهام مفتوحة',
     completed: 'مكتملة',
     yourProjects: 'مشاريعك',
@@ -3766,6 +3793,31 @@ const translations = {
     myProjects: 'My Projects',
     loadingProjects: 'Loading projects...',
     projects: 'Projects',
+    projectsHeader: 'Projects',
+    notifications: 'Notifications',
+    searchPlaceholder: '🔍 Search everything...',
+    globalSearch: 'Global search',
+    noResults: 'No results',
+    resultsCount: 'results',
+    typeTodo: 'Task',
+    typeMessage: 'Message',
+    typeProject: 'Project',
+    typeFile: 'File',
+    ganttChart: 'Gantt Chart',
+    layeredScheduling: 'Layered Scheduling',
+    activity: 'Activity',
+    ganttHint: 'Shows tasks by their dates — set start and end dates on each task to appear here',
+    layersHint: 'Break the project into layers/phases — set the layer number on each task',
+    ganttTooltip: 'Timeline view of tasks ordered by start and end dates — helps track deadlines',
+    layersTooltip: 'Arrange tasks in layers (phases) — e.g., analyze, design, develop, test',
+    campfireTooltip: 'Campfire - project chat',
+    activityTooltip: 'Activity log',
+    addMembersTooltip: 'Add members to this project from platform members',
+    toolSettings: 'Tool Settings',
+    toolSettingsTooltip: 'Choose which tools are available in this project',
+    activeMembers: '👥 Active Platform Members',
+    loading: 'Loading...',
+    searchByName: '🔍 Search by name...',
     openTodos: 'Open Todos',
     completed: 'Completed',
     yourProjects: 'Your Projects',
@@ -3948,12 +4000,35 @@ function t(key) {
 }
 
 function applyTranslations() {
+  // Text content
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.dataset.i18n;
     if (translations[currentLang][key]) {
       el.textContent = translations[currentLang][key];
     }
   });
+  // Placeholder attribute
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    const key = el.dataset.i18nPlaceholder;
+    if (translations[currentLang][key]) {
+      el.setAttribute('placeholder', translations[currentLang][key]);
+    }
+  });
+  // Title attribute (tooltips)
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    const key = el.dataset.i18nTitle;
+    if (translations[currentLang][key]) {
+      el.setAttribute('title', translations[currentLang][key]);
+    }
+  });
+  // Aria-label attribute
+  document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
+    const key = el.dataset.i18nAriaLabel;
+    if (translations[currentLang][key]) {
+      el.setAttribute('aria-label', translations[currentLang][key]);
+    }
+  });
+  
   document.body.classList.toggle('ltr', currentLang === 'en');
   document.documentElement.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
   document.documentElement.lang = currentLang;
@@ -3964,8 +4039,11 @@ document.getElementById('langToggle').onclick = () => {
   currentLang = currentLang === 'ar' ? 'en' : 'ar';
   localStorage.setItem('dploy_lang', currentLang);
   applyTranslations();
+  // Re-render dynamic content with new language
   if (currentUser) loadHome();
   if (activeProject) loadProjectTab(activeTab);
+  // Close sidebar on mobile/tablet after language switch
+  if (typeof closeSidebarOnMobile === 'function') closeSidebarOnMobile();
 };
 
 // Initial language load
