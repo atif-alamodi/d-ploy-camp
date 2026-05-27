@@ -1838,12 +1838,12 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 
       <div class="form-group">
         <label data-i18n="email">البريد الإلكتروني</label>
-        <input type="email" class="form-input" id="loginEmail" placeholder="you@example.com" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('loginPassword').focus();}">
+        <input type="email" class="form-input" id="loginEmail" aria-label="البريد الإلكتروني" placeholder="you@example.com" autocomplete="username" required onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('loginPassword').focus();}">
       </div>
 
       <div class="form-group">
         <label data-i18n="password">كلمة المرور</label>
-        <input type="password" class="form-input" id="loginPassword" placeholder="••••••••" onkeydown="if(event.key==='Enter'){event.preventDefault();handleLogin();}">
+        <input type="password" class="form-input" id="loginPassword" aria-label="كلمة المرور" placeholder="••••••••" autocomplete="current-password" required onkeydown="if(event.key==='Enter'){event.preventDefault();handleLogin();}">
       </div>
 
       <div class="forgot-link">
@@ -1872,7 +1872,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 
       <div class="form-group">
         <label data-i18n="email">البريد الإلكتروني</label>
-        <input type="email" class="form-input" id="forgotEmail" onkeydown="if(event.key==='Enter'){event.preventDefault();handleForgot();}" placeholder="you@example.com">
+        <input type="email" class="form-input" id="forgotEmail" aria-label="البريد الإلكتروني لاستعادة كلمة المرور" autocomplete="email" required onkeydown="if(event.key==='Enter'){event.preventDefault();handleForgot();}" placeholder="you@example.com">
       </div>
 
       <button class="btn btn-primary" onclick="handleForgot()" data-i18n="sendResetLink">إرسال رابط الإعادة</button>
@@ -1891,12 +1891,12 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 
       <div class="form-group">
         <label data-i18n="newPassword">كلمة المرور الجديدة (6+ أحرف)</label>
-        <input type="password" class="form-input" id="resetPassword" placeholder="••••••••" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('resetPassword2').focus();}">
+        <input type="password" class="form-input" id="resetPassword" aria-label="كلمة المرور الجديدة" placeholder="••••••••" autocomplete="new-password" required minlength="6" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('resetPassword2').focus();}">
       </div>
 
       <div class="form-group">
         <label data-i18n="confirmPassword">تأكيد كلمة المرور</label>
-        <input type="password" class="form-input" id="resetPassword2" placeholder="••••••••" onkeydown="if(event.key==='Enter'){event.preventDefault();handleResetPassword();}">
+        <input type="password" class="form-input" id="resetPassword2" aria-label="تأكيد كلمة المرور الجديدة" placeholder="••••••••" autocomplete="new-password" required minlength="6" onkeydown="if(event.key==='Enter'){event.preventDefault();handleResetPassword();}">
       </div>
 
       <button class="btn btn-primary" onclick="handleResetPassword()" data-i18n="updatePassword">تحديث كلمة المرور</button>
@@ -1911,17 +1911,17 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 
       <div class="form-group">
         <label data-i18n="fullName">الاسم الكامل</label>
-        <input type="text" class="form-input" id="signupName" placeholder="عاطف المعمدي" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signupEmail').focus();}">
+        <input type="text" class="form-input" id="signupName" aria-label="الاسم الكامل" placeholder="عاطف المعمدي" autocomplete="name" required onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signupEmail').focus();}">
       </div>
 
       <div class="form-group">
         <label data-i18n="email">البريد الإلكتروني</label>
-        <input type="email" class="form-input" id="signupEmail" placeholder="you@example.com" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signupPassword').focus();}">
+        <input type="email" class="form-input" id="signupEmail" aria-label="البريد الإلكتروني" placeholder="you@example.com" autocomplete="email" required onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signupPassword').focus();}">
       </div>
 
       <div class="form-group">
         <label data-i18n="password">كلمة المرور (6+ أحرف)</label>
-        <input type="password" class="form-input" id="signupPassword" placeholder="••••••••" onkeydown="if(event.key==='Enter'){event.preventDefault();handleSignup();}">
+        <input type="password" class="form-input" id="signupPassword" aria-label="كلمة المرور" placeholder="••••••••" autocomplete="new-password" required minlength="6" onkeydown="if(event.key==='Enter'){event.preventDefault();handleSignup();}">
       </div>
 
       <button class="btn btn-primary" onclick="handleSignup()" data-i18n="createAccount">إنشاء الحساب</button>
@@ -2872,7 +2872,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
     <div class="form-group">
       <label>📷 صورة الغلاف (اختياري)</label>
       <div id="coverImagePreview" style="display:none;margin-bottom:10px">
-        <img id="coverImg" style="max-width:100%;max-height:200px;border-radius:10px;display:block">
+        <img id="coverImg" alt="صورة الغلاف" style="max-width:100%;max-height:200px;border-radius:10px;display:block">
         <button type="button" onclick="clearCoverImage()" style="margin-top:6px;background:#fee2e2;color:#dc2626;border:none;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">✕ حذف الصورة</button>
       </div>
       <button type="button" onclick="uploadMsgCover()" id="uploadCoverBtn" style="background:#f0fdf4;color:#15803d;border:1px dashed #bbf7d0;padding:10px 16px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;width:100%">📷 إضافة صورة غلاف</button>
@@ -3836,7 +3836,7 @@ async function recoverMyInviteLink(btn) {
             <div style="font-size:30px;margin-bottom:6px">✅</div>
             <div style="font-weight:700;margin-bottom:6px;font-size:14px">لديك حساب بالفعل!</div>
             <div style="font-size:12px;margin-bottom:12px;color:#065f46">سجّل دخولك أدناه، أو اضغط الزر لإنشاء كلمة مرور جديدة:</div>
-            <button onclick="sendResetForInvitedUser('${email}', this)" 
+            <button onclick="sendResetForInvitedUser('${escapeHTML(email)}', this)" 
               style="width:100%;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:10px 24px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer">
               🔑 إرسال رابط كلمة مرور جديدة
             </button>
@@ -4316,9 +4316,9 @@ async function loadAccountSettings() {
 async function onAuthSuccess(user) {
   currentUser = user;
   
-  // Ensure profile exists - only insert if missing, never overwrite
+  // Ensure profile exists - upsert prevents duplicate key errors in DB logs
   try {
-    await sb.from('profiles').insert({
+    await sb.from('profiles').upsert({
       id: user.id,
       email: user.email,
       full_name: user.user_metadata?.full_name || user.email.split('@')[0],
@@ -4326,7 +4326,7 @@ async function onAuthSuccess(user) {
       status: 'active',
       platform_role: 'member',
       profile_completed: false
-    }).select().maybeSingle();
+    }, { onConflict: 'id', ignoreDuplicates: true }).select().maybeSingle();
   } catch(e) {
     // Profile already exists - that's fine, ignore error
   }
@@ -11495,7 +11495,7 @@ async function init() {
                   إذا تذكرت كلمة المرور، سجّل دخولك أدناه.<br>
                   أو اضغط الزر التالي لإرسال رابط لإنشاء كلمة مرور جديدة:
                 </div>
-                <button onclick="sendResetForInvitedUser('${inviteInfo.email}', this)" style="background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:12px 24px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;width:100%">
+                <button onclick="sendResetForInvitedUser('${escapeHTML(inviteInfo.email)}', this)" style="background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:12px 24px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;width:100%">
                   🔑 إرسال رابط إنشاء كلمة مرور جديدة
                 </button>
               </div>
