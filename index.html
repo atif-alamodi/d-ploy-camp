@@ -1432,17 +1432,43 @@ textarea.form-input { min-height: 100px; resize: vertical; font-family: inherit;
   .sidebar {
     position: fixed;
     right: -280px;
-    z-index: 200;
+    z-index: 1000;
     transition: right 0.3s;
   }
   body.ltr .sidebar { right: auto; left: -280px; transition: left 0.3s; }
   .sidebar.open { right: 0; }
   body.ltr .sidebar.open { left: 0; }
+  
+  /* Backdrop overlay for mobile/tablet sidebar */
+  .sidebar-backdrop {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(26, 22, 37, 0.45);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    z-index: 999;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .sidebar-backdrop.active {
+    display: block;
+    opacity: 1;
+  }
+  
   .main-content { max-width: 100vw; padding: 20px; }
   .mobile-menu-btn { display: flex; align-items: center; justify-content: center; }
   .page-title { font-size: 24px; }
   .hero-card { padding: 24px; }
   .hero-name { font-size: 22px; }
+}
+
+/* Hide backdrop on desktop completely */
+@media (min-width: 901px) {
+  .sidebar-backdrop { display: none !important; }
 }
 
 /* === Invite acceptance === */
@@ -1972,6 +1998,8 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 
 <!-- Main App -->
 <div id="appScreen" class="app-wrap hidden">
+  <!-- Sidebar backdrop for mobile/tablet — closes sidebar when tapped -->
+  <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="closeSidebarOnMobile()"></div>
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <div class="sidebar-brand-icon">🏕️</div>
@@ -3954,9 +3982,54 @@ function initials(name) {
   return (parts[0].charAt(0) + parts[parts.length-1].charAt(0)).toUpperCase();
 }
 
+// ============================================
+// SIDEBAR CONTROL (mobile + tablet)
+// ============================================
 function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('open');
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  if (!sidebar) return;
+  const isOpen = sidebar.classList.toggle('open');
+  if (backdrop) {
+    if (isOpen) backdrop.classList.add('active');
+    else backdrop.classList.remove('active');
+  }
+  // Prevent body scroll when sidebar is open on mobile
+  if (window.matchMedia('(max-width: 900px)').matches) {
+    document.body.style.overflow = isOpen ? 'hidden' : '';
+  }
 }
+
+// Close sidebar — used after item click on mobile/tablet
+function closeSidebarOnMobile() {
+  // Only close on mobile/tablet (≤ 900px). Desktop sidebar stays visible.
+  if (!window.matchMedia('(max-width: 900px)').matches) return;
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  if (sidebar) sidebar.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+// ESC key closes the sidebar on mobile
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar && sidebar.classList.contains('open')) {
+      closeSidebarOnMobile();
+    }
+  }
+});
+
+// On resize: if window grows past mobile breakpoint, ensure sidebar state is clean
+window.addEventListener('resize', () => {
+  if (!window.matchMedia('(max-width: 900px)').matches) {
+    // Desktop view: hide backdrop and restore scroll
+    const backdrop = document.getElementById('sidebarBackdrop');
+    if (backdrop) backdrop.classList.remove('active');
+    document.body.style.overflow = '';
+  }
+});
 
 // ============================================
 // AUTH
@@ -5346,6 +5419,8 @@ document.addEventListener('click', function(e) {
 }, true); // Use capture phase to catch before any other handlers
 
 async function openProject(id) {
+  // Auto-close sidebar on mobile/tablet when opening a project
+  closeSidebarOnMobile();
   
   try {
     // Defensive: ensure required globals exist
@@ -8714,6 +8789,8 @@ async function restoreNavState() {
 }
 
 function showPage(page) {
+  // Auto-close sidebar on mobile/tablet when navigating
+  closeSidebarOnMobile();
   document.querySelectorAll('.page-content').forEach(p => p.classList.add('hidden'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   if (page === 'home') {
