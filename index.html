@@ -3,6 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#ff6b35">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="D-Ploy">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="favicon.ico">
 <title>D-Ploy Camp - إدارة المشاريع الجامعية</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -3110,6 +3116,34 @@ window.addEventListener('unhandledrejection', function(ev) {
   }
   ev.preventDefault();
 });
+
+// ============================================
+// SERVICE WORKER REGISTRATION (PWA + Push)
+// Enables: offline shell, install on home screen, push notifications
+// ============================================
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js', { scope: './' })
+      .then(reg => {
+        console.log('[SW] registered, scope:', reg.scope);
+        
+        // Listen for messages from SW (e.g., notification clicks)
+        navigator.serviceWorker.addEventListener('message', (event) => {
+          if (event.data?.type === 'notification-click') {
+            const data = event.data.data || {};
+            // Mark notification as read
+            if (data.notif_id && typeof sb !== 'undefined') {
+              sb.from('notifications').update({ 
+                read: true, 
+                read_at: new Date().toISOString() 
+              }).eq('id', data.notif_id).then(() => {});
+            }
+          }
+        });
+      })
+      .catch(err => console.warn('[SW] registration failed:', err));
+  });
+}
 
 let currentUser = null;
 let currentProfile = null;
@@ -6668,6 +6702,9 @@ async function sendMentionNotifications(userIds, contextType, contextId, content
   const projectName = activeProject?.name || 'مشروع';
   const shortContent = (content || '').substring(0, 100);
   
+  // Detect if this message contains @all (look at any active mention input)
+  const isAllMention = /(^|\s)@all(\s|$)/.test(content || '');
+  
   const contextLabels = {
     todo_comment: 'تعليق على مهمة',
     msg_comment: 'تعليق على إعلان',
@@ -6675,21 +6712,53 @@ async function sendMentionNotifications(userIds, contextType, contextId, content
     campfire: 'محادثة Campfire'
   };
   
-  const notifs = userIds
-    .filter(uid => uid && uid !== currentUser?.id) // don't notify self
-    .map(uid => ({
-      user_id: uid,
-      title: `📣 ${senderName} ذكرك في ${contextLabels[contextType] || 'محادثة'}`,
-      body: `في ${projectName}: ${shortContent}`,
-      related_type: contextType,
-      related_id: contextId
-    }));
+  // De-dup and exclude self
+  const targetIds = [...new Set(userIds.filter(uid => uid && uid !== currentUser?.id))];
+  if (targetIds.length === 0) return;
   
-  if (notifs.length === 0) return;
+  const titlePrefix = isAllMention ? '📢' : '📣';
+  const verb = isAllMention 
+    ? (currentLang === 'ar' ? 'نادى الجميع' : 'mentioned @all')
+    : (currentLang === 'ar' ? 'ذكرك' : 'mentioned you');
   
+  const notifs = targetIds.map(uid => ({
+    user_id: uid,
+    title: `${titlePrefix} ${senderName} ${verb} في ${contextLabels[contextType] || 'محادثة'}`,
+    body: `في ${projectName}: ${shortContent}`,
+    related_type: contextType,
+    related_id: contextId
+  }));
+  
+  // 1. Insert in-app notifications (synchronous, fast)
   try {
     await sb.from('notifications').insert(notifs);
   } catch(e) { console.warn('Mention notifications failed:', e); }
+  
+  // 2. Send emails via Edge Function (fire-and-forget, parallel)
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.access_token) {
+      targetIds.forEach(uid => {
+        fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            type: isAllMention ? 'mention_all' : 'mention',
+            targetUserId: uid,
+            senderName,
+            projectName,
+            content: shortContent,
+            projectId: activeProject?.id,
+            contextType,
+            contextId
+          })
+        }).catch(() => { /* silent fail - in-app notif still works */ });
+      });
+    }
+  } catch(e) { /* silent - email is secondary to in-app */ }
 }
 
 // Auto-load comment counts for all visible todos
@@ -10047,6 +10116,27 @@ function showUniversalMentionDropdown(ta) {
   dd.innerHTML = mentionFilteredMembers.slice(0, 8).map((m, i) => {
     const initial = (m.name || '?').charAt(0).toUpperCase();
     const active = i === mentionIndex;
+    
+    // Special rendering for @all
+    if (m.isAll) {
+      const allText = currentLang === 'ar' ? 'مناداة الجميع' : 'Notify everyone';
+      const countLabel = currentLang === 'ar' ? `${m.memberCount} عضو` : `${m.memberCount} members`;
+      return `
+        <div class="mention-item ${active ? 'active' : ''}" 
+          data-mention-index="${i}"
+          style="display:flex;align-items:center;gap:10px;padding:10px;cursor:pointer;border-radius:10px;border-bottom:1px solid #fce7f3;margin-bottom:4px;${active ? 'background:#fdf2f8;border:1px solid #f9a8d4' : ''}"
+          onmouseover="this.style.background='#fdf2f8'"
+          onmouseout="this.style.background='${active ? '#fdf2f8' : 'transparent'}'"
+          onclick="insertUniversalMention('__all__', '${(m.name || '').replace(/'/g, '\\u0027')}')">
+          <div style="width:32px;height:32px;background:linear-gradient(135deg,#6c4ef5,#f7468a);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0">📢</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;color:#6c4ef5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@all</div>
+            <div style="font-size:11px;color:#7c3aed;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${allText} (${countLabel})</div>
+          </div>
+        </div>
+      `;
+    }
+    
     return `
       <div class="mention-item ${active ? 'active' : ''}" 
         data-mention-index="${i}"
@@ -10091,6 +10181,19 @@ async function handleMentionDetect(ta) {
     (m.name || '').toLowerCase().includes(mentionQuery) || 
     (m.email || '').toLowerCase().includes(mentionQuery)
   );
+  
+  // Add @all special option at top if query matches "a", "al", "all" or empty
+  if (mentionMembers.length > 1 && ('all'.startsWith(mentionQuery) || mentionQuery === '')) {
+    const allLabel = currentLang === 'ar' ? 'الكل (مناداة كل الأعضاء)' : 'Everyone in this conversation';
+    mentionFilteredMembers.unshift({
+      id: '__all__',
+      name: allLabel,
+      email: '',
+      isAll: true,
+      memberCount: mentionMembers.length
+    });
+  }
+  
   mentionIndex = 0;
   
   showUniversalMentionDropdown(ta);
@@ -10105,8 +10208,12 @@ function insertUniversalMention(userId, name) {
   const before = val.substring(0, cursor);
   const after = val.substring(cursor);
   
-  // Replace @query with @name (use the name as-is, no space encoding)
-  const newBefore = before.replace(/@([\u0600-\u06FFa-zA-Z0-9_]*)$/, '@' + name + ' ');
+  // Special handling for @all
+  const isAll = (userId === '__all__');
+  const displayText = isAll ? 'all' : name;
+  
+  // Replace @query with @displayText (use as-is, no space encoding)
+  const newBefore = before.replace(/@([\u0600-\u06FFa-zA-Z0-9_]*)$/, '@' + displayText + ' ');
   ta.value = newBefore + after;
   ta.focus();
   
@@ -10116,10 +10223,22 @@ function insertUniversalMention(userId, name) {
   // Store mentioned user IDs on the textarea dataset for notification on send
   if (!ta.dataset.mentions) ta.dataset.mentions = '';
   const existing = ta.dataset.mentions.split(',').filter(Boolean);
-  if (!existing.includes(userId)) {
-    existing.push(userId);
-    ta.dataset.mentions = existing.join(',');
+  
+  if (isAll) {
+    // Add ALL member IDs (excluding the @all sentinel and current user)
+    mentionMembers.forEach(m => {
+      if (m.id && m.id !== '__all__' && m.id !== currentUser?.id && !existing.includes(m.id)) {
+        existing.push(m.id);
+      }
+    });
+    // Mark that this message contains @all (for analytics / visual badge)
+    ta.dataset.hasMentionAll = '1';
+  } else {
+    if (!existing.includes(userId)) {
+      existing.push(userId);
+    }
   }
+  ta.dataset.mentions = existing.join(',');
   
   // Trigger input event so any listeners react
   ta.dispatchEvent(new Event('input', { bubbles: true }));
@@ -10296,25 +10415,53 @@ function subscribeNotifications() {
       table: 'notifications',
       filter: 'user_id=eq.' + currentUser.id
     }, async (payload) => {
-      // Play sound
-      playNotificationSound();
+      const n = payload.new || {};
+      const isMention = (n.title || '').includes('📣') || (n.title || '').includes('📢') || n.related_type === 'mention';
+      const isAllMention = (n.title || '').includes('📢');
+      const tabHidden = document.hidden;
       
-      // Show in-app toast
-      if (payload.new.title) {
-        const notifTitle = payload.new.title;
-        const notifBody = (payload.new.body || '').substring(0, 80);
+      // Play sound (throttled, only when tab visible to avoid sneaky audio)
+      if (!tabHidden) playNotificationSound();
+      
+      // Show in-app toast (always)
+      if (n.title) {
+        const notifTitle = n.title;
+        const notifBody = (n.body || '').substring(0, 80);
         toast('🔔 ' + notifTitle + (notifBody ? ': ' + notifBody : ''));
       }
       
-      // Try browser notification (works only after permission)
+      // Try browser/desktop notification — works only after permission
       try {
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          new Notification(payload.new.title || 'D-Ploy Camp', {
-            body: (payload.new.body || '').substring(0, 120),
-            icon: '/d-ploy-camp/favicon.ico'
+          const notif = new Notification(n.title || 'D-Ploy Camp', {
+            body: (n.body || '').substring(0, 160),
+            icon: 'https://atif-alamodi.github.io/d-ploy-camp/favicon.ico',
+            badge: 'https://atif-alamodi.github.io/d-ploy-camp/favicon.ico',
+            tag: 'dploy-' + (n.id || Date.now()),  // groups same notif if duplicated
+            requireInteraction: isAllMention,       // @all stays until clicked
+            silent: false,
+            data: {
+              notif_id: n.id,
+              project_id: n.project_id || null,
+              related_type: n.related_type || null,
+              related_id: n.related_id || null
+            }
           });
+          
+          // Clicking the notification focuses the window
+          notif.onclick = function() {
+            window.focus();
+            this.close();
+            // Mark as read on click
+            if (n.id) {
+              sb.from('notifications').update({ read: true, read_at: new Date().toISOString() }).eq('id', n.id).then(() => {});
+            }
+          };
         }
       } catch(e) {}
+      
+      // Update favicon/title to show unread count (visual indicator)
+      try { updateUnreadFavicon(); } catch(e) {}
       
       // Refresh side panel and badge
       try { await updateNotificationBadge(); } catch(e) {}
@@ -10330,11 +10477,31 @@ function subscribeNotifications() {
   // Initial badge update
   try { updateNotificationBadge(); } catch(e) {}
   
-  // Request browser notification permission once
+  // Request browser notification permission once (after 2s warm-up)
   try {
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
       setTimeout(() => Notification.requestPermission(), 2000);
     }
+  } catch(e) {}
+  
+  // When tab becomes visible again, refresh badge in case missed events
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      try { updateNotificationBadge(); } catch(e) {}
+    }
+  });
+}
+
+// Update browser tab title with unread count
+async function updateUnreadFavicon() {
+  if (!currentUser?.id) return;
+  try {
+    const { count } = await sb.from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', currentUser.id)
+      .is('read_at', null);
+    const baseTitle = 'D-Ploy Camp';
+    document.title = (count && count > 0) ? `(${count}) ${baseTitle}` : baseTitle;
   } catch(e) {}
 }
 
