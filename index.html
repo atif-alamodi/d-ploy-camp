@@ -985,6 +985,39 @@ body.ltr .nav-item.active::before { right: auto; left: -20px; border-radius: 0 4
 .priority-high { background: #fef3c7; color: #92400e; }
 .priority-urgent { background: #fee2e2; color: #991b1b; }
 
+/* Todo Filter Chips (industry-standard filter bar) */
+.todo-filter-chip {
+  background: rgba(255,255,255,0.6);
+  border: 1px solid rgba(0,0,0,0.06);
+  padding: 6px 14px;
+  border-radius: 50px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.todo-filter-chip:hover {
+  background: #fef7f0;
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.todo-filter-chip.active {
+  background: linear-gradient(135deg, #ff6b35, #f7468a);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(255,107,53,0.3);
+}
+
+/* Visual priority indicator on todo items (industry-standard) */
+.todo-item[data-priority="urgent"] { border-right: 4px solid #ef4444; }
+.todo-item[data-priority="high"] { border-right: 4px solid #f97316; }
+.todo-item[data-priority="low"] { border-right: 4px solid #94a3b8; }
+body.ltr .todo-item[data-priority="urgent"] { border-right: none; border-left: 4px solid #ef4444; }
+body.ltr .todo-item[data-priority="high"] { border-right: none; border-left: 4px solid #f97316; }
+body.ltr .todo-item[data-priority="low"] { border-right: none; border-left: 4px solid #94a3b8; }
+
 /* === Message items === */
 .message-card {
   background: var(--bg-elevated);
@@ -2008,6 +2041,22 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
         🔔
         <span class="notif-badge" id="notifBadge" style="display:none">0</span>
       </div>
+    </div>
+
+    <!-- Global Search Bar -->
+    <div style="padding:0 16px 12px;position:relative">
+      <div style="position:relative">
+        <input 
+          type="search" 
+          id="globalSearchInput"
+          placeholder="🔍 بحث في كل شيء..."
+          aria-label="بحث شامل"
+          autocomplete="off"
+          oninput="handleGlobalSearch(this.value)"
+          onkeydown="if(event.key==='Escape'){this.value='';closeSearchResults();this.blur();}"
+          style="width:100%;padding:9px 14px;border-radius:50px;border:1px solid rgba(0,0,0,0.08);background:rgba(255,255,255,0.7);font-size:13px;outline:none;transition:all 0.2s">
+      </div>
+      <div id="globalSearchResults" style="display:none;position:absolute;top:42px;left:16px;right:16px;background:#fff;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,0.15);max-height:60vh;overflow-y:auto;z-index:1500"></div>
     </div>
 
     <div class="nav-section">
@@ -3981,6 +4030,166 @@ function initials(name) {
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
   return (parts[0].charAt(0) + parts[parts.length-1].charAt(0)).toUpperCase();
 }
+
+// ============================================
+// TODO FILTERING (industry-standard filter bar)
+// ============================================
+function applyTodoFilter(filterType) {
+  // Update active chip
+  document.querySelectorAll('.todo-filter-chip').forEach(c => c.classList.remove('active'));
+  const activeChip = document.querySelector(`.todo-filter-chip[data-filter="${filterType}"]`);
+  if (activeChip) activeChip.classList.add('active');
+  
+  // Filter all visible todo items
+  const todoItems = document.querySelectorAll('.todo-item');
+  const today = new Date().toISOString().split('T')[0];
+  let visibleCount = 0;
+  
+  todoItems.forEach(item => {
+    // Read data from DOM (these are present from render)
+    const isCompleted = item.classList.contains('completed');
+    const priorityBadge = item.querySelector('.priority-badge');
+    const priority = priorityBadge ? Array.from(priorityBadge.classList)
+      .find(c => c.startsWith('priority-') && c !== 'priority-badge')
+      ?.replace('priority-', '') : 'normal';
+    
+    // Check assignee (text content of avatar/name)
+    const itemText = item.textContent || '';
+    const isMine = currentUser?.id && (
+      itemText.includes(currentProfile?.full_name || '___') ||
+      itemText.includes(currentProfile?.email?.split('@')[0] || '___')
+    );
+    
+    // Check overdue (look for date badge)
+    const dateText = item.querySelector('.todo-meta')?.textContent || '';
+    let isOverdue = false;
+    const dateMatch = dateText.match(/(\d{4}-\d{2}-\d{2})/);
+    if (dateMatch && !isCompleted) {
+      isOverdue = dateMatch[1] < today;
+    }
+    
+    let show = true;
+    switch (filterType) {
+      case 'all': show = true; break;
+      case 'open': show = !isCompleted; break;
+      case 'completed': show = isCompleted; break;
+      case 'mine': show = isMine && !isCompleted; break;
+      case 'urgent': show = priority === 'urgent' && !isCompleted; break;
+      case 'overdue': show = isOverdue; break;
+    }
+    
+    item.style.display = show ? '' : 'none';
+    if (show) visibleCount++;
+  });
+  
+  // Hide empty todo lists
+  document.querySelectorAll('.todo-list-card').forEach(list => {
+    const visibleTodos = list.querySelectorAll('.todo-item:not([style*="display: none"])');
+    list.style.opacity = visibleTodos.length === 0 ? '0.4' : '1';
+  });
+  
+  // Update count
+  const countEl = document.getElementById('todoFilterCount');
+  if (countEl) countEl.textContent = `${visibleCount} مهمة معروضة`;
+}
+
+// ============================================
+// GLOBAL SEARCH (industry-standard cross-content search)
+// ============================================
+let globalSearchTimer = null;
+async function handleGlobalSearch(query) {
+  // Debounce: wait 300ms after user stops typing
+  clearTimeout(globalSearchTimer);
+  
+  const resultsBox = document.getElementById('globalSearchResults');
+  if (!resultsBox) return;
+  
+  const trimmed = (query || '').trim();
+  if (trimmed.length < 2) {
+    closeSearchResults();
+    return;
+  }
+  
+  globalSearchTimer = setTimeout(async () => {
+    try {
+      const { data, error } = await sb.rpc('global_search', { p_query: trimmed, p_limit: 20 });
+      if (error) {
+        console.warn('Search error:', error);
+        return;
+      }
+      renderSearchResults(data);
+    } catch (e) {
+      console.warn('Search failed:', e);
+    }
+  }, 300);
+}
+
+function renderSearchResults(data) {
+  const box = document.getElementById('globalSearchResults');
+  if (!box || !data) return;
+  
+  const results = data.results || [];
+  
+  if (results.length === 0) {
+    box.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">لا توجد نتائج لـ "${escapeHTML(data.query || '')}"</div>`;
+    box.style.display = 'block';
+    return;
+  }
+  
+  const typeIcons = { todo: '✅', message: '💬', project: '📁', file: '📎' };
+  const typeNames = { todo: 'مهمة', message: 'رسالة', project: 'مشروع', file: 'ملف' };
+  const priorityColors = { urgent: '#ef4444', high: '#f97316', normal: '#6b7280', low: '#9ca3af' };
+  
+  box.innerHTML = `
+    <div style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-size:11px;color:var(--text-muted);font-weight:600">
+      ${results.length} نتيجة
+    </div>
+    ${results.map(r => `
+      <div onclick="openSearchResult('${r.type}', '${r.id}', '${r.project_id || ''}')" 
+           style="padding:10px 14px;border-bottom:1px solid #f8fafc;cursor:pointer;transition:background 0.15s"
+           onmouseover="this.style.background='#fef7f0'" 
+           onmouseout="this.style.background='transparent'">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span style="font-size:16px">${typeIcons[r.type] || '📄'}</span>
+          <span style="font-size:11px;color:var(--text-muted);font-weight:600">${typeNames[r.type] || r.type}</span>
+          ${r.priority && r.priority !== 'normal' ? `<span style="background:${priorityColors[r.priority]};color:#fff;font-size:9px;padding:2px 6px;border-radius:6px;font-weight:700">${r.priority}</span>` : ''}
+          ${r.status === 'completed' ? '<span style="color:#22c55e;font-size:10px">✓ مكتمل</span>' : ''}
+        </div>
+        <div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:2px">${escapeHTML(r.title || '(بدون عنوان)')}</div>
+        ${r.snippet ? `<div style="font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(r.snippet)}</div>` : ''}
+        ${r.project_name && r.type !== 'project' ? `<div style="font-size:10px;color:#6c4ef5;margin-top:3px">📁 ${escapeHTML(r.project_name)}</div>` : ''}
+      </div>
+    `).join('')}
+  `;
+  box.style.display = 'block';
+}
+
+function openSearchResult(type, id, projectId) {
+  closeSearchResults();
+  document.getElementById('globalSearchInput').value = '';
+  
+  if (type === 'project') {
+    openProject(id);
+  } else if (projectId) {
+    openProject(projectId);
+    // Could add deep-link to specific item later
+  }
+}
+
+function closeSearchResults() {
+  const box = document.getElementById('globalSearchResults');
+  if (box) box.style.display = 'none';
+}
+
+// Close search results when clicking outside
+document.addEventListener('click', (e) => {
+  const box = document.getElementById('globalSearchResults');
+  const input = document.getElementById('globalSearchInput');
+  if (!box || !input) return;
+  if (!box.contains(e.target) && e.target !== input) {
+    closeSearchResults();
+  }
+});
 
 // ============================================
 // SIDEBAR CONTROL (mobile + tablet)
@@ -6380,6 +6589,19 @@ async function renderTodos(container) {
         <h3 class="section-title"><span class="section-icon" style="background:#fef3c7">📋</span> ${t('todos')}</h3>
         <button class="btn btn-primary" onclick="showNewTodoListModal()">➕ ${t('addList')}</button>
       </div>
+      
+      <!-- Filter & Sort Bar (industry-standard) -->
+      <div class="todos-filter-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 0 16px;border-bottom:1px solid #f1f5f9;margin-bottom:16px">
+        <span style="font-size:12px;color:var(--text-muted);font-weight:600;margin-left:4px">عرض:</span>
+        <button class="todo-filter-chip active" data-filter="all" onclick="applyTodoFilter('all')">الكل</button>
+        <button class="todo-filter-chip" data-filter="open" onclick="applyTodoFilter('open')">📌 المفتوحة</button>
+        <button class="todo-filter-chip" data-filter="mine" onclick="applyTodoFilter('mine')">👤 مهامي</button>
+        <button class="todo-filter-chip" data-filter="urgent" onclick="applyTodoFilter('urgent')">🔥 عاجلة</button>
+        <button class="todo-filter-chip" data-filter="overdue" onclick="applyTodoFilter('overdue')">⚠️ متأخرة</button>
+        <button class="todo-filter-chip" data-filter="completed" onclick="applyTodoFilter('completed')">✅ مكتملة</button>
+        <span style="flex:1"></span>
+        <span style="font-size:11px;color:var(--text-muted)" id="todoFilterCount">${(todos || []).length} مهمة</span>
+      </div>
   `;
 
   if (!lists || lists.length === 0) {
@@ -6545,6 +6767,7 @@ function renderTodoCard(td, assignees) {
   
   return `
     <div class="todo-item ${td.completed ? 'completed' : ''}" 
+      data-priority="${td.priority || 'normal'}"
       ondragover="event.preventDefault();this.style.borderColor='var(--primary)';this.style.background='var(--primary-light)'"
       ondragleave="this.style.borderColor='';this.style.background=''"
       ondrop="handleTodoFileDrop(event,'${td.id}')">
