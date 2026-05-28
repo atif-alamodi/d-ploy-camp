@@ -6488,168 +6488,85 @@ async function uploadTodoAttachments(todoId, files) {
 // ============================================
 // PROGRESS EDITOR
 // ============================================
-// INLINE TASK FIELD EDITING (title, description, dates, priority, hours, layer)
+// TASK DETAIL PAGE - EDIT MODE (toggle-based editing)
 // ============================================
 
-// Generic field updater - validates, updates DB, refreshes UI
-async function updateTodoField(todoId, field, value) {
+function enterTodoEditMode(todoId) {
+  window.__todoEditMode = true;
+  showTodoDetailPage(todoId);
+}
+
+async function cancelTodoEdits(todoId) {
+  window.__todoEditMode = false;
+  await showTodoDetailPage(todoId);
+}
+
+async function saveTodoEdits(todoId) {
   try {
-    const updates = { [field]: value };
+    // Collect all the values from the edit form
+    const title = (document.getElementById('editTitleInput')?.value || '').trim();
+    const description = (document.getElementById('editDescInput')?.value || '').trim();
+    const startDate = document.getElementById('editStartDate')?.value || null;
+    const dueDate = document.getElementById('editDueDate')?.value || null;
+    const priority = document.getElementById('editPriority')?.value || 'normal';
+    const hours = parseInt(document.getElementById('editHours')?.value) || 8;
+    const layerId = document.getElementById('editLayer')?.value || null;
+    
+    // Validation
+    if (!title) {
+      toast('⚠️ العنوان لا يمكن أن يكون فارغاً');
+      document.getElementById('editTitleInput')?.focus();
+      return;
+    }
+    
+    if (startDate && dueDate && new Date(dueDate) < new Date(startDate)) {
+      toast('⚠️ تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء');
+      return;
+    }
+    
+    // Show saving indicator on the save button
+    const saveBtns = document.querySelectorAll('button[onclick*="saveTodoEdits"]');
+    saveBtns.forEach(b => { b.disabled = true; b.textContent = '⏳ جاري الحفظ...'; });
+    
+    // Build the update object
+    const updates = {
+      title,
+      description: description || null,
+      start_date: startDate || null,
+      due_date: dueDate || null,
+      priority,
+      estimated_hours: hours,
+      layer_id: layerId || null
+    };
+    
     const { error } = await sb.from('todos').update(updates).eq('id', todoId);
+    
     if (error) {
       toast('❌ ' + error.message);
+      saveBtns.forEach(b => { b.disabled = false; b.textContent = '💾 حفظ'; });
       return;
     }
     
-    // Show subtle confirmation
-    toast(`✅ تم التحديث`);
+    toast('✅ تم حفظ جميع التغييرات');
     
-    // Refresh detail page to reflect changes
-    if (currentDetailTodoId === todoId) {
-      await showTodoDetailPage(todoId);
-    }
-    
-    // Also refresh the list view in background
-    if (activeTab === 'todos') {
-      try { await loadProjectTab('todos'); } catch(e) {}
-    }
-  } catch(e) {
-    toast('❌ ' + e.message);
-  }
-}
-
-// Inline-edit title or description (text fields)
-function editTodoField(todoId, field) {
-  const elId = field === 'title' ? `editableTitle-${todoId}` : `editableDesc-${todoId}`;
-  const el = document.getElementById(elId);
-  if (!el) return;
-  
-  // Get current value from data (we need to refetch since DOM may have placeholder)
-  sb.from('todos').select(field).eq('id', todoId).maybeSingle().then(({ data }) => {
-    if (!data) return;
-    const currentValue = data[field] || '';
-    
-    // Replace with input/textarea
-    const isTitle = field === 'title';
-    const inputHtml = isTitle ? `
-      <input type="text" id="inlineEdit-${field}-${todoId}" value="${escapeHTML(currentValue)}" 
-        style="width:100%;padding:6px 10px;font-size:24px;font-weight:900;border:2px solid #ff6b35;border-radius:10px;outline:none;font-family:inherit"
-        onblur="saveInlineEdit('${todoId}','${field}')"
-        onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}else if(event.key==='Escape'){cancelInlineEdit('${todoId}','${field}')}">
-    ` : `
-      <textarea id="inlineEdit-${field}-${todoId}" rows="3"
-        style="width:100%;padding:8px 12px;font-size:14px;border:2px solid #ff6b35;border-radius:10px;outline:none;font-family:inherit;resize:vertical;line-height:1.7"
-        onblur="saveInlineEdit('${todoId}','${field}')"
-        onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();this.blur()}else if(event.key==='Escape'){cancelInlineEdit('${todoId}','${field}')}">${escapeHTML(currentValue)}</textarea>
-      <div style="font-size:10px;color:#9ca3af;margin-top:4px">Ctrl+Enter للحفظ • Esc للإلغاء</div>
-    `;
-    
-    el.innerHTML = inputHtml;
-    el.style.background = 'transparent';
-    el.style.cursor = 'default';
-    el.onclick = null;
-    el.onmouseover = null;
-    el.onmouseout = null;
-    
-    const input = document.getElementById(`inlineEdit-${field}-${todoId}`);
-    if (input) {
-      input.focus();
-      input.select();
-    }
-  });
-}
-
-// Save inline edit
-async function saveInlineEdit(todoId, field) {
-  const input = document.getElementById(`inlineEdit-${field}-${todoId}`);
-  if (!input) return;
-  
-  const newValue = input.value.trim();
-  
-  // For title, require non-empty
-  if (field === 'title' && !newValue) {
-    toast('⚠️ العنوان لا يمكن أن يكون فارغاً');
-    // Refresh to restore
-    if (currentDetailTodoId === todoId) await showTodoDetailPage(todoId);
-    return;
-  }
-  
-  // Save
-  await updateTodoField(todoId, field, newValue || null);
-}
-
-// Cancel inline edit (refresh the page)
-async function cancelInlineEdit(todoId, field) {
-  if (currentDetailTodoId === todoId) {
+    // Exit edit mode and refresh
+    window.__todoEditMode = false;
     await showTodoDetailPage(todoId);
-  }
-}
-
-// Open date editor (uses progressEditorModal styled differently or new modal)
-function editTodoDates(todoId, currentStart, currentDue) {
-  // Use a simple confirm flow via prompts or build a small inline modal
-  const modal = document.createElement('div');
-  modal.id = 'inlineDateEditModal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
-  modal.innerHTML = `
-    <div style="background:white;border-radius:18px;padding:24px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
-      <h3 style="margin:0 0 16px;font-size:18px;font-weight:700;color:#1f2937">📅 تعديل التواريخ</h3>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-        <div>
-          <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;font-weight:600">▶️ تاريخ البدء</label>
-          <input type="date" id="inlineStartDate" value="${currentStart}" style="width:100%;padding:8px 12px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:14px">
-        </div>
-        <div>
-          <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;font-weight:600">🏁 تاريخ الانتهاء</label>
-          <input type="date" id="inlineDueDate" value="${currentDue}" style="width:100%;padding:8px 12px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:14px">
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button onclick="document.getElementById('inlineDateEditModal').remove()" style="background:transparent;color:#6b7280;border:1px solid #e5e7eb;padding:8px 16px;border-radius:50px;font-weight:600;cursor:pointer">إلغاء</button>
-        <button onclick="saveInlineDates('${todoId}')" style="background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:8px 20px;border-radius:50px;font-weight:700;cursor:pointer">💾 حفظ</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-}
-
-async function saveInlineDates(todoId) {
-  const start = document.getElementById('inlineStartDate')?.value || null;
-  const due = document.getElementById('inlineDueDate')?.value || null;
-  
-  // Validate: due >= start
-  if (start && due && new Date(due) < new Date(start)) {
-    toast('⚠️ تاريخ الانتهاء يجب أن يكون بعد البداية');
-    return;
-  }
-  
-  try {
-    const { error } = await sb.from('todos').update({
-      start_date: start || null,
-      due_date: due || null
-    }).eq('id', todoId);
     
-    if (error) {
-      toast('❌ ' + error.message);
-      return;
-    }
-    
-    const modal = document.getElementById('inlineDateEditModal');
-    if (modal) modal.remove();
-    
-    toast('✅ تم تحديث التواريخ');
-    
-    if (currentDetailTodoId === todoId) {
-      await showTodoDetailPage(todoId);
-    }
+    // Refresh list in background
     if (activeTab === 'todos') {
       try { await loadProjectTab('todos'); } catch(e) {}
     }
   } catch(e) {
     toast('❌ ' + e.message);
+    const saveBtns = document.querySelectorAll('button[onclick*="saveTodoEdits"]');
+    saveBtns.forEach(b => { b.disabled = false; b.textContent = '💾 حفظ'; });
   }
 }
 
+// ============================================
+// PROGRESS EDITOR
+// ============================================
 function openProgressEditor(todoId, currentProgress) {
   document.getElementById('progressTodoId').value = todoId;
   document.getElementById('progressSlider').value = currentProgress || 0;
@@ -12346,6 +12263,10 @@ async function showTodoDetail(todoId) {
 let currentDetailTodoId = null;
 
 async function showTodoDetailPage(todoId) {
+  // If opening a different todo, reset edit mode (don't preserve across navigations)
+  if (currentDetailTodoId !== todoId) {
+    window.__todoEditMode = false;
+  }
   currentDetailTodoId = todoId;
   
   // Fetch full todo with all relations (with fallback)
@@ -12401,11 +12322,12 @@ async function showTodoDetailPage(todoId) {
   };
   const pc = priorityColors[todo.priority] || priorityColors.normal;
   
-  // Permissions
-  const isAssignee = (assignees || []).some(a => a.user_id === currentUser?.id);
-  const canEdit = currentProfile?.is_super_admin || todo.created_by === currentUser?.id || isAssignee || todo.assigned_to === currentUser?.id;
+  // Permissions: super admin, creator, assignees, project members (anyone who can see the project)
+  // Since RLS already allows project_members to view, and we want everyone who opened it to edit:
+  // → Allow super_admin OR creator OR (any active platform user)
+  const canEdit = !!(currentProfile?.is_super_admin || todo.created_by === currentUser?.id || currentUser?.id);
   
-  // Load layers
+  // Load layers (needed for the edit mode select)
   let availableLayers = [];
   try {
     const { data: layers } = await sb.from('project_layers')
@@ -12415,39 +12337,47 @@ async function showTodoDetailPage(todoId) {
     availableLayers = layers || [];
   } catch(e) {}
   
+  // Store data needed by edit mode globally so we can render without refetch
+  window.__currentTodoData = todo;
+  window.__currentTodoAssignees = assignees || [];
+  window.__currentTodoLayers = availableLayers;
+  
+  // Check if we are in edit mode (state persists across renders unless explicitly toggled)
+  const isEditMode = window.__todoEditMode === true;
+  
   const content = document.getElementById('todoDetailContent');
   content.innerHTML = `
     <div class="section-card" style="margin-bottom:20px">
+      <!-- Header with title, status checkbox, and action buttons -->
       <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:16px">
         <div onclick="toggleTodo('${todo.id}', ${!todo.completed}).then(() => showTodoDetailPage('${todo.id}'))" 
           style="width:32px;height:32px;border:2.5px solid ${todo.completed ? '#10b981' : '#d1d5db'};border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;background:${todo.completed ? '#10b981' : 'transparent'};color:white;font-size:18px;flex-shrink:0;transition:all 0.2s">
           ${todo.completed ? '✓' : ''}
         </div>
-        <div style="flex:1">
-          <!-- EDITABLE Title -->
-          <h2 id="editableTitle-${todo.id}" 
-            style="margin:0 0 4px;font-size:24px;font-weight:900;${todo.completed ? 'text-decoration:line-through;color:#9ca3af' : 'color:#1f2937'};${canEdit ? 'cursor:text' : ''};padding:4px 8px;border-radius:8px;transition:background 0.15s"
-            ${canEdit ? `onclick="editTodoField('${todo.id}','title')"
-              onmouseover="this.style.background='#fff7ed'"
-              onmouseout="this.style.background='transparent'"
-              title="انقر للتعديل"` : ''}>
-            ${escapeHTML(todo.title)}
-            ${canEdit ? '<span style="font-size:13px;color:#ff6b35;opacity:0.5;margin-right:8px">✏️</span>' : ''}
-          </h2>
-          <!-- EDITABLE Description -->
-          <div id="editableDesc-${todo.id}" 
-            style="margin:8px 0 0;color:#6b7280;font-size:14px;line-height:1.7;${canEdit ? 'cursor:text' : ''};padding:6px 8px;border-radius:8px;min-height:30px;transition:background 0.15s;white-space:pre-wrap"
-            ${canEdit ? `onclick="editTodoField('${todo.id}','description')"
-              onmouseover="this.style.background='#fff7ed'"
-              onmouseout="this.style.background='transparent'"
-              title="انقر للتعديل"` : ''}>
-            ${todo.description ? escapeHTML(todo.description) : (canEdit ? '<span style="color:#9ca3af;font-style:italic">انقر لإضافة وصف...</span>' : '<span style="color:#9ca3af">لا يوجد وصف</span>')}
-          </div>
+        <div style="flex:1;min-width:0">
+          ${isEditMode ? `
+            <input type="text" id="editTitleInput" value="${escapeHTML(todo.title)}" 
+              placeholder="عنوان المهمة"
+              style="width:100%;padding:8px 12px;font-size:22px;font-weight:900;border:2px solid #ff6b35;border-radius:10px;outline:none;font-family:inherit;color:#1f2937;background:#fff7ed;margin-bottom:8px">
+            <textarea id="editDescInput" placeholder="وصف المهمة (اختياري)..." rows="3"
+              style="width:100%;padding:8px 12px;font-size:14px;border:1.5px solid #fed7aa;border-radius:10px;outline:none;font-family:inherit;resize:vertical;line-height:1.7;background:white">${escapeHTML(todo.description || '')}</textarea>
+          ` : `
+            <h2 style="margin:0 0 4px;font-size:24px;font-weight:900;${todo.completed ? 'text-decoration:line-through;color:#9ca3af' : 'color:#1f2937'};word-wrap:break-word">${escapeHTML(todo.title)}</h2>
+            ${todo.description ? `<p style="margin:8px 0 0;color:#6b7280;font-size:14px;line-height:1.7;white-space:pre-wrap">${escapeHTML(todo.description)}</p>` : ''}
+          `}
         </div>
-        ${(currentProfile?.is_super_admin || todo.created_by === currentUser?.id) ? 
-          `<button class="btn btn-ghost" onclick="openMoveTodoModal('${todo.id}', \`${(todo.title || '').replace(/`/g, '\\`')}\`, '${todo.created_by}')" 
-            style="padding:8px;font-size:18px" title="نقل لمشروع آخر">📦</button>` : ''}
-        <button class="btn btn-ghost" onclick="toggleReactionPicker(event,'todo','${todo.id}')" style="padding:8px;font-size:18px" title="تفاعل">😊</button>
+        <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;align-items:flex-start">
+          ${isEditMode ? `
+            <button class="btn btn-primary" onclick="saveTodoEdits('${todo.id}')" style="padding:8px 14px;font-size:13px;font-weight:700">💾 حفظ</button>
+            <button class="btn btn-ghost" onclick="cancelTodoEdits('${todo.id}')" style="padding:8px 14px;font-size:13px;color:#6b7280;border:1px solid #e5e7eb">❌ إلغاء</button>
+          ` : `
+            ${canEdit ? `<button class="btn btn-primary" onclick="enterTodoEditMode('${todo.id}')" style="padding:8px 14px;font-size:13px;font-weight:700">✏️ تحرير</button>` : ''}
+            ${(currentProfile?.is_super_admin || todo.created_by === currentUser?.id) ? 
+              `<button class="btn btn-ghost" onclick="openMoveTodoModal('${todo.id}', \`${(todo.title || '').replace(/`/g, '\\`')}\`, '${todo.created_by}')" 
+                style="padding:8px;font-size:18px" title="نقل لمشروع آخر">📦</button>` : ''}
+            <button class="btn btn-ghost" onclick="toggleReactionPicker(event,'todo','${todo.id}')" style="padding:8px;font-size:18px" title="تفاعل">😊</button>
+          `}
+        </div>
       </div>
       
       ${todo.completed && todo.completed_at ? `
@@ -12463,14 +12393,14 @@ async function showTodoDetailPage(todoId) {
       
       <div id="reactions-todo-${todo.id}" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px"></div>
       
-      <!-- EDITABLE Properties grid -->
+      <!-- Properties grid -->
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px">
         
-        <!-- Assignees (editable via picker) -->
+        <!-- Assignees -->
         <div style="background:#fafaf9;padding:12px;border-radius:12px;border:1px solid #f1f5f9">
           <div style="font-size:11px;color:#9ca3af;font-weight:700;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
             <span>👥 الأعضاء المعيّنون</span>
-            ${canEdit ? `<button onclick="openAssigneesPicker('${todo.id}')" style="background:transparent;border:none;color:#ff6b35;cursor:pointer;font-size:11px;font-weight:600">✏️ تعديل</button>` : ''}
+            ${isEditMode ? `<button onclick="openAssigneesPicker('${todo.id}')" style="background:#fff7ed;border:1px solid #fed7aa;color:#ff6b35;cursor:pointer;font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px">✏️ تعديل المعيّنين</button>` : ''}
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
             ${(assignees || []).length === 0 ? '<span style="color:#9ca3af;font-size:12px;font-style:italic">لم يُعيَّن أحد</span>' :
@@ -12484,54 +12414,58 @@ async function showTodoDetailPage(todoId) {
           </div>
         </div>
         
-        <!-- EDITABLE Dates -->
+        <!-- Dates -->
         <div style="background:#fafaf9;padding:12px;border-radius:12px;border:1px solid #f1f5f9">
-          <div style="font-size:11px;color:#9ca3af;font-weight:700;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
-            <span>📅 التواريخ</span>
-            ${canEdit ? `<button onclick="editTodoDates('${todo.id}','${todo.start_date || ''}','${todo.due_date || ''}')" style="background:transparent;border:none;color:#ff6b35;cursor:pointer;font-size:11px;font-weight:600">✏️ تعديل</button>` : ''}
-          </div>
-          <div style="font-size:12px;color:#374151;line-height:1.7">
-            ${todo.start_date ? `▶️ البداية: <strong>${formatDate(todo.start_date)}</strong><br>` : ''}
-            ${todo.due_date ? `🏁 الانتهاء: <strong>${formatDate(todo.due_date)}</strong>` : ''}
-            ${!todo.start_date && !todo.due_date ? '<span style="color:#9ca3af;font-style:italic">لم تُحدّد تواريخ</span>' : ''}
-          </div>
+          <div style="font-size:11px;color:#9ca3af;font-weight:700;margin-bottom:8px">📅 التواريخ</div>
+          ${isEditMode ? `
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <label style="font-size:11px;color:#6b7280;font-weight:600">▶️ تاريخ البدء
+                <input type="date" id="editStartDate" value="${todo.start_date || ''}" style="width:100%;padding:6px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:12px;margin-top:3px">
+              </label>
+              <label style="font-size:11px;color:#6b7280;font-weight:600">🏁 تاريخ الانتهاء
+                <input type="date" id="editDueDate" value="${todo.due_date || ''}" style="width:100%;padding:6px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:12px;margin-top:3px">
+              </label>
+            </div>
+          ` : `
+            <div style="font-size:12px;color:#374151;line-height:1.7">
+              ${todo.start_date ? `▶️ البداية: <strong>${formatDate(todo.start_date)}</strong><br>` : ''}
+              ${todo.due_date ? `🏁 الانتهاء: <strong>${formatDate(todo.due_date)}</strong>` : ''}
+              ${!todo.start_date && !todo.due_date ? '<span style="color:#9ca3af;font-style:italic">لم تُحدّد تواريخ</span>' : ''}
+            </div>
+          `}
         </div>
         
-        <!-- EDITABLE Priority -->
+        <!-- Priority -->
         <div style="background:#fafaf9;padding:12px;border-radius:12px;border:1px solid #f1f5f9">
-          <div style="font-size:11px;color:#9ca3af;font-weight:700;margin-bottom:8px">🚦 الأولوية ${canEdit ? '↕️' : ''}</div>
-          ${canEdit ? `
-            <select onchange="updateTodoField('${todo.id}','priority',this.value)" 
-              style="width:100%;padding:8px 12px;border:1.5px solid ${pc.border};border-radius:10px;background:${pc.bg};color:${pc.color};font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
+          <div style="font-size:11px;color:#9ca3af;font-weight:700;margin-bottom:8px">🚦 الأولوية</div>
+          ${isEditMode ? `
+            <select id="editPriority" style="width:100%;padding:8px 12px;border:1.5px solid ${pc.border};border-radius:10px;background:${pc.bg};color:${pc.color};font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
               <option value="low" ${todo.priority === 'low' ? 'selected' : ''}>🟢 منخفضة</option>
               <option value="normal" ${todo.priority === 'normal' ? 'selected' : ''}>🔵 عادية</option>
               <option value="high" ${todo.priority === 'high' ? 'selected' : ''}>🟡 عالية</option>
               <option value="urgent" ${todo.priority === 'urgent' ? 'selected' : ''}>🔴 عاجلة</option>
             </select>
-          ` : `<span style="background:${pc.bg};color:${pc.color};padding:6px 14px;border-radius:50px;font-size:13px;font-weight:700;border:1px solid ${pc.border}">${priorityLabels[todo.priority] || todo.priority}</span>`}
+          ` : `<span style="background:${pc.bg};color:${pc.color};padding:6px 14px;border-radius:50px;font-size:13px;font-weight:700;border:1px solid ${pc.border};display:inline-block">${priorityLabels[todo.priority] || todo.priority}</span>`}
         </div>
         
-        <!-- EDITABLE Hours -->
+        <!-- Hours -->
         <div style="background:#fafaf9;padding:12px;border-radius:12px;border:1px solid #f1f5f9">
           <div style="font-size:11px;color:#9ca3af;font-weight:700;margin-bottom:8px">⏱️ الساعات المقدّرة</div>
-          ${canEdit ? `
-            <input type="number" min="1" max="500" value="${todo.estimated_hours || 8}" 
-              onblur="updateTodoField('${todo.id}','estimated_hours',parseInt(this.value) || 8)"
-              onkeydown="if(event.key==='Enter')this.blur()"
+          ${isEditMode ? `
+            <input type="number" id="editHours" min="1" max="500" value="${todo.estimated_hours || 8}" 
               style="width:100%;padding:8px 12px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:13px;font-weight:700;color:#1f2937;background:white;text-align:center">
           ` : `<span style="font-size:14px;font-weight:700;color:#1f2937">${todo.estimated_hours || 8} ساعة</span>`}
         </div>
         
-        <!-- EDITABLE Layer -->
+        <!-- Layer -->
         <div style="background:#fafaf9;padding:12px;border-radius:12px;border:1px solid #f1f5f9">
-          <div style="font-size:11px;color:#9ca3af;font-weight:700;margin-bottom:8px">🎯 الطبقة ${canEdit && availableLayers.length > 0 ? '↕️' : ''}</div>
-          ${canEdit && availableLayers.length > 0 ? `
-            <select onchange="updateTodoField('${todo.id}','layer_id',this.value || null)" 
-              style="width:100%;padding:8px 12px;border:1.5px solid #c7d2fe;border-radius:10px;background:#eef2ff;color:#3730a3;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">
+          <div style="font-size:11px;color:#9ca3af;font-weight:700;margin-bottom:8px">🎯 الطبقة</div>
+          ${isEditMode && availableLayers.length > 0 ? `
+            <select id="editLayer" style="width:100%;padding:8px 12px;border:1.5px solid #c7d2fe;border-radius:10px;background:#eef2ff;color:#3730a3;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">
               <option value="">— بدون طبقة —</option>
               ${availableLayers.map(l => `<option value="${l.id}" ${todo.layer_id === l.id ? 'selected' : ''}>طبقة ${l.layer_number}: ${escapeHTML(l.name)}</option>`).join('')}
             </select>
-          ` : (todo.layer_number ? `<span style="background:#e0e7ff;color:#3730a3;padding:4px 12px;border-radius:50px;font-size:12px;font-weight:700">طبقة ${todo.layer_number}</span>` : '<span style="color:#9ca3af;font-size:12px;font-style:italic">لا توجد طبقات</span>')}
+          ` : (todo.layer_number ? `<span style="background:#e0e7ff;color:#3730a3;padding:4px 12px;border-radius:50px;font-size:12px;font-weight:700;display:inline-block">طبقة ${todo.layer_number}</span>` : '<span style="color:#9ca3af;font-size:12px;font-style:italic">لا توجد طبقة</span>')}
         </div>
       </div>
       
@@ -12541,13 +12475,15 @@ async function showTodoDetailPage(todoId) {
           <div style="font-weight:700;color:#92400e;font-size:14px">📊 نسبة الإنجاز</div>
           <div style="font-size:24px;font-weight:900;color:#c2410c">${todo.progress || 0}%</div>
         </div>
-        <div onclick="openProgressEditor('${todo.id}', ${todo.progress || 0})" 
-          style="position:relative;height:12px;background:white;border-radius:6px;cursor:pointer;overflow:hidden">
+        <div onclick="${isEditMode ? '' : `openProgressEditor('${todo.id}', ${todo.progress || 0})`}" 
+          style="position:relative;height:12px;background:white;border-radius:6px;${isEditMode ? '' : 'cursor:pointer;'}overflow:hidden">
           <div style="position:absolute;top:0;left:0;height:100%;background:linear-gradient(90deg,#ff6b35,#f7468a);border-radius:6px;transition:width 0.4s;width:${todo.progress || 0}%"></div>
         </div>
-        <button onclick="openProgressEditor('${todo.id}', ${todo.progress || 0})" style="margin-top:10px;background:white;color:#c2410c;border:1px solid #fed7aa;padding:6px 14px;border-radius:50px;font-size:12px;font-weight:700;cursor:pointer;width:100%">
-          📊 تحديث نسبة الإنجاز
-        </button>
+        ${!isEditMode ? `
+          <button onclick="openProgressEditor('${todo.id}', ${todo.progress || 0})" style="margin-top:10px;background:white;color:#c2410c;border:1px solid #fed7aa;padding:6px 14px;border-radius:50px;font-size:12px;font-weight:700;cursor:pointer;width:100%">
+            📊 تحديث نسبة الإنجاز
+          </button>
+        ` : ''}
       </div>
     </div>
     
@@ -12653,6 +12589,7 @@ async function showTodoDetailPage(todoId) {
 
 function closeTodoDetailPage() {
   currentDetailTodoId = null;
+  window.__todoEditMode = false;  // Reset edit mode on close
   document.getElementById('todoDetailPage').classList.add('hidden');
   // Go back to project page and re-render to reflect any changes
   if (activeProject) {
