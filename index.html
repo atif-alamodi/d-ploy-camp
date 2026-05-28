@@ -2724,6 +2724,52 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 </div>
 
 <!-- New Todo Modal -->
+<!-- Unified Edit Message Modal - used for Campfire, Message Board, Todo Comments, Message Comments -->
+<div class="modal-bg" id="editMessageModal">
+  <div class="modal" style="max-width:560px;max-height:90vh;overflow-y:auto">
+    <h3 class="modal-title" id="editMessageModalTitle">✏️ تعديل الرسالة</h3>
+    <input type="hidden" id="editMessageType"><!-- campfire | message | todo_comment | msg_comment -->
+    <input type="hidden" id="editMessageId">
+    <input type="hidden" id="editMessageContextId"><!-- todoId or messageId for comments -->
+    
+    <!-- Optional title field (only for Message Board posts) -->
+    <div class="form-group" id="editMessageTitleGroup" style="display:none">
+      <label>📌 العنوان</label>
+      <input type="text" class="form-input" id="editMessageTitleInput" placeholder="عنوان الرسالة">
+    </div>
+    
+    <!-- Content textarea with formatting toolbar -->
+    <div class="form-group">
+      <label id="editMessageContentLabel">📝 المحتوى</label>
+      <!-- Formatting toolbar -->
+      <div style="display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap">
+        <button type="button" onclick="applyFormat(document.getElementById('editMessageContentInput'), 'bold')" 
+          style="padding:4px 10px;font-size:12px;background:white;border:1px solid #e5e7eb;border-radius:8px;cursor:pointer;font-weight:900" title="عريض (Ctrl+B)">𝐁</button>
+        <button type="button" onclick="applyFormat(document.getElementById('editMessageContentInput'), 'italic')" 
+          style="padding:4px 10px;font-size:12px;background:white;border:1px solid #e5e7eb;border-radius:8px;cursor:pointer;font-style:italic;font-weight:700" title="مائل (Ctrl+I)">𝐼</button>
+        <button type="button" onclick="applyFormat(document.getElementById('editMessageContentInput'), 'bullet')" 
+          style="padding:4px 10px;font-size:12px;background:white;border:1px solid #e5e7eb;border-radius:8px;cursor:pointer" title="قائمة نقطية">•</button>
+        <button type="button" onclick="applyFormat(document.getElementById('editMessageContentInput'), 'number')" 
+          style="padding:4px 10px;font-size:12px;background:white;border:1px solid #e5e7eb;border-radius:8px;cursor:pointer" title="قائمة مرقمة">1.</button>
+        <span style="flex:1"></span>
+        <span style="font-size:10px;color:#9ca3af;align-self:center">Ctrl+Enter للحفظ • Esc للإلغاء</span>
+      </div>
+      <textarea class="form-input" id="editMessageContentInput" rows="6" 
+        style="resize:vertical;line-height:1.7;font-family:inherit"
+        onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();saveMessageEdit()}else if(event.key==='Escape'){closeModal('editMessageModal')}"></textarea>
+    </div>
+    
+    <div style="font-size:11px;color:#9ca3af;background:#fafaf9;padding:8px 12px;border-radius:8px;margin-bottom:14px">
+      ℹ️ ستظهر علامة "تم التعديل" بجانب الرسالة بعد الحفظ، حتى يعلم الآخرون أنها عُدّلت.
+    </div>
+    
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('editMessageModal')">إلغاء</button>
+      <button class="btn btn-primary" id="saveMessageEditBtn" onclick="saveMessageEdit()">💾 حفظ التعديل</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="newTodoModal">
   <div class="modal" style="max-width:560px;max-height:90vh;overflow-y:auto">
     <h3 class="modal-title">✨ مهمة جديدة</h3>
@@ -6024,19 +6070,133 @@ async function deleteProject(projectId, projectName) {
 // ============================================
 // EDIT/DELETE MESSAGES (campfire, board, comments)
 // ============================================
-async function editCampfireMessage(messageId, currentContent) {
-  const newContent = prompt('تعديل الرسالة:', currentContent);
-  if (newContent === null || newContent.trim() === '' || newContent === currentContent) return;
+// ============================================
+// UNIFIED MESSAGE EDIT MODAL
+// Used for: Campfire messages, Message Board posts, Todo comments, Message comments
+// Each opens the same modal with the right type/id/context, and saveMessageEdit() routes to the correct table.
+// ============================================
+
+function openEditMessageModal(type, messageId, contextId, currentContent, currentTitle) {
+  document.getElementById('editMessageType').value = type;
+  document.getElementById('editMessageId').value = messageId;
+  document.getElementById('editMessageContextId').value = contextId || '';
+  
+  // Set modal title based on type
+  const titles = {
+    campfire: '🔥 تعديل رسالة Campfire',
+    message: '📢 تعديل رسالة لوحة الإعلانات',
+    todo_comment: '💬 تعديل تعليق المهمة',
+    msg_comment: '💬 تعديل التعليق'
+  };
+  document.getElementById('editMessageModalTitle').textContent = titles[type] || '✏️ تعديل الرسالة';
+  
+  // Show title input only for message board posts
+  const titleGroup = document.getElementById('editMessageTitleGroup');
+  const titleInput = document.getElementById('editMessageTitleInput');
+  if (type === 'message') {
+    titleGroup.style.display = '';
+    titleInput.value = currentTitle || '';
+  } else {
+    titleGroup.style.display = 'none';
+    titleInput.value = '';
+  }
+  
+  // Fill content
+  document.getElementById('editMessageContentInput').value = currentContent || '';
+  
+  openModal('editMessageModal');
+  
+  // Focus content after modal animates in
+  setTimeout(() => {
+    const ta = document.getElementById('editMessageContentInput');
+    if (ta) {
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length); // cursor at end
+    }
+  }, 100);
+}
+
+async function saveMessageEdit() {
+  const type = document.getElementById('editMessageType').value;
+  const messageId = document.getElementById('editMessageId').value;
+  const contextId = document.getElementById('editMessageContextId').value;
+  const newContent = document.getElementById('editMessageContentInput').value.trim();
+  const newTitle = document.getElementById('editMessageTitleInput').value.trim();
+  
+  if (!newContent) {
+    toast('⚠️ المحتوى لا يمكن أن يكون فارغاً');
+    document.getElementById('editMessageContentInput').focus();
+    return;
+  }
+  
+  const btn = document.getElementById('saveMessageEditBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ جاري الحفظ...'; }
+  
+  // Map type → table + update payload + reload function
+  const config = {
+    campfire: {
+      table: 'campfire_messages',
+      payload: { content: newContent, edited_at: new Date().toISOString() },
+      reload: async () => { if (typeof loadCampfire === 'function') await loadCampfire(); }
+    },
+    message: {
+      table: 'messages',
+      payload: { 
+        content: newContent, 
+        ...(newTitle ? { title: newTitle } : {}),
+        edited_at: new Date().toISOString() 
+      },
+      reload: async () => { if (activeTab === 'messages') await loadProjectTab('messages'); }
+    },
+    todo_comment: {
+      table: 'todo_comments',
+      payload: { content: newContent, edited_at: new Date().toISOString() },
+      reload: async () => {
+        if (typeof loadInlineComments === 'function' && contextId) await loadInlineComments(contextId);
+        if (currentDetailTodoId === contextId) await showTodoDetailPage(contextId);
+      }
+    },
+    msg_comment: {
+      table: 'message_comments',
+      payload: { content: newContent, edited_at: new Date().toISOString() },
+      reload: async () => { if (activeTab === 'messages') await loadProjectTab('messages'); }
+    }
+  };
+  
+  const cfg = config[type];
+  if (!cfg) {
+    toast('❌ نوع غير معروف');
+    if (btn) { btn.disabled = false; btn.textContent = '💾 حفظ التعديل'; }
+    return;
+  }
   
   try {
-    const { error } = await sb.from('campfire_messages')
-      .update({ content: newContent.trim(), edited_at: new Date().toISOString() })
-      .eq('id', messageId);
-    if (error) { toast('❌ ' + error.message); return; }
-    toast('✅ تم التعديل');
-    // Realtime will refresh others
-    if (typeof loadCampfire === 'function') await loadCampfire();
-  } catch(e) { toast('❌ ' + e.message); }
+    const { error } = await sb.from(cfg.table).update(cfg.payload).eq('id', messageId);
+    if (error) {
+      toast('❌ ' + error.message);
+      if (btn) { btn.disabled = false; btn.textContent = '💾 حفظ التعديل'; }
+      return;
+    }
+    
+    closeModal('editMessageModal');
+    toast('✅ تم حفظ التعديل');
+    
+    // Reload appropriate view
+    try { await cfg.reload(); } catch(e) { console.warn('Reload after edit:', e); }
+    
+    if (btn) { btn.disabled = false; btn.textContent = '💾 حفظ التعديل'; }
+  } catch(e) {
+    toast('❌ ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '💾 حفظ التعديل'; }
+  }
+}
+
+// ============================================
+// EDIT WRAPPERS (replace old prompt-based versions, but keep same signatures so existing onclick handlers work)
+// ============================================
+
+async function editCampfireMessage(messageId, currentContent) {
+  openEditMessageModal('campfire', messageId, null, currentContent);
 }
 
 async function deleteCampfireMessage(messageId) {
@@ -6050,17 +6210,7 @@ async function deleteCampfireMessage(messageId) {
 }
 
 async function editTodoComment(commentId, todoId, currentContent) {
-  const newContent = prompt('تعديل التعليق:', currentContent);
-  if (newContent === null || newContent.trim() === '' || newContent === currentContent) return;
-  
-  try {
-    const { error } = await sb.from('todo_comments')
-      .update({ content: newContent.trim(), edited_at: new Date().toISOString() })
-      .eq('id', commentId);
-    if (error) { toast('❌ ' + error.message); return; }
-    toast('✅ تم التعديل');
-    if (typeof loadInlineComments === 'function') await loadInlineComments(todoId);
-  } catch(e) { toast('❌ ' + e.message); }
+  openEditMessageModal('todo_comment', commentId, todoId, currentContent);
 }
 
 async function deleteTodoComment(commentId, todoId) {
@@ -6070,29 +6220,12 @@ async function deleteTodoComment(commentId, todoId) {
     if (error) { toast('❌ ' + error.message); return; }
     toast('✅ تم الحذف');
     if (typeof loadInlineComments === 'function') await loadInlineComments(todoId);
+    if (currentDetailTodoId === todoId) await showTodoDetailPage(todoId);
   } catch(e) { toast('❌ ' + e.message); }
 }
 
 async function editMessage(messageId, currentTitle, currentContent) {
-  const newTitle = prompt('تعديل عنوان الرسالة:', currentTitle);
-  if (newTitle === null) return;
-  const newContent = prompt('تعديل محتوى الرسالة:', currentContent);
-  if (newContent === null) return;
-  
-  if (newTitle === currentTitle && newContent === currentContent) return;
-  
-  try {
-    const { error } = await sb.from('messages')
-      .update({ 
-        title: newTitle.trim() || currentTitle, 
-        content: newContent.trim(),
-        edited_at: new Date().toISOString() 
-      })
-      .eq('id', messageId);
-    if (error) { toast('❌ ' + error.message); return; }
-    toast('✅ تم التعديل');
-    if (activeTab === 'messages') await loadProjectTab('messages');
-  } catch(e) { toast('❌ ' + e.message); }
+  openEditMessageModal('message', messageId, null, currentContent, currentTitle);
 }
 
 async function deleteMessage(messageId) {
@@ -6106,17 +6239,7 @@ async function deleteMessage(messageId) {
 }
 
 async function editMessageComment(commentId, messageId, currentContent) {
-  const newContent = prompt('تعديل التعليق:', currentContent);
-  if (newContent === null || newContent.trim() === '' || newContent === currentContent) return;
-  
-  try {
-    const { error } = await sb.from('message_comments')
-      .update({ content: newContent.trim(), edited_at: new Date().toISOString() })
-      .eq('id', commentId);
-    if (error) { toast('❌ ' + error.message); return; }
-    toast('✅ تم التعديل');
-    if (typeof loadMessageDetail === 'function' && messageId) await loadMessageDetail(messageId);
-  } catch(e) { toast('❌ ' + e.message); }
+  openEditMessageModal('msg_comment', commentId, messageId, currentContent);
 }
 
 async function deleteMessageComment(commentId, messageId) {
