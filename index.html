@@ -4224,6 +4224,15 @@ function formatDate(dateStr) {
   return d.toLocaleDateString(currentLang === 'ar' ? 'ar-SA' : 'en-US', { day: '2-digit', month: 'short' });
 }
 
+// Full date + time (for creation timestamps, comments, messages)
+function formatDateTime(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const datePart = d.toLocaleDateString(currentLang === 'ar' ? 'ar-SA' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const timePart = d.toLocaleTimeString(currentLang === 'ar' ? 'ar-SA' : 'en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  return `${datePart} • ${timePart}`;
+}
+
 function initials(name) {
   if (!name) return '?';
   const parts = name.trim().split(/\s+/);
@@ -6524,6 +6533,25 @@ function filterAssigneesList() {
   });
 }
 
+// Unified refresh after any assignment change: updates picker, detail page, and background list
+async function refreshAfterAssignmentChange(todoId) {
+  // 1. Refresh the picker list (shows ✅/⭕ state + count)
+  try { filterAssigneesList(); } catch(e) {}
+  
+  // 2. If the detail page is open for this todo, re-render it so assignee chips update immediately
+  if (currentDetailTodoId === todoId) {
+    try { await showTodoDetailPage(todoId); } catch(e) {}
+  }
+  
+  // 3. Refresh the background todos list so the card avatars update immediately
+  //    (do this regardless of activeTab, since the list may be behind the detail page)
+  try {
+    if (typeof loadProjectTab === 'function' && activeProject) {
+      await loadProjectTab('todos');
+    }
+  } catch(e) {}
+}
+
 async function toggleAssignment(userId, rowElement) {
   const todoId = document.getElementById('assigneeTodoId').value;
   if (!todoId) return;
@@ -6556,11 +6584,8 @@ async function toggleAssignment(userId, rowElement) {
     toast('✅ تم التعيين والإشعار');
   }
   
-  // Refresh the picker list
-  filterAssigneesList();
-  
-  // Refresh the todos view in background
-  setTimeout(() => { if (activeTab === 'todos') loadProjectTab('todos'); }, 300);
+  // Refresh the picker list + detail page + background list
+  await refreshAfterAssignmentChange(todoId);
 }
 
 // ============================================
@@ -6617,11 +6642,8 @@ async function assignAllMembers() {
     
     toast(`✅ تم تعيين ${toAdd.length} عضو وإشعارهم محلياً وبالبريد`);
     
-    // Refresh the picker list
-    filterAssigneesList();
-    
-    // Refresh the todos view in background
-    setTimeout(() => { if (activeTab === 'todos') loadProjectTab('todos'); }, 300);
+    // Refresh the picker list + detail page + background list
+    await refreshAfterAssignmentChange(todoId);
   } catch(e) {
     toast('❌ ' + e.message);
   }
@@ -6654,11 +6676,8 @@ async function unassignAllMembers() {
     
     toast(`✅ تم إلغاء تعيين ${current.length} عضو`);
     
-    // Refresh the picker list
-    filterAssigneesList();
-    
-    // Refresh the todos view in background
-    setTimeout(() => { if (activeTab === 'todos') loadProjectTab('todos'); }, 300);
+    // Refresh the picker list + detail page + background list
+    await refreshAfterAssignmentChange(todoId);
   } catch(e) {
     toast('❌ ' + e.message);
   }
@@ -7656,8 +7675,10 @@ async function loadInlineComments(todoId) {
     const canModify = isMine || currentProfile?.is_super_admin;
     const name = c.profile?.full_name || 'مستخدم';
     const initial = name.charAt(0).toUpperCase();
-    const time = timeAgo(c.created_at);
-    const editedBadge = c.edited_at ? '<span style="font-size:9px;color:#9ca3af" title="معدّل">✎</span> ' : '';
+    // TODO comments: full date+time; when edited show "محرّر" + new edit datetime
+    const timeLine = c.edited_at
+      ? '<span style="color:#c2410c;font-weight:700" title="تم تعديل هذا التعليق">محرّر</span> • ' + formatDateTime(c.edited_at)
+      : formatDateTime(c.created_at);
     const safeContent = (c.content || '').replace(/`/g, '\\`').replace(/\$/g, '\\$').replace(/'/g, "\\'");
     return `
       <div style="display:flex;gap:8px;align-items:flex-start;${isMine ? 'flex-direction:row-reverse' : ''}" data-comment-id="${c.id}">
@@ -7667,7 +7688,7 @@ async function loadInlineComments(todoId) {
             <div style="font-weight:600;font-size:11px;color:#ff6b35;margin-bottom:2px">${escapeHTML(name)}</div>
             <div style="font-size:13px;line-height:1.7;color:#1f2937;word-wrap:break-word;white-space:pre-wrap">${formatCommentText(c.content)}</div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:4px">
-              <div style="font-size:10px;color:#9ca3af">${editedBadge}${time}</div>
+              <div style="font-size:10px;color:#9ca3af">${timeLine}</div>
               <div style="display:flex;gap:2px">
                 <button onclick="event.stopPropagation();toggleReactionPicker(event,'todo_comment','${c.id}')" 
                   style="background:transparent;border:none;font-size:13px;cursor:pointer;opacity:0.5;padding:2px 4px;border-radius:50%" 
@@ -8538,7 +8559,8 @@ async function renderMessages(container) {
       const msgReactions = reactionsByMsg[m.id] || [];
       const cat = categoryConfig[m.category || 'general'] || categoryConfig.general;
       const commentCount = commentCounts[m.id] || 0;
-      const editedBadge = m.edited_at ? '<span style="font-size:10px;color:#9ca3af;margin-right:4px" title="معدّل">✎</span>' : '';
+      // Message board: date+time of creation only. No "محرّر", no edit-time update (per requirement).
+      const editedBadge = '';
       const safeTitle = (m.title || '').replace(/`/g, '\\`').replace(/'/g, "\\'");
       const safeContent = (m.content || '').replace(/`/g, '\\`').replace(/'/g, "\\'");
       
@@ -8553,7 +8575,7 @@ async function renderMessages(container) {
               <span style="background:${cat.bg};color:${cat.color};padding:2px 10px;border-radius:50px;font-size:11px;font-weight:700">${cat.icon} ${cat.label}</span>
             </div>
             <h3 style="margin:0;font-size:18px;font-weight:900;color:#1f2937">${escapeHTML(m.title)}</h3>
-            <div style="font-size:11px;color:#9ca3af;margin-top:2px">${escapeHTML(m.author?.full_name || '')} • ${timeAgo(m.created_at)} ${editedBadge}</div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:2px">${escapeHTML(m.author?.full_name || '')} • ${formatDateTime(m.created_at)}</div>
           </div>
           <div style="display:flex;gap:4px">
             <button class="btn btn-ghost" onclick="toggleReactionPicker(event,'message','${m.id}')" style="padding:6px" title="تفاعل">😊</button>
@@ -8648,8 +8670,10 @@ async function loadMessageComments(messageId) {
     const canModify = isMine || currentProfile?.is_super_admin;
     const name = c.profile?.full_name || 'مستخدم';
     const initial = name.charAt(0).toUpperCase();
-    const time = timeAgo(c.created_at);
-    const editedBadge = c.edited_at ? '<span style="font-size:9px;color:#9ca3af" title="معدّل">✎</span> ' : '';
+    // Project/message comments: full date+time; when edited show "محرّر" + new edit datetime
+    const timeLine = c.edited_at
+      ? '<span style="color:#c2410c;font-weight:700" title="تم تعديل هذا التعليق">محرّر</span> • ' + formatDateTime(c.edited_at)
+      : formatDateTime(c.created_at);
     const safeContent = (c.content || '').replace(/`/g, '\\`').replace(/'/g, "\\'");
     return `
       <div style="display:flex;gap:8px;align-items:flex-start;${isMine ? 'flex-direction:row-reverse' : ''}">
@@ -8659,7 +8683,7 @@ async function loadMessageComments(messageId) {
             <div style="font-weight:600;font-size:11px;color:#ff6b35;margin-bottom:2px">${escapeHTML(name)}</div>
             <div style="font-size:13px;line-height:1.7;color:#1f2937;word-wrap:break-word;white-space:pre-wrap">${formatCommentText(c.content)}</div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:4px">
-              <div style="font-size:10px;color:#9ca3af">${editedBadge}${time}</div>
+              <div style="font-size:10px;color:#9ca3af">${timeLine}</div>
               <div style="display:flex;gap:2px;align-items:center">
                 <button onclick="event.stopPropagation();toggleReactionPicker(event,'message_comment','${c.id}')" 
                   style="background:transparent;border:none;font-size:13px;cursor:pointer;opacity:0.6;padding:2px 4px;border-radius:50%" 
@@ -12231,7 +12255,7 @@ function renderCampfireMsg(m) {
   const canModify = isMine || currentProfile?.is_super_admin;
   const name = m.profile?.full_name || 'مستخدم';
   const initial = name.charAt(0).toUpperCase();
-  const time = new Date(m.created_at).toLocaleTimeString('ar-SA', { hour:'2-digit', minute:'2-digit' });
+  const time = formatDateTime(m.created_at);
   const reactionsHtml = renderReactionsRow('campfire', m.id, m.reactions || []);
   const attachments = m.attachments || [];
   
@@ -12255,7 +12279,8 @@ function renderCampfireMsg(m) {
     attHtml += '</div>';
   }
   
-  const editedBadge = m.edited_at ? '<span style="font-size:10px;color:#9ca3af;margin-right:4px" title="تم التعديل">✎</span>' : '';
+  // Chat: date+time only, NO edited label, NO edit-time update (per requirement)
+  const editedBadge = '';
   
   return `
     <div class="campfire-msg ${isMine ? 'mine' : ''}" data-msg-id="${m.id}">
@@ -12899,6 +12924,12 @@ async function showTodoDetailPage(todoId) {
           🔄 <strong>أُعيد فتحها</strong> ${timeAgo(todo.reopened_at)} ${todo.reopened_by_profile ? '— بواسطة ' + escapeHTML(todo.reopened_by_profile.full_name) : ''}
         </div>
       ` : ''}
+      
+      <!-- Creation timestamp (read-only, never editable) -->
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#9ca3af;margin-bottom:12px;padding:6px 0;border-bottom:1px dashed #f1f5f9">
+        🕐 أُنشئت: <strong style="color:#6b7280">${formatDateTime(todo.created_at)}</strong>
+        ${todo.creator?.full_name ? `<span style="color:#cbd5e1">•</span> بواسطة ${escapeHTML(todo.creator.full_name)}` : ''}
+      </div>
       
       <div id="reactions-todo-${todo.id}" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px"></div>
       
