@@ -8524,6 +8524,12 @@ async function toggleTodo(id, completed) {
     completed_at: completed ? new Date().toISOString() : null,
     completed_by: completed ? currentUser.id : null
   }).eq('id', id);
+  if (completed) {
+    try {
+      await sb.rpc('notify_assignees_task_completed', { p_todo_id: id });
+      toast('✅ تم إغلاق المهمة وإشعار المعيّنين');
+    } catch(e) { console.warn('notify on complete failed:', e); }
+  }
   await loadProjectTab('todos');
   await loadProjectCounts();
   await loadStats();
