@@ -6655,19 +6655,58 @@ async function uploadTodoAttachments(todoId, files) {
   
   toast(`✅ تم رفع ${uploaded} من ${totalFiles}`);
   
-  // Refresh everything: detail page (if open), todos list, and project counts
-  // The detail page shows the attachment list - it must refresh to show new files
+  // 1. Surgically update the attachment badge on the card in DOM (always, no matter which tab is open)
+  updateAttachmentBadgeOnCard(todoId, newAttachments.length);
+  
+  // 2. Refresh detail page if open (it shows the attachment list)
   if (currentDetailTodoId === todoId) {
     try { await showTodoDetailPage(todoId); } catch(e) {}
   }
   
-  // Refresh the todos list to update the 📎 badge count on the card
+  // 3. Refresh the todos list ONLY if user is currently viewing it (for the full re-sort etc.)
+  // The badge update above already happened, so this is just for completeness
   if (activeTab === 'todos') {
     try { await loadProjectTab('todos'); } catch(e) {}
   }
   
-  // Refresh project tool counts (📁 files icon counter)
+  // 4. Refresh project tool counts (📁 files icon counter)
   try { await loadProjectCounts(); } catch(e) {}
+}
+
+// Surgically update the 📎 attachment count badge on a task card without redrawing the whole list
+function updateAttachmentBadgeOnCard(todoId, newCount) {
+  try {
+    const card = document.querySelector(`[data-todo-id="${todoId}"]`);
+    if (!card) return; // card not in DOM (user on a different tab)
+    
+    // Find the metadata badge row (second row inside the title/badges container)
+    const badgeRows = card.querySelectorAll('div[style*="flex-wrap:wrap"]');
+    if (!badgeRows || badgeRows.length === 0) return;
+    const badgeRow = badgeRows[badgeRows.length - 1]; // the badges row is the last one in the title/desc container
+    
+    // The attachment badge is the 3rd span in the badges row (after priority and date)
+    // It has 📎 in its content. Find it by content.
+    const spans = badgeRow.querySelectorAll(':scope > span');
+    let attachmentBadge = null;
+    for (const s of spans) {
+      if ((s.textContent || '').includes('📎')) {
+        attachmentBadge = s;
+        break;
+      }
+    }
+    if (!attachmentBadge) return;
+    
+    // Update text and styling
+    const hasAttachments = newCount > 0;
+    attachmentBadge.textContent = `📎 ${newCount}`;
+    attachmentBadge.style.background = hasAttachments ? '#f0fdf4' : '#f9fafb';
+    attachmentBadge.style.color = hasAttachments ? '#15803d' : '#9ca3af';
+    attachmentBadge.style.opacity = hasAttachments ? '1' : '0.5';
+    attachmentBadge.title = hasAttachments ? `${newCount} مرفق` : 'لا توجد مرفقات';
+  } catch(e) {
+    // Silent fail - the next list re-render will catch up
+    console.warn('updateAttachmentBadgeOnCard:', e);
+  }
 }
 
 // NOTE: handleTodoFileDrop defined later with dropzone styling cleanup
@@ -11379,7 +11418,10 @@ async function deleteTodoAttachment(todoId, index) {
   renderTodoAttachments(todoId, attachments);
   toast('🗑️ تم حذف المرفق');
   
-  // Refresh detail page (if open) and todos list so badge count updates immediately
+  // Surgically update the badge on the card (works regardless of which tab is open)
+  updateAttachmentBadgeOnCard(todoId, attachments.length);
+  
+  // Refresh detail page if open
   if (currentDetailTodoId === todoId) {
     try { await showTodoDetailPage(todoId); } catch(e) {}
   }
