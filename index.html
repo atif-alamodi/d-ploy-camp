@@ -6983,52 +6983,55 @@ function renderTodoCard(td, assignees) {
     <div class="todo-item-compact ${td.completed ? 'completed' : ''}" 
       data-todo-id="${td.id}"
       onclick="showTodoDetailPage('${td.id}')"
-      style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:white;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:6px;cursor:pointer;transition:all 0.15s"
+      style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:white;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:6px;cursor:pointer;transition:all 0.15s"
       onmouseover="this.style.borderColor='#ff6b35';this.style.background='#fff7ed';this.style.transform='translateX(-2px)'"
       onmouseout="this.style.borderColor='#e5e7eb';this.style.background='white';this.style.transform=''">
       
       <!-- Checkbox -->
       <div onclick="event.stopPropagation();toggleTodo('${td.id}', ${!td.completed})" 
-        style="width:22px;height:22px;border:2px solid ${td.completed ? '#10b981' : '#d1d5db'};border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;background:${td.completed ? '#10b981' : 'transparent'};color:white;font-size:14px;flex-shrink:0;transition:all 0.2s"
+        style="width:22px;height:22px;border:2px solid ${td.completed ? '#10b981' : '#d1d5db'};border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;background:${td.completed ? '#10b981' : 'transparent'};color:white;font-size:14px;flex-shrink:0;transition:all 0.2s;margin-top:1px"
         title="${td.completed ? 'إعادة فتح' : 'إكمال'}">
         ${td.completed ? '✓' : ''}
       </div>
       
-      <!-- Title and metadata in one line -->
-      <div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <!-- Title + badges below in a two-row layout -->
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">
+        <!-- Row 1: Title only -->
         <span style="font-weight:600;font-size:14px;${td.completed ? 'text-decoration:line-through;color:#9ca3af' : 'color:#1f2937'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${escapeHTML(td.title)}</span>
         
-        <!-- Badges in STRICT order: 1) Priority  2) Date  3) Attachment -->
-        <!-- 1. Priority -->
-        <span style="background:${td.priority === 'urgent' ? '#fee2e2' : td.priority === 'high' ? '#fef3c7' : td.priority === 'low' ? '#f0fdf4' : '#eff6ff'};color:${td.priority === 'urgent' ? '#dc2626' : td.priority === 'high' ? '#92400e' : td.priority === 'low' ? '#15803d' : '#1d4ed8'};padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700;flex-shrink:0" title="الأولوية">
-          ${td.priority === 'urgent' ? '🔴' : td.priority === 'high' ? '🟡' : td.priority === 'low' ? '🟢' : '🔵'} ${t(td.priority || 'normal')}
-        </span>
-        
-        <!-- 2. Date -->
-        <span style="background:${hasSchedule ? '#fef3c7' : '#f9fafb'};color:${hasSchedule ? '#92400e' : '#9ca3af'};padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0;${!hasSchedule ? 'opacity:0.5' : ''}" title="${hasSchedule ? (dateText || 'له تواريخ') : 'لا توجد تواريخ'}">
-          📅 ${hasSchedule ? (td.due_date ? formatDate(td.due_date).slice(0,5) : (td.start_date ? formatDate(td.start_date).slice(0,5) : '')) : '—'}
-        </span>
-        
-        <!-- 3. Attachment -->
-        <span style="background:${attachments.length > 0 ? '#f0fdf4' : '#f9fafb'};color:${attachments.length > 0 ? '#15803d' : '#9ca3af'};padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0;${attachments.length === 0 ? 'opacity:0.5' : ''}" title="${attachments.length > 0 ? attachments.length + ' مرفق' : 'لا توجد مرفقات'}">
-          📎 ${attachments.length || 0}
-        </span>
-        
-        <!-- 4. Layer (only when set) -->
-        ${hasLayer ? `<span style="background:#e0e7ff;color:#3730a3;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0" title="طبقة ${td.layer_number}">🎯 ${td.layer_number}</span>` : ''}
-        
-        <!-- 5. Comments (only when present) -->
-        ${commentCount > 0 ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0" title="${commentCount} تعليق">💬 ${commentCount}</span>` : ''}
-        
-        <!-- 6. Progress mini bar (only if > 0%) -->
-        ${progress > 0 && !td.completed ? `
-          <span style="display:inline-flex;align-items:center;gap:5px;flex-shrink:0">
-            <span style="font-size:10px;color:#6b7280;font-weight:600">${progress}%</span>
-            <div style="width:50px;height:4px;background:#f1f5f9;border-radius:2px;overflow:hidden">
-              <div style="height:100%;width:${progress}%;background:linear-gradient(90deg,#ff6b35,#f7468a)"></div>
-            </div>
+        <!-- Row 2: All badges in STRICT order: Priority → Date → Attachment → (optional Layer/Comments/Progress) -->
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <!-- 1. Priority -->
+          <span style="background:${td.priority === 'urgent' ? '#fee2e2' : td.priority === 'high' ? '#fef3c7' : td.priority === 'low' ? '#f0fdf4' : '#eff6ff'};color:${td.priority === 'urgent' ? '#dc2626' : td.priority === 'high' ? '#92400e' : td.priority === 'low' ? '#15803d' : '#1d4ed8'};padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700;flex-shrink:0" title="الأولوية">
+            ${td.priority === 'urgent' ? '🔴' : td.priority === 'high' ? '🟡' : td.priority === 'low' ? '🟢' : '🔵'} ${t(td.priority || 'normal')}
           </span>
-        ` : ''}
+          
+          <!-- 2. Date -->
+          <span style="background:${hasSchedule ? '#fef3c7' : '#f9fafb'};color:${hasSchedule ? '#92400e' : '#9ca3af'};padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0;${!hasSchedule ? 'opacity:0.5' : ''}" title="${hasSchedule ? (dateText || 'له تواريخ') : 'لا توجد تواريخ'}">
+            📅 ${hasSchedule ? (td.due_date ? formatDate(td.due_date).slice(0,5) : (td.start_date ? formatDate(td.start_date).slice(0,5) : '')) : '—'}
+          </span>
+          
+          <!-- 3. Attachment -->
+          <span style="background:${attachments.length > 0 ? '#f0fdf4' : '#f9fafb'};color:${attachments.length > 0 ? '#15803d' : '#9ca3af'};padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0;${attachments.length === 0 ? 'opacity:0.5' : ''}" title="${attachments.length > 0 ? attachments.length + ' مرفق' : 'لا توجد مرفقات'}">
+            📎 ${attachments.length || 0}
+          </span>
+          
+          <!-- 4. Layer (only when set) -->
+          ${hasLayer ? `<span style="background:#e0e7ff;color:#3730a3;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0" title="طبقة ${td.layer_number}">🎯 ${td.layer_number}</span>` : ''}
+          
+          <!-- 5. Comments (only when present) -->
+          ${commentCount > 0 ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0" title="${commentCount} تعليق">💬 ${commentCount}</span>` : ''}
+          
+          <!-- 6. Progress mini bar (only if > 0%) -->
+          ${progress > 0 && !td.completed ? `
+            <span style="display:inline-flex;align-items:center;gap:5px;flex-shrink:0">
+              <span style="font-size:10px;color:#6b7280;font-weight:600">${progress}%</span>
+              <div style="width:50px;height:4px;background:#f1f5f9;border-radius:2px;overflow:hidden">
+                <div style="height:100%;width:${progress}%;background:linear-gradient(90deg,#ff6b35,#f7468a)"></div>
+              </div>
+            </span>
+          ` : ''}
+        </div>
       </div>
       
       <!-- Right side: assignees + open arrow -->
