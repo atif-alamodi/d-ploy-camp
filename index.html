@@ -13121,9 +13121,10 @@ async function showTodoDetailPage(todoId) {
           <span class="section-icon" style="background:#dcfce7">📎</span>
           المرفقات (${attachments.length})
         </h3>
-        <button class="btn btn-primary" onclick="openAttachmentUpload('${todo.id}')">📎 رفع ملف</button>
+        ${isEditMode ? `<button class="btn btn-primary" onclick="openAttachmentUpload('${todo.id}')">📎 رفع ملف</button>` : ''}
       </div>
-      <div id="todoDropZone_${todo.id}" 
+      ${isEditMode ? `
+      <div id="todoDropZone_${todo.id}"
         style="border:2px dashed #cbd5e1;border-radius:14px;padding:24px;text-align:center;color:#9ca3af;cursor:pointer;transition:all 0.2s"
         ondragover="event.preventDefault();this.style.borderColor='#ff6b35';this.style.background='#fff7ed'"
         ondragleave="this.style.borderColor='#cbd5e1';this.style.background='transparent'"
@@ -13131,6 +13132,7 @@ async function showTodoDetailPage(todoId) {
         onclick="openAttachmentUpload('${todo.id}')">
         📁 اسحب الملفات هنا أو اضغط للرفع
       </div>
+      ` : ''}
       ${attachments.length > 0 ? `
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
           ${attachments.map((a, idx) => `
