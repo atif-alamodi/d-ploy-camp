@@ -6797,6 +6797,22 @@ async function renderTodos(container) {
       assigneesByTodo[a.todo_id].push(a);
     });
   }
+  
+  // Fetch comment counts BEFORE rendering, so cards have the count in their slot
+  if (todos && todos.length > 0) {
+    try {
+      const { data: cmts } = await sb.from('todo_comments')
+        .select('todo_id')
+        .in('todo_id', todos.map(t => t.id));
+      const countMap = {};
+      (cmts || []).forEach(c => {
+        countMap[c.todo_id] = (countMap[c.todo_id] || 0) + 1;
+      });
+      todos.forEach(td => {
+        td._commentCount = countMap[td.id] || 0;
+      });
+    } catch(e) {}
+  }
 
   let html = `
     <div class="section-card">
@@ -6877,10 +6893,7 @@ async function renderTodos(container) {
       });
     } catch(e) { if(window.DPLOY_DEBUG) console.log('Load todo reactions:', e); }
     
-    // Also load comment counts (badges on cards)
-    try { await refreshTodoCommentCounts(todos.map(t => t.id)); } catch(e) {}
-    
-    // Comments are no longer inline - they live in the detail page
+    // Comment counts are now fetched before rendering, included in each card's slot
   }
 }
 
@@ -6982,17 +6995,36 @@ function renderTodoCard(td, assignees) {
       </div>
       
       <!-- Title and metadata in one line -->
-      <div style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span style="font-weight:600;font-size:14px;${td.completed ? 'text-decoration:line-through;color:#9ca3af' : 'color:#1f2937'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${escapeHTML(td.title)}</span>
         
-        <!-- Compact metadata badges -->
-        ${td.priority === 'high' || td.priority === 'urgent' ? `<span style="background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700;flex-shrink:0">${t(td.priority)}</span>` : ''}
-        ${hasSchedule ? `<span style="background:#fef3c7;color:#92400e;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0">📅</span>` : ''}
-        ${hasLayer ? `<span style="background:#e0e7ff;color:#3730a3;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0">🎯</span>` : ''}
-        ${attachments.length > 0 ? `<span style="background:#f0fdf4;color:#15803d;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0">📎 ${attachments.length}</span>` : ''}
-        ${commentCount > 0 ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0">💬 ${commentCount}</span>` : ''}
+        <!-- Metadata badges - ALWAYS in fixed order: Priority, Date, Attachment, Layer, Comments -->
+        <!-- 1. Priority (always shown) -->
+        <span style="background:${td.priority === 'urgent' ? '#fee2e2' : td.priority === 'high' ? '#fef3c7' : td.priority === 'low' ? '#f0fdf4' : '#eff6ff'};color:${td.priority === 'urgent' ? '#dc2626' : td.priority === 'high' ? '#92400e' : td.priority === 'low' ? '#15803d' : '#1d4ed8'};padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700;flex-shrink:0" title="الأولوية">
+          ${td.priority === 'urgent' ? '🔴' : td.priority === 'high' ? '🟡' : td.priority === 'low' ? '🟢' : '🔵'} ${t(td.priority || 'normal')}
+        </span>
         
-        <!-- Mini progress bar (only if > 0%) -->
+        <!-- 2. Date badge (always shown - placeholder if none) -->
+        <span style="background:${hasSchedule ? '#fef3c7' : '#f9fafb'};color:${hasSchedule ? '#92400e' : '#9ca3af'};padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0;${!hasSchedule ? 'opacity:0.5' : ''}" title="${hasSchedule ? (dateText || 'له تواريخ') : 'لا توجد تواريخ'}">
+          📅 ${hasSchedule ? (td.due_date ? formatDate(td.due_date).slice(0,5) : (td.start_date ? formatDate(td.start_date).slice(0,5) : '')) : '—'}
+        </span>
+        
+        <!-- 3. Attachment badge (always shown - placeholder if none) -->
+        <span style="background:${attachments.length > 0 ? '#f0fdf4' : '#f9fafb'};color:${attachments.length > 0 ? '#15803d' : '#9ca3af'};padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0;${attachments.length === 0 ? 'opacity:0.5' : ''}" title="${attachments.length > 0 ? attachments.length + ' مرفق' : 'لا توجد مرفقات'}">
+          📎 ${attachments.length || 0}
+        </span>
+        
+        <!-- 4. Layer badge (always shown - placeholder if none) -->
+        <span style="background:${hasLayer ? '#e0e7ff' : '#f9fafb'};color:${hasLayer ? '#3730a3' : '#9ca3af'};padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0;${!hasLayer ? 'opacity:0.5' : ''}" title="${hasLayer ? 'طبقة ' + td.layer_number : 'بدون طبقة'}">
+          🎯 ${hasLayer ? td.layer_number : '—'}
+        </span>
+        
+        <!-- 5. Comments badge (always shown - placeholder if none) -->
+        <span style="background:${commentCount > 0 ? '#fff7ed' : '#f9fafb'};color:${commentCount > 0 ? '#c2410c' : '#9ca3af'};padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0;${commentCount === 0 ? 'opacity:0.5' : ''}" title="${commentCount > 0 ? commentCount + ' تعليق' : 'لا توجد تعليقات'}">
+          💬 ${commentCount || 0}
+        </span>
+        
+        <!-- 6. Progress mini bar (only if > 0%) -->
         ${progress > 0 && !td.completed ? `
           <span style="display:inline-flex;align-items:center;gap:5px;flex-shrink:0">
             <span style="font-size:10px;color:#6b7280;font-weight:600">${progress}%</span>
