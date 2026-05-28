@@ -6740,13 +6740,10 @@ async function renderTodos(container) {
       });
     } catch(e) { if(window.DPLOY_DEBUG) console.log('Load todo reactions:', e); }
     
-    // Also load comment counts
+    // Also load comment counts (badges on cards)
     try { await refreshTodoCommentCounts(todos.map(t => t.id)); } catch(e) {}
     
-    // Auto-load comments for each todo since they are now always visible
-    todos.forEach(td => {
-      try { loadInlineComments(td.id); } catch(e) {}
-    });
+    // Comments are no longer inline - they live in the detail page
   }
 }
 
@@ -6754,52 +6751,31 @@ async function renderTodos(container) {
 function renderTodoListNested(list, allLists, allTodos, assigneesByTodo, depth) {
   const listTodos = (allTodos || []).filter(t => t.list_id === list.id);
   const subLists = (allLists || []).filter(l => l.parent_list_id === list.id);
-  const indent = depth * 20;
+  const indent = depth * 24;
   const totalCount = listTodos.length;
   const completedCount = listTodos.filter(t => t.completed).length;
-  const pendingCount = totalCount - completedCount;
   const canDelete = (list.created_by === currentUser?.id) || currentProfile?.is_super_admin;
-  
-  // Persisted collapse state per list - DEFAULT: COLLAPSED (closed)
-  const collapseKey = 'todoListExpanded_' + list.id;
-  const isExpanded = localStorage.getItem(collapseKey) === '1'; // default false (collapsed)
-  
-  // Progress percentage for the list
-  const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  // Persisted collapse state per list - default: EXPANDED
+  const collapseKey = 'todoListCollapsed_' + list.id;
+  const isCollapsed = localStorage.getItem(collapseKey) === '1';
   
   let html = `
-    <div class="todo-list-block" data-list-id="${list.id}" style="margin-right:${indent}px;margin-bottom:8px;background:white;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;${depth > 0 ? 'border-' + (currentLang === 'ar' ? 'right' : 'left') + ':3px solid #fed7aa' : ''}">
-      <!-- Compact list header (always visible, click to expand) -->
-      <div onclick="toggleListCollapse('${list.id}')" 
-        style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;user-select:none;background:${isExpanded ? '#fff7ed' : 'white'};border-bottom:${isExpanded ? '1px solid #fed7aa' : 'none'};transition:background 0.15s"
-        onmouseover="this.style.background='${isExpanded ? '#fff7ed' : '#fafaf9'}'"
-        onmouseout="this.style.background='${isExpanded ? '#fff7ed' : 'white'}'">
-        <span id="listCaret-${list.id}" style="font-size:11px;color:#9ca3af;transition:transform 0.2s;display:inline-block;${isExpanded ? '' : 'transform:rotate(-90deg)'}">▼</span>
-        <span style="font-size:16px">${depth > 0 ? '📂' : '📋'}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:14px;color:#1f2937;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-            ${escapeHTML(list.title)}
-          </div>
-          <div style="display:flex;align-items:center;gap:10px;margin-top:3px">
-            ${totalCount > 0 ? `
-              <span style="font-size:11px;color:#6b7280">
-                ${completedCount}/${totalCount} مهام
-                ${pendingCount > 0 ? `• <span style="color:#c2410c;font-weight:600">${pendingCount} متبقية</span>` : '• <span style="color:#16a34a;font-weight:600">✓ مكتملة</span>'}
-              </span>
-              <div style="flex:1;max-width:100px;height:4px;background:#f1f5f9;border-radius:2px;overflow:hidden">
-                <div style="height:100%;background:linear-gradient(90deg,#ff6b35,#f7468a);width:${progressPct}%;transition:width 0.3s"></div>
-              </div>
-            ` : `<span style="font-size:11px;color:#9ca3af;font-style:italic">لا توجد مهام بعد</span>`}
-          </div>
-        </div>
-        <div style="display:flex;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
-          <button class="btn btn-secondary" style="padding:5px 10px;font-size:11px" onclick="event.stopPropagation();showNewTodoModal('${list.id}')" title="إضافة مهمة">➕ مهمة</button>
-          <button class="btn btn-ghost" style="padding:5px 8px;font-size:11px;background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd" onclick="event.stopPropagation();showNewSubListModal('${list.id}')" title="قائمة فرعية">📂</button>
-          ${canDelete ? `<button class="btn btn-ghost" style="padding:5px 7px;font-size:11px;color:#ef4444" onclick="event.stopPropagation();deleteList('${list.id}')" title="حذف القائمة">🗑️</button>` : ''}
+    <div class="todo-list-block" data-list-id="${list.id}" style="margin-right:${indent}px;border-${currentLang === 'ar' ? 'right' : 'left'}:${depth > 0 ? '3px solid #fed7aa' : 'none'};padding-${currentLang === 'ar' ? 'right' : 'left'}:${depth > 0 ? '14px' : '0'}">
+      <div class="todo-list-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span onclick="toggleListCollapse('${list.id}')" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;user-select:none" 
+          onmouseover="this.style.color='#ff6b35'" onmouseout="this.style.color='inherit'" title="انقر لطي/فتح القائمة">
+          <span id="listCaret-${list.id}" style="font-size:11px;color:#9ca3af;transition:transform 0.2s;display:inline-block;${isCollapsed ? 'transform:rotate(-90deg)' : ''}">▼</span>
+          ${depth > 0 ? '📂' : '📋'} ${escapeHTML(list.title)}
+        </span>
+        <span style="font-size:11px;color:#6b7280;background:#f3f4f6;padding:2px 8px;border-radius:8px">${completedCount}/${totalCount}</span>
+        <div style="margin-${currentLang === 'ar' ? 'right' : 'left'}:auto;display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-secondary" style="padding:5px 10px; font-size:11px" onclick="showNewTodoModal('${list.id}')">➕ مهمة</button>
+          <button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd" onclick="showNewSubListModal('${list.id}')" title="إضافة قائمة فرعية داخل هذه القائمة">📂 قائمة فرعية</button>
+          ${canDelete ? `<button class="btn btn-ghost" style="padding:5px 8px;font-size:11px;color:#ef4444" onclick="deleteList('${list.id}')" title="حذف القائمة (للمنشئ فقط)">🗑️</button>` : ''}
         </div>
       </div>
-      <div id="listBody-${list.id}" style="${isExpanded ? '' : 'display:none'};padding:${isExpanded ? '12px 14px' : '0'}">
-        ${listTodos.length === 0 && subLists.length === 0 ? `<div style="padding:12px;color:var(--text-muted);font-size:13px;text-align:center;font-style:italic">لا توجد مهام في هذه القائمة بعد. اضغط <strong>➕ مهمة</strong> لإضافة أول مهمة.</div>` : ''}
+      <div id="listBody-${list.id}" style="${isCollapsed ? 'display:none' : ''}">
+        ${listTodos.length === 0 && subLists.length === 0 ? `<div style="padding:12px; color:var(--text-muted); font-size:13px">لا توجد مهام في هذه القائمة بعد. اضغط <strong>➕ مهمة</strong> لإضافة أول مهمة.</div>` : ''}
         ${listTodos.map(td => renderTodoCard(td, assigneesByTodo[td.id] || [])).join('')}
   `;
   
@@ -6812,39 +6788,15 @@ function renderTodoListNested(list, allLists, allTodos, assigneesByTodo, depth) 
   return html;
 }
 
-// Toggle collapse/expand of a list (INVERTED: default is collapsed, click expands)
+// Toggle collapse/expand of a list
 function toggleListCollapse(listId) {
   const body = document.getElementById('listBody-' + listId);
   const caret = document.getElementById('listCaret-' + listId);
   if (!body) return;
   const isHidden = body.style.display === 'none';
-  
-  if (isHidden) {
-    // Expanding
-    body.style.display = '';
-    body.style.padding = '12px 14px';
-    if (caret) caret.style.transform = '';
-    localStorage.setItem('todoListExpanded_' + listId, '1');
-    
-    // Update parent background
-    const parent = body.parentElement?.querySelector('div[onclick*="toggleListCollapse"]');
-    if (parent) {
-      parent.style.background = '#fff7ed';
-      parent.style.borderBottom = '1px solid #fed7aa';
-    }
-  } else {
-    // Collapsing
-    body.style.display = 'none';
-    body.style.padding = '0';
-    if (caret) caret.style.transform = 'rotate(-90deg)';
-    localStorage.removeItem('todoListExpanded_' + listId);
-    
-    const parent = body.parentElement?.querySelector('div[onclick*="toggleListCollapse"]');
-    if (parent) {
-      parent.style.background = 'white';
-      parent.style.borderBottom = 'none';
-    }
-  }
+  body.style.display = isHidden ? '' : 'none';
+  if (caret) caret.style.transform = isHidden ? '' : 'rotate(-90deg)';
+  localStorage.setItem('todoListCollapsed_' + listId, isHidden ? '0' : '1');
 }
 
 // Single todo card renderer
@@ -6855,132 +6807,69 @@ function renderTodoCard(td, assignees) {
     ? `${formatDate(td.start_date)} → ${formatDate(td.due_date)}`
     : (td.due_date ? '🏁 ' + formatDate(td.due_date) : (td.start_date ? '▶️ ' + formatDate(td.start_date) : ''));
   
-  // Assignee avatars
+  // Compact assignee avatars (max 3 shown)
   let assigneesHtml = '';
-  if (assignees && assignees.length > 0) {
-    assigneesHtml = `<div style="display:inline-flex;gap:2px;align-items:center;flex-wrap:wrap">` +
-      assignees.slice(0, 4).map(a => {
+  const assigneeList = (assignees && assignees.length > 0)
+    ? assignees
+    : (td.assigned_profile ? [{ profile: td.assigned_profile }] : []);
+  
+  if (assigneeList.length > 0) {
+    assigneesHtml = `<div style="display:inline-flex;align-items:center" title="${escapeHTML(assigneeList.map(a => a.profile?.full_name || '').join(', '))}">` +
+      assigneeList.slice(0, 3).map((a, idx) => {
         const name = a.profile?.full_name || '?';
         const initial = name.charAt(0).toUpperCase();
-        return `<span title="${escapeHTML(name)}" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border-radius:50%;font-size:10px;font-weight:700;border:2px solid white;margin-${currentLang === 'ar' ? 'left' : 'right'}:-6px">${initial}</span>`;
+        return `<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border-radius:50%;font-size:10px;font-weight:700;border:2px solid white;${idx > 0 ? 'margin-' + (currentLang === 'ar' ? 'left' : 'right') + ':-6px' : ''}">${initial}</span>`;
       }).join('') +
-      (assignees.length > 4 ? `<span style="background:#f3f4f6;color:#6b7280;border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;border:2px solid white;margin-${currentLang === 'ar' ? 'left' : 'right'}:-6px">+${assignees.length - 4}</span>` : '') +
+      (assigneeList.length > 3 ? `<span style="background:#f3f4f6;color:#6b7280;border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;border:2px solid white;margin-${currentLang === 'ar' ? 'left' : 'right'}:-6px">+${assigneeList.length - 3}</span>` : '') +
       `</div>`;
-  } else if (td.assigned_profile) {
-    const name = td.assigned_profile.full_name;
-    const initial = name.charAt(0).toUpperCase();
-    assigneesHtml = `<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border-radius:50%;font-size:10px;font-weight:700;border:2px solid white" title="${escapeHTML(name)}">${initial}</span>`;
   }
   
-  // Attachments preview
   const attachments = td.attachments || [];
-  const attachmentsHtml = attachments.length > 0 ? `
-    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-      ${attachments.slice(0, 3).map(a => `
-        <a href="${escapeHTML(a.url)}" target="_blank" onclick="event.stopPropagation()" 
-          style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:11px;text-decoration:none;color:#15803d;font-weight:600">
-          ${getFileIcon(a.type, a.name)} ${escapeHTML((a.name || '').substring(0, 25))}${(a.name || '').length > 25 ? '...' : ''}
-        </a>
-      `).join('')}
-      ${attachments.length > 3 ? `<span style="font-size:11px;color:#6b7280;padding:3px 6px">+${attachments.length - 3} مرفق</span>` : ''}
-    </div>
-  ` : '';
-  
+  const commentCount = td._commentCount || 0;
+  const progress = td.progress || 0;
   const canDeleteTodo = (td.created_by === currentUser?.id) || currentProfile?.is_super_admin;
   
   return `
-    <div class="todo-item ${td.completed ? 'completed' : ''}" 
-      data-priority="${td.priority || 'normal'}"
-      ondragover="event.preventDefault();this.style.borderColor='var(--primary)';this.style.background='var(--primary-light)'"
-      ondragleave="this.style.borderColor='';this.style.background=''"
-      ondrop="handleTodoFileDrop(event,'${td.id}')">
-      <div class="todo-checkbox ${td.completed ? 'checked' : ''}" onclick="event.stopPropagation();toggleTodo('${td.id}', ${!td.completed})" title="${td.completed ? 'إعادة فتح المهمة' : 'إكمال المهمة'}">${td.completed ? '✓' : ''}</div>
-      <div class="todo-content">
-        <div class="todo-title" onclick="showTodoDetailPage('${td.id}')" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;cursor:pointer" 
-          onmouseover="this.style.color='#ff6b35'" onmouseout="this.style.color=''">
-          <span style="font-weight:700">${escapeHTML(td.title)}</span>
-          ${td.completed ? `<span style="font-size:10px;background:#dcfce7;color:#16a34a;padding:2px 8px;border-radius:8px">✓ مكتملة</span>` : ''}
-          <span style="font-size:11px;color:#ff6b35;font-weight:600">› افتح</span>
-        </div>
-        <div class="todo-meta" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px">
-          ${assigneesHtml}
-          <button onclick="event.stopPropagation();openAssigneesPicker('${td.id}')" 
-            style="background:#fef3c7;color:#92400e;border:1px dashed #fbbf24;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer">
-            👥+ تعيين
-          </button>
-          <span class="priority-badge priority-${td.priority}">${t(td.priority)}</span>
-          ${hasSchedule ? `<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer" onclick="event.stopPropagation();showProjectTab('gantt')" title="المخطط الزمني">📅 ${dateText}</span>` : ''}
-          ${hasLayer ? `<span style="background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer" onclick="event.stopPropagation();showProjectTab('layers')" title="الجدولة الطبقية">🎯 طبقة ${td.layer_number}</span>` : ''}
-          <button onclick="event.stopPropagation();openAttachmentUpload('${td.id}')" 
-            style="background:#f0fdf4;color:#15803d;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #bbf7d0">
-            📎 ${attachments.length > 0 ? attachments.length + ' مرفق' : 'إضافة مرفق'}
-          </button>
-        </div>
-        ${attachmentsHtml}
-        <!-- Progress bar -->
-        <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
-          <span style="font-size:11px;color:#6b7280;white-space:nowrap;min-width:35px">${td.progress || 0}%</span>
-          <div style="flex:1;position:relative;height:8px;background:#f1f5f9;border-radius:4px;cursor:pointer" 
-            onclick="event.stopPropagation();openProgressEditor('${td.id}', ${td.progress || 0})"
-            title="انقر لتحديث التقدم">
-            <div style="position:absolute;top:0;left:0;height:100%;background:linear-gradient(90deg,#ff6b35,#f7468a);border-radius:4px;transition:width 0.3s;width:${td.progress || 0}%"></div>
-          </div>
-          <button onclick="event.stopPropagation();openProgressEditor('${td.id}', ${td.progress || 0})" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;padding:3px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">📊 تحديث</button>
-        </div>
-        ${td.completed && td.completed_at ? `
-          <div style="margin-top:6px;padding:6px 10px;background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0;font-size:11px;color:#15803d">
-            ✓ أُغلقت ${timeAgo(td.completed_at)} ${td.completed_by_profile ? 'بواسطة ' + escapeHTML(td.completed_by_profile.full_name) : ''}
-          </div>
-        ` : ''}
-        ${td.reopened_at && !td.completed ? `
-          <div style="margin-top:6px;padding:6px 10px;background:#fef3c7;border-radius:8px;border:1px solid #fcd34d;font-size:11px;color:#92400e">
-            🔄 أُعيد فتحها ${timeAgo(td.reopened_at)} ${td.reopened_by_profile ? 'بواسطة ' + escapeHTML(td.reopened_by_profile.full_name) : ''}
-          </div>
-        ` : ''}
-        <div id="reactions-todo-${td.id}" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px"></div>
-        
-        <!-- COMMENTS BOX - ALWAYS OPEN -->
-        <div class="todo-comments-wrap" style="margin-top:14px;padding:14px;background:#fafaf9;border-radius:14px;border:1px solid #e5e7eb" onclick="event.stopPropagation()">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <div style="font-size:12px;color:#374151;font-weight:700;display:flex;align-items:center;gap:6px">
-              💬 <span id="commentCount-${td.id}">التعليقات</span>
-            </div>
-            <button onclick="event.stopPropagation();toggleReactionPicker(event,'todo','${td.id}')" 
-              style="background:transparent;border:none;font-size:16px;cursor:pointer;opacity:0.6" 
-              onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="تفاعل بالإيموجي">😊</button>
-          </div>
-          <div id="commentsList-${td.id}" style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto;margin-bottom:10px"></div>
-          
-          <!-- Formatting toolbar -->
-          <div style="display:flex;gap:2px;padding:6px;background:white;border:1px solid #e5e7eb;border-radius:10px 10px 0 0;border-bottom:none;flex-wrap:wrap">
-            <button type="button" onclick="event.preventDefault();event.stopPropagation();fmtComment('${td.id}','bold')" 
-              style="background:transparent;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-weight:900" 
-              onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="تسميك (Ctrl+B)">𝐁</button>
-            <button type="button" onclick="event.preventDefault();event.stopPropagation();fmtComment('${td.id}','italic')" 
-              style="background:transparent;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-style:italic" 
-              onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="مائل (Ctrl+I)">𝐼</button>
-            <button type="button" onclick="event.preventDefault();event.stopPropagation();fmtComment('${td.id}','bullet')" 
-              style="background:transparent;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:13px" 
-              onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="قائمة نقاط">• نقاط</button>
-            <button type="button" onclick="event.preventDefault();event.stopPropagation();fmtComment('${td.id}','number')" 
-              style="background:transparent;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:13px" 
-              onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'" title="ترقيم">1. ترقيم</button>
-            <span style="flex:1"></span>
-            <span style="font-size:10px;color:#9ca3af;align-self:center;padding:0 6px">Shift+Enter = سطر جديد</span>
-          </div>
-          
-          <textarea id="commentInput-${td.id}" placeholder="اكتب تعليقاً... استخدم @ للإشارة لعضو • Shift+Enter سطر جديد • Enter للإرسال" 
-            style="width:100%;padding:10px 14px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 14px 14px;font-family:inherit;font-size:13px;resize:vertical;min-height:80px;max-height:300px;background:white;line-height:1.7;box-sizing:border-box"
-            onclick="event.stopPropagation()"></textarea>
-          <div style="display:flex;justify-content:flex-end;margin-top:8px">
-            <button onclick="event.stopPropagation();submitComment('${td.id}','${activeProject.id}')" 
-              style="background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:8px 20px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer">
-              📤 إرسال التعليق
-            </button>
-          </div>
-        </div>
+    <div class="todo-item-compact ${td.completed ? 'completed' : ''}" 
+      data-todo-id="${td.id}"
+      onclick="showTodoDetailPage('${td.id}')"
+      style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:white;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:6px;cursor:pointer;transition:all 0.15s"
+      onmouseover="this.style.borderColor='#ff6b35';this.style.background='#fff7ed';this.style.transform='translateX(-2px)'"
+      onmouseout="this.style.borderColor='#e5e7eb';this.style.background='white';this.style.transform=''">
+      
+      <!-- Checkbox -->
+      <div onclick="event.stopPropagation();toggleTodo('${td.id}', ${!td.completed})" 
+        style="width:22px;height:22px;border:2px solid ${td.completed ? '#10b981' : '#d1d5db'};border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;background:${td.completed ? '#10b981' : 'transparent'};color:white;font-size:14px;flex-shrink:0;transition:all 0.2s"
+        title="${td.completed ? 'إعادة فتح' : 'إكمال'}">
+        ${td.completed ? '✓' : ''}
       </div>
-      ${canDeleteTodo ? `<button class="btn btn-ghost" style="padding:6px;color:#ef4444;align-self:flex-start" onclick="event.stopPropagation();deleteTodo('${td.id}')" title="حذف (للمنشئ فقط)">🗑️</button>` : ''}
+      
+      <!-- Title and metadata in one line -->
+      <div style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="font-weight:600;font-size:14px;${td.completed ? 'text-decoration:line-through;color:#9ca3af' : 'color:#1f2937'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${escapeHTML(td.title)}</span>
+        
+        <!-- Compact metadata badges -->
+        ${td.priority === 'high' || td.priority === 'urgent' ? `<span style="background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700;flex-shrink:0">${t(td.priority)}</span>` : ''}
+        ${hasSchedule ? `<span style="background:#fef3c7;color:#92400e;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0">📅</span>` : ''}
+        ${hasLayer ? `<span style="background:#e0e7ff;color:#3730a3;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0">🎯</span>` : ''}
+        ${attachments.length > 0 ? `<span style="background:#f0fdf4;color:#15803d;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0">📎 ${attachments.length}</span>` : ''}
+        ${commentCount > 0 ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0">💬 ${commentCount}</span>` : ''}
+        
+        <!-- Mini progress bar (only if > 0%) -->
+        ${progress > 0 && !td.completed ? `
+          <span style="display:inline-flex;align-items:center;gap:5px;flex-shrink:0">
+            <span style="font-size:10px;color:#6b7280;font-weight:600">${progress}%</span>
+            <div style="width:50px;height:4px;background:#f1f5f9;border-radius:2px;overflow:hidden">
+              <div style="height:100%;width:${progress}%;background:linear-gradient(90deg,#ff6b35,#f7468a)"></div>
+            </div>
+          </span>
+        ` : ''}
+      </div>
+      
+      <!-- Right side: assignees + open arrow -->
+      ${assigneesHtml}
+      <span style="color:#ff6b35;font-size:13px;font-weight:600;flex-shrink:0;white-space:nowrap">› افتح</span>
+      ${canDeleteTodo ? `<button onclick="event.stopPropagation();deleteTodo('${td.id}')" style="background:transparent;border:none;color:#ef4444;padding:4px;cursor:pointer;font-size:13px;opacity:0.4;border-radius:6px;flex-shrink:0" onmouseover="this.style.opacity='1';this.style.background='#fee2e2'" onmouseout="this.style.opacity='0.4';this.style.background='transparent'" title="حذف">🗑️</button>` : ''}
     </div>
   `;
 }
@@ -7503,11 +7392,22 @@ async function refreshTodoCommentCounts(todoIds) {
       countMap[c.todo_id] = (countMap[c.todo_id] || 0) + 1;
     });
     
+    // For each todo with comments, inject a badge into the compact card
     todoIds.forEach(tid => {
-      const badge = document.getElementById('commentCount-' + tid);
-      if (badge) {
-        const count = countMap[tid] || 0;
-        badge.textContent = count > 0 ? `${count} تعليق` : 'تعليقات';
+      const count = countMap[tid] || 0;
+      if (count > 0) {
+        const card = document.querySelector(`[data-todo-id="${tid}"]`);
+        if (card && !card.querySelector('.comment-count-badge')) {
+          // Find the metadata container (the flex-wrap one)
+          const metaWrap = card.querySelector('div[style*="flex-wrap:wrap"]');
+          if (metaWrap) {
+            const badge = document.createElement('span');
+            badge.className = 'comment-count-badge';
+            badge.style.cssText = 'background:#fff7ed;color:#c2410c;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0';
+            badge.textContent = `💬 ${count}`;
+            metaWrap.appendChild(badge);
+          }
+        }
       }
     });
   } catch(e) {}
