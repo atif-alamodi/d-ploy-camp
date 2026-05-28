@@ -2870,14 +2870,24 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
   <div class="modal" style="max-width:560px;max-height:90vh;overflow-y:auto">
     <h3 class="modal-title">👥 تعيين الأعضاء للمهمة</h3>
     <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px">
-      اختر عضواً واحداً أو أكثر من جميع أعضاء المنصة. يمكن لأي عضو أن يعيّن آخرين.
+      اختر عضواً واحداً أو أكثر، أو استخدم "تعيين الكل" لإضافة جميع الأعضاء دفعة واحدة. كل من يُعيّن يصله إشعار محلي وبريد إلكتروني.
     </p>
     <input type="hidden" id="assigneeTodoId">
     <input type="text" class="form-input" id="assigneeSearch" placeholder="🔍 ابحث بالاسم..." 
-      style="margin-bottom:12px" oninput="filterAssigneesList()">
-    <div id="assigneesPickerList" style="display:flex;flex-direction:column;gap:6px;max-height:400px;overflow-y:auto"></div>
+      style="margin-bottom:10px" oninput="filterAssigneesList()">
+    <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+      <button type="button" class="btn btn-secondary" 
+        style="padding:6px 12px;font-size:12px;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;font-weight:700" 
+        onclick="assignAllMembers()">✅ تعيين الكل</button>
+      <button type="button" class="btn btn-ghost" 
+        style="padding:6px 12px;font-size:12px;color:#ef4444;border:1px solid #fecaca" 
+        onclick="unassignAllMembers()">✖️ إلغاء الكل</button>
+      <span style="flex:1"></span>
+      <span id="assigneesPickerCount" style="font-size:11px;color:#6b7280;align-self:center;font-weight:600"></span>
+    </div>
+    <div id="assigneesPickerList" style="display:flex;flex-direction:column;gap:6px;max-height:380px;overflow-y:auto"></div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeModal('assigneesPickerModal')">إغلاق</button>
+      <button class="btn btn-primary" onclick="closeModal('assigneesPickerModal');if(currentDetailTodoId)showTodoDetailPage(currentDetailTodoId)">✓ تم</button>
     </div>
   </div>
 </div>
@@ -6350,6 +6360,10 @@ async function renderAssigneesPickerList(currentSet) {
   const listBox = document.getElementById('assigneesPickerList');
   const search = (document.getElementById('assigneeSearch')?.value || '').toLowerCase().trim();
   
+  // Update counter badge
+  const counter = document.getElementById('assigneesPickerCount');
+  if (counter) counter.textContent = `${currentSet.size} مُعيَّن`;
+  
   let members = allMembersCache || [];
   if (search) {
     members = members.filter(m => (m.full_name || '').toLowerCase().includes(search) || (m.email || '').toLowerCase().includes(search));
@@ -6404,14 +6418,19 @@ async function toggleAssignment(userId, rowElement) {
     if (error) { toast('❌ ' + error.message); return; }
     toast('✅ تم إلغاء التعيين');
   } else {
-    // Add assignment
+    // Add assignment (DB trigger sends in-app notification automatically)
     const { error } = await sb.from('todo_assignees').insert({
       todo_id: todoId,
       user_id: userId,
       assigned_by: currentUser.id
     });
     if (error) { toast('❌ ' + error.message); return; }
-    toast('✅ تم التعيين');
+    
+    // Send email notification for this single new assignee (if not self)
+    if (userId !== currentUser.id) {
+      sendAssignmentEmailForTodo(todoId, [userId]).catch(e => console.warn('Email failed:', e));
+    }
+    toast('✅ تم التعيين والإشعار');
   }
   
   // Refresh the picker list
@@ -6419,6 +6438,156 @@ async function toggleAssignment(userId, rowElement) {
   
   // Refresh the todos view in background
   setTimeout(() => { if (activeTab === 'todos') loadProjectTab('todos'); }, 300);
+}
+
+// ============================================
+// BULK assignment helpers - used by "Select All" / "Clear All" buttons in picker
+// ============================================
+
+// Assign all platform members to the task, send in-app + email notifications
+async function assignAllMembers() {
+  const todoId = document.getElementById('assigneeTodoId').value;
+  if (!todoId) return;
+  
+  const members = allMembersCache || [];
+  if (members.length === 0) {
+    toast('⚠️ لا توجد أعضاء للتعيين');
+    return;
+  }
+  
+  if (!confirm(`سيتم تعيين جميع الأعضاء (${members.length}) على هذه المهمة، وسيصلهم إشعار محلي وبريد إلكتروني. هل تريد المتابعة؟`)) {
+    return;
+  }
+  
+  try {
+    // Get current assignees so we only insert new ones (avoid unique-constraint errors)
+    const { data: current } = await sb.from('todo_assignees')
+      .select('user_id')
+      .eq('todo_id', todoId);
+    const currentSet = new Set((current || []).map(a => a.user_id));
+    
+    const toAdd = members.filter(m => !currentSet.has(m.id));
+    if (toAdd.length === 0) {
+      toast('ℹ️ كل الأعضاء مُعيّنون مسبقاً');
+      return;
+    }
+    
+    const rows = toAdd.map(m => ({
+      todo_id: todoId,
+      user_id: m.id,
+      assigned_by: currentUser.id
+    }));
+    
+    const { error } = await sb.from('todo_assignees').insert(rows);
+    if (error) {
+      toast('❌ ' + error.message);
+      return;
+    }
+    
+    // In-app notifications are sent automatically by the DB trigger trg_notify_assignment for each new row
+    
+    // Send email notifications to all newly-added members (except self)
+    const emailRecipients = toAdd.filter(m => m.id !== currentUser.id).map(m => m.id);
+    if (emailRecipients.length > 0) {
+      sendAssignmentEmailForTodo(todoId, emailRecipients).catch(e => console.warn('Bulk email failed:', e));
+    }
+    
+    toast(`✅ تم تعيين ${toAdd.length} عضو وإشعارهم محلياً وبالبريد`);
+    
+    // Refresh the picker list
+    filterAssigneesList();
+    
+    // Refresh the todos view in background
+    setTimeout(() => { if (activeTab === 'todos') loadProjectTab('todos'); }, 300);
+  } catch(e) {
+    toast('❌ ' + e.message);
+  }
+}
+
+// Remove all assignees from the task
+async function unassignAllMembers() {
+  const todoId = document.getElementById('assigneeTodoId').value;
+  if (!todoId) return;
+  
+  const { data: current } = await sb.from('todo_assignees')
+    .select('user_id')
+    .eq('todo_id', todoId);
+  
+  if (!current || current.length === 0) {
+    toast('ℹ️ لا يوجد أعضاء معيّنون لإزالتهم');
+    return;
+  }
+  
+  if (!confirm(`سيتم إزالة جميع الأعضاء (${current.length}) من هذه المهمة. هل تريد المتابعة؟`)) {
+    return;
+  }
+  
+  try {
+    const { error } = await sb.from('todo_assignees').delete().eq('todo_id', todoId);
+    if (error) {
+      toast('❌ ' + error.message);
+      return;
+    }
+    
+    toast(`✅ تم إلغاء تعيين ${current.length} عضو`);
+    
+    // Refresh the picker list
+    filterAssigneesList();
+    
+    // Refresh the todos view in background
+    setTimeout(() => { if (activeTab === 'todos') loadProjectTab('todos'); }, 300);
+  } catch(e) {
+    toast('❌ ' + e.message);
+  }
+}
+
+// Helper: send assignment emails for a list of user IDs on a given todo
+// Used by individual toggleAssignment and bulk assignAllMembers
+async function sendAssignmentEmailForTodo(todoId, userIds) {
+  if (!userIds || userIds.length === 0) return;
+  
+  try {
+    // Fetch the todo details
+    const { data: todo } = await sb.from('todos')
+      .select('id, title, project_id')
+      .eq('id', todoId)
+      .maybeSingle();
+    if (!todo) return;
+    
+    // Fetch the project name (in case activeProject is different)
+    let projectName = activeProject?.name;
+    if (!projectName || activeProject?.id !== todo.project_id) {
+      const { data: proj } = await sb.from('projects').select('name').eq('id', todo.project_id).maybeSingle();
+      projectName = proj?.name || 'مشروع';
+    }
+    
+    // Fetch recipient emails
+    const { data: profiles } = await sb.from('profiles')
+      .select('id, email, full_name')
+      .in('id', userIds);
+    
+    if (!profiles || profiles.length === 0) return;
+    
+    const assignerName = currentProfile?.full_name || 'عضو';
+    
+    // Send via the same RPC used for new-task emails
+    for (const profile of profiles) {
+      if (!profile.email) continue;
+      try {
+        await sb.rpc('send_task_assignment_email', {
+          p_recipient_email: profile.email,
+          p_recipient_name: profile.full_name || profile.email.split('@')[0],
+          p_task_title: todo.title,
+          p_project_name: projectName,
+          p_assigner_name: assignerName
+        });
+      } catch(e) {
+        console.warn('Email to', profile.email, 'failed:', e);
+      }
+    }
+  } catch(e) {
+    console.warn('sendAssignmentEmailForTodo:', e);
+  }
 }
 
 // ============================================
