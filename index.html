@@ -6754,31 +6754,52 @@ async function renderTodos(container) {
 function renderTodoListNested(list, allLists, allTodos, assigneesByTodo, depth) {
   const listTodos = (allTodos || []).filter(t => t.list_id === list.id);
   const subLists = (allLists || []).filter(l => l.parent_list_id === list.id);
-  const indent = depth * 24;
+  const indent = depth * 20;
   const totalCount = listTodos.length;
   const completedCount = listTodos.filter(t => t.completed).length;
+  const pendingCount = totalCount - completedCount;
   const canDelete = (list.created_by === currentUser?.id) || currentProfile?.is_super_admin;
-  // Persisted collapse state per list
-  const collapseKey = 'todoListCollapsed_' + list.id;
-  const isCollapsed = localStorage.getItem(collapseKey) === '1';
+  
+  // Persisted collapse state per list - DEFAULT: COLLAPSED (closed)
+  const collapseKey = 'todoListExpanded_' + list.id;
+  const isExpanded = localStorage.getItem(collapseKey) === '1'; // default false (collapsed)
+  
+  // Progress percentage for the list
+  const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
   
   let html = `
-    <div class="todo-list-block" data-list-id="${list.id}" style="margin-right:${indent}px;border-${currentLang === 'ar' ? 'right' : 'left'}:${depth > 0 ? '3px solid #fed7aa' : 'none'};padding-${currentLang === 'ar' ? 'right' : 'left'}:${depth > 0 ? '14px' : '0'}">
-      <div class="todo-list-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <span onclick="toggleListCollapse('${list.id}')" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;user-select:none" 
-          onmouseover="this.style.color='#ff6b35'" onmouseout="this.style.color='inherit'" title="انقر لطي/فتح القائمة">
-          <span id="listCaret-${list.id}" style="font-size:11px;color:#9ca3af;transition:transform 0.2s;display:inline-block;${isCollapsed ? 'transform:rotate(-90deg)' : ''}">▼</span>
-          ${depth > 0 ? '📂' : '📋'} ${escapeHTML(list.title)}
-        </span>
-        <span style="font-size:11px;color:#6b7280;background:#f3f4f6;padding:2px 8px;border-radius:8px">${completedCount}/${totalCount}</span>
-        <div style="margin-${currentLang === 'ar' ? 'right' : 'left'}:auto;display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn btn-secondary" style="padding:5px 10px; font-size:11px" onclick="showNewTodoModal('${list.id}')">➕ مهمة</button>
-          <button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd" onclick="showNewSubListModal('${list.id}')" title="إضافة قائمة فرعية داخل هذه القائمة">📂 قائمة فرعية</button>
-          ${canDelete ? `<button class="btn btn-ghost" style="padding:5px 8px;font-size:11px;color:#ef4444" onclick="deleteList('${list.id}')" title="حذف القائمة (للمنشئ فقط)">🗑️</button>` : ''}
+    <div class="todo-list-block" data-list-id="${list.id}" style="margin-right:${indent}px;margin-bottom:8px;background:white;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;${depth > 0 ? 'border-' + (currentLang === 'ar' ? 'right' : 'left') + ':3px solid #fed7aa' : ''}">
+      <!-- Compact list header (always visible, click to expand) -->
+      <div onclick="toggleListCollapse('${list.id}')" 
+        style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;user-select:none;background:${isExpanded ? '#fff7ed' : 'white'};border-bottom:${isExpanded ? '1px solid #fed7aa' : 'none'};transition:background 0.15s"
+        onmouseover="this.style.background='${isExpanded ? '#fff7ed' : '#fafaf9'}'"
+        onmouseout="this.style.background='${isExpanded ? '#fff7ed' : 'white'}'">
+        <span id="listCaret-${list.id}" style="font-size:11px;color:#9ca3af;transition:transform 0.2s;display:inline-block;${isExpanded ? '' : 'transform:rotate(-90deg)'}">▼</span>
+        <span style="font-size:16px">${depth > 0 ? '📂' : '📋'}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:14px;color:#1f2937;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+            ${escapeHTML(list.title)}
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:3px">
+            ${totalCount > 0 ? `
+              <span style="font-size:11px;color:#6b7280">
+                ${completedCount}/${totalCount} مهام
+                ${pendingCount > 0 ? `• <span style="color:#c2410c;font-weight:600">${pendingCount} متبقية</span>` : '• <span style="color:#16a34a;font-weight:600">✓ مكتملة</span>'}
+              </span>
+              <div style="flex:1;max-width:100px;height:4px;background:#f1f5f9;border-radius:2px;overflow:hidden">
+                <div style="height:100%;background:linear-gradient(90deg,#ff6b35,#f7468a);width:${progressPct}%;transition:width 0.3s"></div>
+              </div>
+            ` : `<span style="font-size:11px;color:#9ca3af;font-style:italic">لا توجد مهام بعد</span>`}
+          </div>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
+          <button class="btn btn-secondary" style="padding:5px 10px;font-size:11px" onclick="event.stopPropagation();showNewTodoModal('${list.id}')" title="إضافة مهمة">➕ مهمة</button>
+          <button class="btn btn-ghost" style="padding:5px 8px;font-size:11px;background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd" onclick="event.stopPropagation();showNewSubListModal('${list.id}')" title="قائمة فرعية">📂</button>
+          ${canDelete ? `<button class="btn btn-ghost" style="padding:5px 7px;font-size:11px;color:#ef4444" onclick="event.stopPropagation();deleteList('${list.id}')" title="حذف القائمة">🗑️</button>` : ''}
         </div>
       </div>
-      <div id="listBody-${list.id}" style="${isCollapsed ? 'display:none' : ''}">
-        ${listTodos.length === 0 && subLists.length === 0 ? `<div style="padding:12px; color:var(--text-muted); font-size:13px">لا توجد مهام في هذه القائمة بعد. اضغط <strong>➕ مهمة</strong> لإضافة أول مهمة.</div>` : ''}
+      <div id="listBody-${list.id}" style="${isExpanded ? '' : 'display:none'};padding:${isExpanded ? '12px 14px' : '0'}">
+        ${listTodos.length === 0 && subLists.length === 0 ? `<div style="padding:12px;color:var(--text-muted);font-size:13px;text-align:center;font-style:italic">لا توجد مهام في هذه القائمة بعد. اضغط <strong>➕ مهمة</strong> لإضافة أول مهمة.</div>` : ''}
         ${listTodos.map(td => renderTodoCard(td, assigneesByTodo[td.id] || [])).join('')}
   `;
   
@@ -6791,15 +6812,39 @@ function renderTodoListNested(list, allLists, allTodos, assigneesByTodo, depth) 
   return html;
 }
 
-// Toggle collapse/expand of a list
+// Toggle collapse/expand of a list (INVERTED: default is collapsed, click expands)
 function toggleListCollapse(listId) {
   const body = document.getElementById('listBody-' + listId);
   const caret = document.getElementById('listCaret-' + listId);
   if (!body) return;
   const isHidden = body.style.display === 'none';
-  body.style.display = isHidden ? '' : 'none';
-  if (caret) caret.style.transform = isHidden ? '' : 'rotate(-90deg)';
-  localStorage.setItem('todoListCollapsed_' + listId, isHidden ? '0' : '1');
+  
+  if (isHidden) {
+    // Expanding
+    body.style.display = '';
+    body.style.padding = '12px 14px';
+    if (caret) caret.style.transform = '';
+    localStorage.setItem('todoListExpanded_' + listId, '1');
+    
+    // Update parent background
+    const parent = body.parentElement?.querySelector('div[onclick*="toggleListCollapse"]');
+    if (parent) {
+      parent.style.background = '#fff7ed';
+      parent.style.borderBottom = '1px solid #fed7aa';
+    }
+  } else {
+    // Collapsing
+    body.style.display = 'none';
+    body.style.padding = '0';
+    if (caret) caret.style.transform = 'rotate(-90deg)';
+    localStorage.removeItem('todoListExpanded_' + listId);
+    
+    const parent = body.parentElement?.querySelector('div[onclick*="toggleListCollapse"]');
+    if (parent) {
+      parent.style.background = 'white';
+      parent.style.borderBottom = 'none';
+    }
+  }
 }
 
 // Single todo card renderer
