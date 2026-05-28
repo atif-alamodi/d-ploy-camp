@@ -7173,7 +7173,7 @@ async function renderTodos(container) {
   let assigneesByTodo = {};
   if (todos && todos.length > 0) {
     const { data: assignees } = await sb.from('todo_assignees')
-      .select('todo_id, user_id, profile:user_id!todo_assignees_user_id_profiles_fkey(full_name)')
+      .select('todo_id, user_id, profile:user_id(full_name)')
       .in('todo_id', todos.map(t => t.id));
     (assignees || []).forEach(a => {
       if (!assigneesByTodo[a.todo_id]) assigneesByTodo[a.todo_id] = [];
@@ -12828,7 +12828,7 @@ async function showTodoDetailPage(todoId) {
   
   // Fetch assignees
   const { data: assignees } = await sb.from('todo_assignees')
-    .select('user_id, assigned_at, profile:user_id!todo_assignees_user_id_profiles_fkey(full_name)')
+    .select('user_id, assigned_at, profile:user_id(full_name)')
     .eq('todo_id', todoId);
   
   // Fetch history
