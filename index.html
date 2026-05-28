@@ -6725,10 +6725,25 @@ function showProjectTab(tab) {
   document.querySelectorAll('.page-content').forEach(p => p.classList.add('hidden'));
   document.getElementById('projectPage').classList.remove('hidden');
   
-  // Scroll to top for better UX
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-  
-  loadProjectTab(tab);
+  loadProjectTab(tab).then(() => {
+    // After the tab content is rendered, scroll to it
+    // On mobile (width < 768), scroll DOWN to the tab content so user sees it without manual scroll
+    // On desktop, just scroll to top for cleanliness
+    setTimeout(() => {
+      const isMobile = window.innerWidth < 768;
+      if (isMobile) {
+        const target = document.getElementById('projectContent');
+        if (target) {
+          // Use offsetTop for reliable positioning even inside scroll containers
+          const rect = target.getBoundingClientRect();
+          const offsetTop = window.scrollY + rect.top - 12; // 12px breathing room above
+          window.scrollTo({ top: offsetTop, behavior: 'smooth' });
+        }
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }, 150);
+  }).catch(e => console.warn('Tab load:', e));
 }
 
 async function loadProjectTab(tab) {
