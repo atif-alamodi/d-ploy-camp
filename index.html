@@ -6574,9 +6574,9 @@ async function toggleAssignment(userId, rowElement) {
     .maybeSingle();
   
   if (existing) {
-    // إزالة التعيين مسموحة فقط للمنشئ أو super_admin
-    if (window.__canRemoveAssignees !== true) {
-      toast('🔒 لا تملك صلاحية إزالة المعيّنين');
+    // منع الإزالة لمن لا يملك الصلاحية
+    if (!window.__canRemoveAssignees) {
+      toast('⚠️ إزالة المعيّنين متاحة لمنشئ المهمة فقط');
       return;
     }
     // Remove assignment
@@ -6669,9 +6669,9 @@ async function unassignAllMembers() {
   const todoId = document.getElementById('assigneeTodoId').value;
   if (!todoId) return;
 
-  // إزالة الكل مسموحة فقط للمنشئ أو super_admin
-  if (window.__canRemoveAssignees !== true) {
-    toast('🔒 لا تملك صلاحية إزالة المعيّنين');
+  // منع الإزالة لمن لا يملك الصلاحية
+  if (!window.__canRemoveAssignees) {
+    toast('⚠️ إزالة المعيّنين متاحة لمنشئ المهمة فقط');
     return;
   }
 
