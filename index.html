@@ -7169,12 +7169,39 @@ async function renderTodos(container) {
   }
   
   
-  // Fetch multi-assignees for all todos
+  // Fetch multi-assignees for all todos (explicit FK to profiles + robust fallback)
   let assigneesByTodo = {};
   if (todos && todos.length > 0) {
-    const { data: assignees } = await sb.from('todo_assignees')
-      .select('todo_id, user_id, profile:user_id(full_name)')
-      .in('todo_id', todos.map(t => t.id));
+    const todoIds = todos.map(t => t.id);
+    let assignees = null;
+    // Try with explicit FK name first
+    try {
+      const res = await sb.from('todo_assignees')
+        .select('todo_id, user_id, profile:user_id!todo_assignees_user_id_profiles_fkey(full_name)')
+        .in('todo_id', todoIds);
+      assignees = res.data;
+      if (res.error) throw res.error;
+    } catch(e) {
+      // Fallback: fetch assignees without join, then fetch profiles separately
+      try {
+        const { data: rawAssignees } = await sb.from('todo_assignees')
+          .select('todo_id, user_id')
+          .in('todo_id', todoIds);
+        const uids = [...new Set((rawAssignees || []).map(a => a.user_id))];
+        let profileMap = {};
+        if (uids.length > 0) {
+          const { data: profs } = await sb.from('profiles').select('id, full_name').in('id', uids);
+          (profs || []).forEach(p => { profileMap[p.id] = p; });
+        }
+        assignees = (rawAssignees || []).map(a => ({
+          todo_id: a.todo_id,
+          user_id: a.user_id,
+          profile: profileMap[a.user_id] || null
+        }));
+      } catch(e2) {
+        assignees = [];
+      }
+    }
     (assignees || []).forEach(a => {
       if (!assigneesByTodo[a.todo_id]) assigneesByTodo[a.todo_id] = [];
       assigneesByTodo[a.todo_id].push(a);
@@ -12826,10 +12853,35 @@ async function showTodoDetailPage(todoId) {
   // Fetch list
   const { data: list } = await sb.from('todo_lists').select('title').eq('id', todo.list_id).maybeSingle();
   
-  // Fetch assignees
-  const { data: assignees } = await sb.from('todo_assignees')
-    .select('user_id, assigned_at, profile:user_id(full_name)')
-    .eq('todo_id', todoId);
+  // Fetch assignees (explicit FK to profiles + robust fallback)
+  let assignees = null;
+  try {
+    const res = await sb.from('todo_assignees')
+      .select('user_id, assigned_at, profile:user_id!todo_assignees_user_id_profiles_fkey(full_name)')
+      .eq('todo_id', todoId);
+    if (res.error) throw res.error;
+    assignees = res.data;
+  } catch(e) {
+    // Fallback: fetch raw rows then profiles separately
+    try {
+      const { data: raw } = await sb.from('todo_assignees')
+        .select('user_id, assigned_at')
+        .eq('todo_id', todoId);
+      const uids = [...new Set((raw || []).map(a => a.user_id))];
+      let profileMap = {};
+      if (uids.length > 0) {
+        const { data: profs } = await sb.from('profiles').select('id, full_name').in('id', uids);
+        (profs || []).forEach(p => { profileMap[p.id] = p; });
+      }
+      assignees = (raw || []).map(a => ({
+        user_id: a.user_id,
+        assigned_at: a.assigned_at,
+        profile: profileMap[a.user_id] || null
+      }));
+    } catch(e2) {
+      assignees = [];
+    }
+  }
   
   // Fetch history
   const { data: history } = await sb.from('todo_history')
