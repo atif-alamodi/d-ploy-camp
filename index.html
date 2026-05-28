@@ -6655,10 +6655,19 @@ async function uploadTodoAttachments(todoId, files) {
   
   toast(`✅ تم رفع ${uploaded} من ${totalFiles}`);
   
-  // Refresh
-  if (activeTab === 'todos') {
-    await loadProjectTab('todos');
+  // Refresh everything: detail page (if open), todos list, and project counts
+  // The detail page shows the attachment list - it must refresh to show new files
+  if (currentDetailTodoId === todoId) {
+    try { await showTodoDetailPage(todoId); } catch(e) {}
   }
+  
+  // Refresh the todos list to update the 📎 badge count on the card
+  if (activeTab === 'todos') {
+    try { await loadProjectTab('todos'); } catch(e) {}
+  }
+  
+  // Refresh project tool counts (📁 files icon counter)
+  try { await loadProjectCounts(); } catch(e) {}
 }
 
 // NOTE: handleTodoFileDrop defined later with dropzone styling cleanup
@@ -11369,6 +11378,15 @@ async function deleteTodoAttachment(todoId, index) {
   await sb.from('todos').update({ attachments }).eq('id', todoId);
   renderTodoAttachments(todoId, attachments);
   toast('🗑️ تم حذف المرفق');
+  
+  // Refresh detail page (if open) and todos list so badge count updates immediately
+  if (currentDetailTodoId === todoId) {
+    try { await showTodoDetailPage(todoId); } catch(e) {}
+  }
+  if (activeTab === 'todos') {
+    try { await loadProjectTab('todos'); } catch(e) {}
+  }
+  try { await loadProjectCounts(); } catch(e) {}
 }
 
 
