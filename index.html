@@ -2782,9 +2782,18 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
     </div>
     <div class="form-group">
       <label>🎯 الطبقة (اختياري)</label>
-      <select class="form-input" id="newTodoLayer">
-        <option value="">— بدون طبقة —</option>
-      </select>
+      <div style="display:flex;gap:6px">
+        <select class="form-input" id="newTodoLayer" style="flex:1">
+          <option value="">— بدون طبقة —</option>
+        </select>
+        <button type="button" class="btn btn-secondary" 
+          style="padding:8px 14px;font-size:12px;background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;white-space:nowrap"
+          onclick="quickCreateLayerFromTodoModal()" 
+          title="إنشاء طبقة جديدة في هذا المشروع">
+          + طبقة جديدة
+        </button>
+      </div>
+      <div style="font-size:11px;color:#9ca3af;margin-top:4px">الطبقات تساعدك في تجميع المهام حسب المراحل (مثل: الإعداد، التنفيذ، المراجعة)</div>
     </div>
     <div class="form-group">
       <label>📝 وصف (اختياري)</label>
@@ -7983,6 +7992,108 @@ async function loadLayersForTodoModal() {
     (layers || []).map(l => `<option value="${l.id}">${l.layer_number}. ${escapeHTML(l.name)}</option>`).join('');
 }
 
+// Quick-create a new layer without leaving the new-todo modal
+// Quick-create layer from the task EDIT mode (uses todo.project_id, not activeProject)
+async function quickCreateLayerForEdit(projectId) {
+  if (!projectId) {
+    toast('⚠️ معرّف المشروع مفقود');
+    return;
+  }
+  const name = prompt('🎯 اسم الطبقة الجديدة (مثل: الإعداد، التنفيذ، المراجعة):');
+  if (!name || !name.trim()) return;
+  
+  try {
+    const { data: existing } = await sb.from('project_layers')
+      .select('layer_number')
+      .eq('project_id', projectId)
+      .order('layer_number', { ascending: false })
+      .limit(1);
+    const nextNumber = (existing && existing.length > 0) ? (existing[0].layer_number + 1) : 1;
+    
+    const { data: newLayer, error } = await sb.from('project_layers').insert({
+      project_id: projectId,
+      name: name.trim(),
+      layer_number: nextNumber,
+      created_by: currentUser.id
+    }).select().single();
+    
+    if (error) {
+      toast('❌ ' + error.message);
+      return;
+    }
+    
+    toast(`✅ تم إنشاء طبقة ${nextNumber}: ${name.trim()}`);
+    
+    // Reload edit dropdown and select the new one
+    const sel = document.getElementById('editLayer');
+    if (sel) {
+      const { data: layers } = await sb.from('project_layers')
+        .select('id, layer_number, name')
+        .eq('project_id', projectId)
+        .order('layer_number');
+      const current = sel.value;
+      sel.innerHTML = '<option value="">— بدون طبقة —</option>' +
+        (layers || []).map(l => `<option value="${l.id}" ${l.id === newLayer.id ? 'selected' : ''}>طبقة ${l.layer_number}: ${escapeHTML(l.name)}</option>`).join('');
+      // Remove the "no layers" hint if it was there
+      const hint = sel.parentElement?.parentElement?.querySelector('div[style*="margin-top:4px"]');
+      if (hint && hint.textContent.includes('لا توجد طبقات')) hint.remove();
+    }
+  } catch(e) {
+    toast('❌ ' + e.message);
+  }
+}
+
+async function quickCreateLayerFromTodoModal() {
+  if (!activeProject?.id) {
+    toast('⚠️ لا يوجد مشروع نشط');
+    return;
+  }
+  const name = prompt('🎯 اسم الطبقة الجديدة (مثل: الإعداد، التنفيذ، المراجعة):');
+  if (!name || !name.trim()) return;
+  
+  try {
+    // Get next layer number
+    const { data: existing } = await sb.from('project_layers')
+      .select('layer_number')
+      .eq('project_id', activeProject.id)
+      .order('layer_number', { ascending: false })
+      .limit(1);
+    const nextNumber = (existing && existing.length > 0) ? (existing[0].layer_number + 1) : 1;
+    
+    const { data: newLayer, error } = await sb.from('project_layers').insert({
+      project_id: activeProject.id,
+      name: name.trim(),
+      layer_number: nextNumber,
+      created_by: currentUser.id
+    }).select().single();
+    
+    if (error) {
+      toast('❌ ' + error.message);
+      return;
+    }
+    
+    toast(`✅ تم إنشاء طبقة ${nextNumber}: ${name.trim()}`);
+    
+    // Reload layers and select the new one
+    await loadLayersForTodoModal();
+    const select = document.getElementById('newTodoLayer');
+    if (select && newLayer) select.value = newLayer.id;
+    
+    // Also reload the edit-mode layer dropdown if it exists
+    const editSel = document.getElementById('editLayer');
+    if (editSel) {
+      const { data: layers } = await sb.from('project_layers')
+        .select('id, layer_number, name')
+        .eq('project_id', activeProject.id)
+        .order('layer_number');
+      editSel.innerHTML = '<option value="">— بدون طبقة —</option>' + 
+        (layers || []).map(l => `<option value="${l.id}" ${l.id === newLayer?.id ? 'selected' : ''}>طبقة ${l.layer_number}: ${escapeHTML(l.name)}</option>`).join('');
+    }
+  } catch(e) {
+    toast('❌ ' + e.message);
+  }
+}
+
 async function toggleTodo(id, completed) {
   await sb.from('todos').update({
     completed,
@@ -12491,11 +12602,17 @@ async function showTodoDetailPage(todoId) {
         <!-- Layer -->
         <div style="background:#fafaf9;padding:12px;border-radius:12px;border:1px solid #f1f5f9">
           <div style="font-size:11px;color:#9ca3af;font-weight:700;margin-bottom:8px">🎯 الطبقة</div>
-          ${isEditMode && availableLayers.length > 0 ? `
-            <select id="editLayer" style="width:100%;padding:8px 12px;border:1.5px solid #c7d2fe;border-radius:10px;background:#eef2ff;color:#3730a3;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">
-              <option value="">— بدون طبقة —</option>
-              ${availableLayers.map(l => `<option value="${l.id}" ${todo.layer_id === l.id ? 'selected' : ''}>طبقة ${l.layer_number}: ${escapeHTML(l.name)}</option>`).join('')}
-            </select>
+          ${isEditMode ? `
+            <div style="display:flex;gap:6px;align-items:stretch">
+              <select id="editLayer" style="flex:1;padding:8px 12px;border:1.5px solid #c7d2fe;border-radius:10px;background:#eef2ff;color:#3730a3;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">
+                <option value="">— بدون طبقة —</option>
+                ${availableLayers.map(l => `<option value="${l.id}" ${todo.layer_id === l.id ? 'selected' : ''}>طبقة ${l.layer_number}: ${escapeHTML(l.name)}</option>`).join('')}
+              </select>
+              <button type="button" onclick="quickCreateLayerForEdit('${todo.project_id}')" 
+                style="padding:6px 10px;background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap" 
+                title="إنشاء طبقة جديدة">+ جديدة</button>
+            </div>
+            ${availableLayers.length === 0 ? '<div style="font-size:10px;color:#9ca3af;margin-top:4px">لا توجد طبقات بعد - اضغط "+ جديدة" لإنشاء أول طبقة</div>' : ''}
           ` : (todo.layer_number ? `<span style="background:#e0e7ff;color:#3730a3;padding:4px 12px;border-radius:50px;font-size:12px;font-weight:700;display:inline-block">طبقة ${todo.layer_number}</span>` : '<span style="color:#9ca3af;font-size:12px;font-style:italic">لا توجد طبقة</span>')}
         </div>
       </div>
