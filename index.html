@@ -6474,16 +6474,23 @@ async function loadAllMembers() {
 async function openAssigneesPicker(todoId) {
   document.getElementById('assigneeTodoId').value = todoId;
   document.getElementById('assigneeSearch').value = '';
-  
-  // Load all members
+
+  // تحديد صلاحية الإزالة: المنشئ أو super_admin فقط
+  let canRemove = currentProfile?.is_super_admin === true;
+  try {
+    const { data: td } = await sb.from('todos').select('created_by').eq('id', todoId).maybeSingle();
+    if (td && td.created_by === currentUser?.id) canRemove = true;
+  } catch(e) {}
+  window.__canRemoveAssignees = canRemove;
+
+  // إظهار/إخفاء زر "إلغاء الكل" حسب الصلاحية
+  const clearAllBtn = document.querySelector('#assigneesPickerModal button[onclick="unassignAllMembers()"]');
+  if (clearAllBtn) clearAllBtn.style.display = canRemove ? '' : 'none';
+
   await loadAllMembers();
-  
-  // Load current assignees for this todo
   const { data: currentAssignees } = await sb.from('todo_assignees')
-    .select('user_id')
-    .eq('todo_id', todoId);
+    .select('user_id').eq('todo_id', todoId);
   const currentSet = new Set((currentAssignees || []).map(a => a.user_id));
-  
   await renderAssigneesPickerList(currentSet);
   openModal('assigneesPickerModal');
 }
@@ -6506,19 +6513,22 @@ async function renderAssigneesPickerList(currentSet) {
     return;
   }
   
+  const canRemove = window.__canRemoveAssignees === true;
   listBox.innerHTML = members.map(m => {
     const name = m.full_name || m.email || '?';
     const initial = name.charAt(0).toUpperCase();
     const isAssigned = currentSet.has(m.id);
+    // الأعضاء المُعيّنون لا يمكن إزالتهم إلا للمنشئ أو super_admin
+    const locked = isAssigned && !canRemove;
     return `
-      <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:${isAssigned ? '#fff7ed' : 'white'};border:1px solid ${isAssigned ? '#fed7aa' : '#e5e7eb'};border-radius:12px;cursor:pointer;transition:all 0.15s" 
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:${isAssigned ? '#fff7ed' : 'white'};border:1px solid ${isAssigned ? '#fed7aa' : '#e5e7eb'};border-radius:12px;cursor:${locked ? 'not-allowed' : 'pointer'};transition:all 0.15s;${locked ? 'opacity:0.85' : ''}"
         onclick="toggleAssignment('${m.id}', this)">
         <div style="width:36px;height:36px;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0">${initial}</div>
         <div style="flex:1">
           <div style="font-weight:600;font-size:14px;color:#1f2937">${escapeHTML(name)}</div>
           <div style="font-size:11px;color:#9ca3af;direction:ltr;text-align:right">${escapeHTML(m.email || '')}</div>
         </div>
-        <div style="font-size:18px;flex-shrink:0">${isAssigned ? '✅' : '⭕'}</div>
+        <div style="font-size:18px;flex-shrink:0">${isAssigned ? (locked ? '🔒' : '✅') : '⭕'}</div>
       </div>
     `;
   }).join('');
@@ -6564,6 +6574,11 @@ async function toggleAssignment(userId, rowElement) {
     .maybeSingle();
   
   if (existing) {
+    // إزالة التعيين مسموحة فقط للمنشئ أو super_admin
+    if (window.__canRemoveAssignees !== true) {
+      toast('🔒 لا تملك صلاحية إزالة المعيّنين');
+      return;
+    }
     // Remove assignment
     const { error } = await sb.from('todo_assignees').delete().eq('id', existing.id);
     if (error) { toast('❌ ' + error.message); return; }
@@ -6653,7 +6668,13 @@ async function assignAllMembers() {
 async function unassignAllMembers() {
   const todoId = document.getElementById('assigneeTodoId').value;
   if (!todoId) return;
-  
+
+  // إزالة الكل مسموحة فقط للمنشئ أو super_admin
+  if (window.__canRemoveAssignees !== true) {
+    toast('🔒 لا تملك صلاحية إزالة المعيّنين');
+    return;
+  }
+
   const { data: current } = await sb.from('todo_assignees')
     .select('user_id')
     .eq('todo_id', todoId);
