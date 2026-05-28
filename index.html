@@ -2725,26 +2725,43 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 
 <!-- New Todo Modal -->
 <div class="modal-bg" id="newTodoModal">
-  <div class="modal" style="max-width:520px;max-height:90vh;overflow-y:auto">
-    <h3 class="modal-title" data-i18n="newTodoTitle">مهمة جديدة</h3>
+  <div class="modal" style="max-width:560px;max-height:90vh;overflow-y:auto">
+    <h3 class="modal-title">✨ مهمة جديدة</h3>
     <input type="hidden" id="todoListId">
+    <input type="hidden" id="newTodoAssigneeIds" value=""><!-- comma-separated user ids -->
+    <input type="hidden" id="newTodoAttachments" value="[]"><!-- JSON of uploaded files -->
+    
     <div class="form-group">
-      <label data-i18n="todoTitle">عنوان المهمة <span style="color:red">*</span></label>
-      <input type="text" class="form-input" id="newTodoTitle" onkeydown="if(event.key==='Enter')createTodo()">
+      <label>عنوان المهمة <span style="color:red">*</span></label>
+      <input type="text" class="form-input" id="newTodoTitle" placeholder="مثلاً: مراجعة الفصل الأول">
     </div>
+    
+    <!-- Multi-assign section -->
     <div class="form-group">
-      <label>👤 تعيين إلى</label>
-      <select class="form-input" id="newTodoAssignee">
-        <option value="">— غير معيّن —</option>
-      </select>
+      <label>👥 تعيين إلى (يمكن اختيار أكثر من شخص)</label>
+      <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+        <button type="button" class="btn btn-secondary" style="padding:6px 12px;font-size:12px" onclick="openNewTodoAssigneesPicker()">
+          + اختر الأعضاء
+        </button>
+        <button type="button" class="btn btn-secondary" style="padding:6px 12px;font-size:12px;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0" onclick="selectAllForNewTodo()">
+          ✅ تعيين الجميع
+        </button>
+        <button type="button" class="btn btn-ghost" style="padding:6px 12px;font-size:12px;color:#ef4444" onclick="clearNewTodoAssignees()">
+          ✖️ إلغاء الكل
+        </button>
+      </div>
+      <div id="newTodoAssigneesChips" style="display:flex;flex-wrap:wrap;gap:4px;min-height:30px;padding:6px;background:#fafaf9;border:1px solid #e5e7eb;border-radius:10px;font-size:12px">
+        <span style="color:#9ca3af;font-style:italic">لم يتم تعيين أحد بعد</span>
+      </div>
     </div>
+    
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group">
         <label>📅 تاريخ البدء</label>
         <input type="date" class="form-input" id="newTodoStart">
       </div>
       <div class="form-group">
-        <label data-i18n="dueDate">🏁 تاريخ الانتهاء</label>
+        <label>🏁 تاريخ الانتهاء</label>
         <input type="date" class="form-input" id="newTodoDue">
       </div>
     </div>
@@ -2754,12 +2771,12 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
         <input type="number" class="form-input" id="newTodoHours" min="1" max="500" value="8">
       </div>
       <div class="form-group">
-        <label data-i18n="priority">🚦 الأولوية</label>
+        <label>🚦 الأولوية</label>
         <select class="form-input" id="newTodoPriority">
-          <option value="low" data-i18n="low">منخفضة</option>
-          <option value="normal" selected data-i18n="normal">عادية</option>
-          <option value="high" data-i18n="high">عالية</option>
-          <option value="urgent" data-i18n="urgent">عاجلة</option>
+          <option value="low">منخفضة</option>
+          <option value="normal" selected>عادية</option>
+          <option value="high">عالية</option>
+          <option value="urgent">عاجلة</option>
         </select>
       </div>
     </div>
@@ -2773,9 +2790,49 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
       <label>📝 وصف (اختياري)</label>
       <textarea class="form-input" id="newTodoDesc" rows="2" style="resize:vertical" placeholder="تفاصيل إضافية..."></textarea>
     </div>
+    
+    <!-- File attachments -->
+    <div class="form-group">
+      <label>📎 المرفقات (اختياري)</label>
+      <input type="file" id="newTodoFiles" multiple style="display:none" onchange="handleNewTodoFiles(this.files)">
+      <div onclick="document.getElementById('newTodoFiles').click()" 
+        style="border:2px dashed #d1d5db;border-radius:12px;padding:14px;text-align:center;cursor:pointer;background:#fafaf9;transition:all 0.15s"
+        onmouseover="this.style.borderColor='#ff6b35';this.style.background='#fff7ed'"
+        onmouseout="this.style.borderColor='#d1d5db';this.style.background='#fafaf9'"
+        ondragover="event.preventDefault();this.style.borderColor='#ff6b35';this.style.background='#fff7ed'"
+        ondragleave="this.style.borderColor='#d1d5db';this.style.background='#fafaf9'"
+        ondrop="event.preventDefault();this.style.borderColor='#d1d5db';this.style.background='#fafaf9';handleNewTodoFiles(event.dataTransfer.files)">
+        <div style="font-size:24px;margin-bottom:4px">📎</div>
+        <div style="font-size:13px;color:#6b7280;font-weight:600">انقر أو اسحب الملفات هنا</div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:2px">الملفات ستكون مرئية لكل المعيّنين وأعضاء المشروع</div>
+      </div>
+      <div id="newTodoFilesPreview" style="display:flex;flex-direction:column;gap:4px;margin-top:8px"></div>
+      <div id="newTodoUploadProgress" style="display:none;margin-top:8px;font-size:12px;color:#6b7280"></div>
+    </div>
+    
     <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeModal('newTodoModal')" data-i18n="cancel">إلغاء</button>
-      <button class="btn btn-primary" onclick="createTodo()" data-i18n="create">إنشاء</button>
+      <button class="btn btn-ghost" onclick="closeNewTodoModal()">إلغاء</button>
+      <button class="btn btn-primary" id="createTodoBtn" onclick="createTodo()">✨ إنشاء المهمة</button>
+    </div>
+  </div>
+</div>
+
+<!-- Multi-assignee picker for new todo (different from existing tasks picker) -->
+<div class="modal-bg" id="newTodoAssigneesPickerModal">
+  <div class="modal" style="max-width:540px;max-height:80vh;overflow-y:auto">
+    <h3 class="modal-title">👥 اختر المعيّنين</h3>
+    <p style="color:#6b7280;font-size:12px;margin-bottom:12px">اضغط على أي عضو لإضافته/إزالته. يمكنك اختيار أي عدد.</p>
+    <input type="text" class="form-input" id="newTodoAssigneeSearch" placeholder="🔍 ابحث بالاسم..."
+      style="margin-bottom:10px" oninput="renderNewTodoAssigneesPickerList()">
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button type="button" class="btn btn-secondary" style="padding:5px 10px;font-size:11px;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0" onclick="selectAllForNewTodo();renderNewTodoAssigneesPickerList()">✅ الكل</button>
+      <button type="button" class="btn btn-secondary" style="padding:5px 10px;font-size:11px" onclick="clearNewTodoAssignees();renderNewTodoAssigneesPickerList()">✖️ إلغاء الكل</button>
+      <span style="flex:1"></span>
+      <span id="newTodoAssigneeCount" style="font-size:12px;color:#6b7280;align-self:center"></span>
+    </div>
+    <div id="newTodoAssigneesPickerList" style="display:flex;flex-direction:column;gap:4px;max-height:380px;overflow-y:auto"></div>
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="btn btn-primary" onclick="closeModal('newTodoAssigneesPickerModal');refreshNewTodoAssigneesChips()">✓ تم</button>
     </div>
   </div>
 </div>
@@ -7428,12 +7485,22 @@ async function createTodoList() {
   await loadProjectCounts();
 }
 
+// State for new todo modal (multi-assign + attachments)
+let newTodoSelectedAssignees = new Set();
+let newTodoPickerMembers = [];
+let newTodoUploadedFiles = [];
+
 async function showNewTodoModal(listId) {
   document.getElementById('todoListId').value = listId;
   document.getElementById('newTodoTitle').value = '';
   document.getElementById('newTodoDue').value = '';
   document.getElementById('newTodoPriority').value = 'normal';
   document.getElementById('newTodoDesc').value = '';
+  document.getElementById('newTodoAttachments').value = '[]';
+  
+  // Reset multi-assign + attachments state
+  newTodoSelectedAssignees = new Set([currentUser.id]); // default: assign to current user
+  newTodoUploadedFiles = [];
   
   // Default dates: today → 7 days from now
   const today = new Date();
@@ -7446,65 +7513,352 @@ async function showNewTodoModal(listId) {
   // Load layers
   await loadLayersForTodoModal();
   
-  // Load project members into assignee dropdown
-  const { data: members } = await sb.from('project_members')
-    .select('user_id, profile:user_id(full_name, email)')
-    .eq('project_id', activeProject.id);
-  const sel = document.getElementById('newTodoAssignee');
-  sel.innerHTML = '<option value="">— غير معيّن —</option>';
-  (members || []).forEach(m => {
-    const opt = document.createElement('option');
-    opt.value = m.user_id;
-    opt.textContent = m.profile?.full_name || m.profile?.email || m.user_id;
-    if (m.user_id === currentUser.id) opt.textContent += ' (أنا)';
-    sel.appendChild(opt);
-  });
-  sel.value = currentUser.id;
+  // Load project members for picker
+  try {
+    const { data: members } = await sb.from('project_members')
+      .select('user_id, profile:user_id(id, full_name, email)')
+      .eq('project_id', activeProject.id);
+    newTodoPickerMembers = (members || [])
+      .filter(m => m.profile)
+      .map(m => ({
+        id: m.profile.id,
+        name: m.profile.full_name || m.profile.email?.split('@')[0] || '?',
+        email: m.profile.email
+      }));
+    
+    // Fallback if no project members - load all platform members
+    if (newTodoPickerMembers.length === 0) {
+      const { data: profiles } = await sb.from('profiles')
+        .select('id, full_name, email')
+        .or('status.eq.active,status.is.null')
+        .limit(50);
+      newTodoPickerMembers = (profiles || []).map(p => ({
+        id: p.id,
+        name: p.full_name || p.email?.split('@')[0] || '?',
+        email: p.email
+      }));
+    }
+  } catch(e) {
+    console.warn('Loading members for new todo:', e);
+    newTodoPickerMembers = [];
+  }
+  
+  refreshNewTodoAssigneesChips();
+  refreshNewTodoFilesPreview();
   openModal('newTodoModal');
+  
+  setTimeout(() => document.getElementById('newTodoTitle')?.focus(), 100);
+}
+
+function closeNewTodoModal() {
+  // Clean up any uploaded files that weren't saved (best effort)
+  newTodoUploadedFiles = [];
+  newTodoSelectedAssignees = new Set();
+  closeModal('newTodoModal');
+}
+
+// Show chips of currently selected assignees in the new todo modal
+function refreshNewTodoAssigneesChips() {
+  const wrap = document.getElementById('newTodoAssigneesChips');
+  if (!wrap) return;
+  
+  if (newTodoSelectedAssignees.size === 0) {
+    wrap.innerHTML = '<span style="color:#9ca3af;font-style:italic">لم يتم تعيين أحد بعد</span>';
+    return;
+  }
+  
+  const memberMap = {};
+  newTodoPickerMembers.forEach(m => memberMap[m.id] = m);
+  
+  wrap.innerHTML = Array.from(newTodoSelectedAssignees).map(id => {
+    const m = memberMap[id];
+    const name = m?.name || (id === currentUser?.id ? (currentProfile?.full_name || 'أنا') : 'عضو');
+    const initial = name.charAt(0).toUpperCase();
+    const isMe = id === currentUser?.id;
+    return `
+      <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 4px 3px 8px;background:white;border:1px solid #fed7aa;border-radius:50px;font-size:12px">
+        <span style="width:20px;height:20px;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:10px">${initial}</span>
+        ${escapeHTML(name)}${isMe ? ' (أنا)' : ''}
+        <button type="button" onclick="removeNewTodoAssignee('${id}')" style="background:transparent;border:none;color:#ef4444;cursor:pointer;font-size:14px;padding:0 4px;line-height:1" title="إزالة">×</button>
+      </span>
+    `;
+  }).join('');
+}
+
+function removeNewTodoAssignee(userId) {
+  newTodoSelectedAssignees.delete(userId);
+  refreshNewTodoAssigneesChips();
+}
+
+function selectAllForNewTodo() {
+  newTodoPickerMembers.forEach(m => newTodoSelectedAssignees.add(m.id));
+  refreshNewTodoAssigneesChips();
+  toast(`✅ تم تعيين ${newTodoSelectedAssignees.size} عضو`);
+}
+
+function clearNewTodoAssignees() {
+  newTodoSelectedAssignees.clear();
+  refreshNewTodoAssigneesChips();
+}
+
+// Open the multi-assignee picker modal
+function openNewTodoAssigneesPicker() {
+  document.getElementById('newTodoAssigneeSearch').value = '';
+  renderNewTodoAssigneesPickerList();
+  openModal('newTodoAssigneesPickerModal');
+}
+
+function renderNewTodoAssigneesPickerList() {
+  const listBox = document.getElementById('newTodoAssigneesPickerList');
+  const search = (document.getElementById('newTodoAssigneeSearch')?.value || '').toLowerCase().trim();
+  
+  let members = newTodoPickerMembers;
+  if (search) {
+    members = members.filter(m => 
+      (m.name || '').toLowerCase().includes(search) ||
+      (m.email || '').toLowerCase().includes(search)
+    );
+  }
+  
+  document.getElementById('newTodoAssigneeCount').textContent = `${newTodoSelectedAssignees.size} مُعيَّن`;
+  
+  if (members.length === 0) {
+    listBox.innerHTML = '<div style="padding:20px;text-align:center;color:#9ca3af">لا توجد نتائج</div>';
+    return;
+  }
+  
+  listBox.innerHTML = members.map(m => {
+    const isSelected = newTodoSelectedAssignees.has(m.id);
+    const initial = (m.name || '?').charAt(0).toUpperCase();
+    const isMe = m.id === currentUser?.id;
+    return `
+      <div onclick="toggleNewTodoAssignee('${m.id}')"
+        style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:${isSelected ? '#fff7ed' : 'white'};border:1.5px solid ${isSelected ? '#fed7aa' : '#e5e7eb'};border-radius:12px;cursor:pointer;transition:all 0.15s">
+        <div style="width:32px;height:32px;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">${initial}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px;color:#1f2937">${escapeHTML(m.name)}${isMe ? ' (أنا)' : ''}</div>
+          <div style="font-size:10px;color:#9ca3af;direction:ltr;text-align:right">${escapeHTML(m.email || '')}</div>
+        </div>
+        <div style="font-size:18px;flex-shrink:0">${isSelected ? '✅' : '⭕'}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleNewTodoAssignee(userId) {
+  if (newTodoSelectedAssignees.has(userId)) {
+    newTodoSelectedAssignees.delete(userId);
+  } else {
+    newTodoSelectedAssignees.add(userId);
+  }
+  renderNewTodoAssigneesPickerList();
+}
+
+// File handling for new todo
+async function handleNewTodoFiles(fileList) {
+  if (!fileList || fileList.length === 0) return;
+  const progressEl = document.getElementById('newTodoUploadProgress');
+  if (progressEl) {
+    progressEl.style.display = 'block';
+    progressEl.textContent = '⬆️ جارٍ رفع الملفات...';
+  }
+  
+  const files = Array.from(fileList);
+  let uploaded = 0;
+  
+  for (const file of files) {
+    try {
+      // Generate a unique path
+      const timestamp = Date.now();
+      const safeName = file.name.replace(/[^a-zA-Z0-9._\u0600-\u06FF-]/g, '_');
+      const path = `todo-attachments/${activeProject.id}/${timestamp}_${safeName}`;
+      
+      const { error: upErr } = await sb.storage.from('project-files').upload(path, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+      
+      if (upErr) {
+        toast(`❌ فشل رفع ${file.name}: ${upErr.message}`);
+        continue;
+      }
+      
+      // Get public URL
+      const { data: urlData } = sb.storage.from('project-files').getPublicUrl(path);
+      
+      newTodoUploadedFiles.push({
+        name: file.name,
+        url: urlData.publicUrl,
+        path: path,
+        size: file.size,
+        type: file.type,
+        uploaded_at: new Date().toISOString(),
+        uploaded_by: currentUser.id
+      });
+      uploaded++;
+      
+      if (progressEl) {
+        progressEl.textContent = `⬆️ تم رفع ${uploaded}/${files.length}...`;
+      }
+    } catch(e) {
+      toast(`❌ خطأ: ${e.message}`);
+    }
+  }
+  
+  if (progressEl) {
+    progressEl.style.display = 'none';
+  }
+  
+  if (uploaded > 0) {
+    toast(`✅ تم رفع ${uploaded} ملف`);
+    refreshNewTodoFilesPreview();
+  }
+}
+
+function refreshNewTodoFilesPreview() {
+  const preview = document.getElementById('newTodoFilesPreview');
+  if (!preview) return;
+  
+  if (newTodoUploadedFiles.length === 0) {
+    preview.innerHTML = '';
+    return;
+  }
+  
+  preview.innerHTML = newTodoUploadedFiles.map((f, idx) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;font-size:12px">
+      <span style="font-size:14px">${getFileIcon(f.type, f.name)}</span>
+      <span style="flex:1;font-weight:600;color:#15803d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(f.name)}</span>
+      <span style="font-size:10px;color:#9ca3af">${formatFileSize(f.size)}</span>
+      <button type="button" onclick="removeNewTodoFile(${idx})" style="background:transparent;border:none;color:#ef4444;cursor:pointer;font-size:14px;padding:0 4px" title="إزالة">×</button>
+    </div>
+  `).join('');
+}
+
+function removeNewTodoFile(idx) {
+  newTodoUploadedFiles.splice(idx, 1);
+  refreshNewTodoFilesPreview();
+}
+
+function formatFileSize(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
 async function createTodo() {
+  const btn = document.getElementById('createTodoBtn');
   const listId = document.getElementById('todoListId').value;
   const title = document.getElementById('newTodoTitle').value.trim();
   const start = document.getElementById('newTodoStart').value;
   const due = document.getElementById('newTodoDue').value;
   const hours = parseInt(document.getElementById('newTodoHours').value) || 8;
   const priority = document.getElementById('newTodoPriority').value;
-  const assignee = document.getElementById('newTodoAssignee').value;
   const layerId = document.getElementById('newTodoLayer').value;
   const desc = document.getElementById('newTodoDesc').value.trim();
-  if (!title) { document.getElementById('newTodoTitle').focus(); return; }
   
-  const { error } = await sb.from('todos').insert({
-    list_id: listId, project_id: activeProject.id, title,
-    description: desc || null,
-    start_date: start || null,
-    due_date: due || null, 
-    estimated_hours: hours,
-    priority, 
-    created_by: currentUser.id,
-    assigned_to: assignee || currentUser.id,
-    layer_id: layerId || null
-  });
-  
-  if (error) { toast('❌ ' + error.message); return; }
-  
-  logActivity('أضاف مهمة جديدة', 'todo', title);
-  
-  // Notify assigned person
-  if (assignee && assignee !== currentUser.id) {
-    sendNotificationEmail('task_assigned', assignee, title, activeProject.id, activeProject.name);
-    sb.from('notifications').insert({
-      user_id: assignee, project_id: activeProject.id,
-      type: 'task', title: '✅ تم تعيينك في مهمة', body: title
-    }).then(() => {}).catch(() => {});
+  if (!title) {
+    document.getElementById('newTodoTitle').focus();
+    toast('⚠️ العنوان مطلوب');
+    return;
   }
   
-  closeModal('newTodoModal');
-  toast(currentLang === 'ar' ? '✅ تمت الإضافة' : '✅ Added');
-  await loadProjectTab('todos');
-  await loadProjectCounts();
-  await loadStats();
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ جارٍ الإنشاء...'; }
+  
+  // The "primary" assignee is current user if assigned to themselves, else first selected
+  const assigneeIds = Array.from(newTodoSelectedAssignees);
+  const primaryAssignee = assigneeIds.includes(currentUser.id) ? currentUser.id : (assigneeIds[0] || currentUser.id);
+  
+  try {
+    // 1. Create the todo with attachments
+    const { data: newTodo, error } = await sb.from('todos').insert({
+      list_id: listId,
+      project_id: activeProject.id,
+      title,
+      description: desc || null,
+      start_date: start || null,
+      due_date: due || null,
+      estimated_hours: hours,
+      priority,
+      created_by: currentUser.id,
+      assigned_to: primaryAssignee,
+      layer_id: layerId || null,
+      attachments: newTodoUploadedFiles  // attachments stored on todo
+    }).select().single();
+    
+    if (error) {
+      toast('❌ ' + error.message);
+      if (btn) { btn.disabled = false; btn.textContent = '✨ إنشاء المهمة'; }
+      return;
+    }
+    
+    // 2. Insert all assignees into todo_assignees table (multi-assign)
+    if (assigneeIds.length > 0 && newTodo) {
+      const assigneeRows = assigneeIds.map(uid => ({
+        todo_id: newTodo.id,
+        user_id: uid,
+        assigned_by: currentUser.id
+      }));
+      const { error: assignErr } = await sb.from('todo_assignees').insert(assigneeRows);
+      if (assignErr) console.warn('Multi-assignment partial fail:', assignErr);
+      // Note: DB trigger trg_notify_assignment sends in-app notifications automatically
+    }
+    
+    // 3. Send EMAIL notifications to assignees (in-app already handled by trigger)
+    if (assigneeIds.length > 0 && newTodo) {
+      const otherAssignees = assigneeIds.filter(id => id !== currentUser.id);
+      if (otherAssignees.length > 0) {
+        try {
+          await sendTaskAssignmentEmails(otherAssignees, newTodo, title);
+        } catch(e) { console.warn('Email send failed (non-fatal):', e); }
+      }
+    }
+    
+    // 4. Log activity (auto-logger trigger also fires, but explicit one for the new-task action)
+    try { await logActivity('أنشأ مهمة', 'todo', title); } catch(e) {}
+    
+    closeNewTodoModal();
+    toast(`✅ تم إنشاء المهمة${assigneeIds.length > 0 ? ` وإشعار ${assigneeIds.length} عضو` : ''}`);
+    
+    await loadProjectTab('todos');
+    try { await loadProjectCounts(); } catch(e) {}
+    try { await loadStats(); } catch(e) {}
+  } catch(e) {
+    toast('❌ ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '✨ إنشاء المهمة'; }
+  }
+}
+
+// Send email notifications to task assignees via Edge Function or direct call
+async function sendTaskAssignmentEmails(userIds, todo, title) {
+  if (!userIds || userIds.length === 0) return;
+  
+  try {
+    // Get assignee emails
+    const { data: profiles } = await sb.from('profiles')
+      .select('id, email, full_name')
+      .in('id', userIds);
+    
+    if (!profiles || profiles.length === 0) return;
+    
+    // Call the send_task_assignment_email RPC (we'll create this)
+    for (const profile of profiles) {
+      if (!profile.email) continue;
+      try {
+        await sb.rpc('send_task_assignment_email', {
+          p_recipient_email: profile.email,
+          p_recipient_name: profile.full_name || profile.email.split('@')[0],
+          p_task_title: title,
+          p_project_name: activeProject?.name || 'مشروع',
+          p_assigner_name: currentProfile?.full_name || 'عضو'
+        });
+      } catch(e) {
+        console.warn('Email send for', profile.email, 'failed:', e);
+      }
+    }
+  } catch(e) {
+    console.warn('sendTaskAssignmentEmails:', e);
+  }
 }
 
 async function loadLayersForTodoModal() {
