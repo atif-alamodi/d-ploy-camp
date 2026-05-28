@@ -7173,7 +7173,7 @@ async function renderTodos(container) {
   let assigneesByTodo = {};
   if (todos && todos.length > 0) {
     const { data: assignees } = await sb.from('todo_assignees')
-      .select('todo_id, user_id, profile:user_id(full_name)')
+      .select('todo_id, user_id, profile:user_id!todo_assignees_user_id_profiles_fkey(full_name)')
       .in('todo_id', todos.map(t => t.id));
     (assignees || []).forEach(a => {
       if (!assigneesByTodo[a.todo_id]) assigneesByTodo[a.todo_id] = [];
@@ -12291,21 +12291,23 @@ function renderCampfireMsg(m) {
           ${m.content ? `<div class="campfire-bubble-text" style="white-space:pre-wrap;line-height:1.6">${escapeHTML(m.content)}</div>` : ''}
           ${attHtml}
           <div class="campfire-bubble-time">${editedBadge}${time}</div>
-          <div style="position:absolute;top:-12px;${isMine ? 'left:-8px' : 'right:-8px'};display:flex;gap:3px">
-            <button onclick="event.stopPropagation();toggleReactionPicker(event,'campfire','${m.id}')" 
-                    style="background:#fff;border:1px solid #e5e7eb;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:inline-flex;align-items:center;justify-content:center;line-height:1" 
-                    title="إضافة تفاعل">😊</button>
-            ${canModify ? `
-              <button onclick="event.stopPropagation();editCampfireMessage('${m.id}', \`${(m.content || '').replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" 
-                      style="background:#fff;border:1px solid #e5e7eb;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:11px;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:inline-flex;align-items:center;justify-content:center" 
-                      title="تعديل">✏️</button>
-              <button onclick="event.stopPropagation();deleteCampfireMessage('${m.id}')" 
-                      style="background:#fff;border:1px solid #fecaca;color:#ef4444;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:11px;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:inline-flex;align-items:center;justify-content:center" 
-                      title="حذف">🗑️</button>
-            ` : ''}
-          </div>
         </div>
+        <!-- Reactions shown directly under the bubble -->
         <div id="reactions-campfire-${m.id}" style="display:flex;gap:4px;flex-wrap:wrap">${reactionsHtml}</div>
+        <!-- Action buttons (react / edit / delete) BELOW the bubble -->
+        <div style="display:flex;gap:3px;${isMine ? 'justify-content:flex-end' : 'justify-content:flex-start'}">
+          <button onclick="event.stopPropagation();toggleReactionPicker(event,'campfire','${m.id}')" 
+                  style="background:#fff;border:1px solid #e5e7eb;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:13px;box-shadow:0 1px 3px rgba(0,0,0,0.08);display:inline-flex;align-items:center;justify-content:center;line-height:1" 
+                  title="إضافة تفاعل">😊</button>
+          ${canModify ? `
+            <button onclick="event.stopPropagation();editCampfireMessage('${m.id}', \`${(m.content || '').replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" 
+                    style="background:#fff;border:1px solid #e5e7eb;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:11px;box-shadow:0 1px 3px rgba(0,0,0,0.08);display:inline-flex;align-items:center;justify-content:center" 
+                    title="تعديل">✏️</button>
+            <button onclick="event.stopPropagation();deleteCampfireMessage('${m.id}')" 
+                    style="background:#fff;border:1px solid #fecaca;color:#ef4444;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:11px;box-shadow:0 1px 3px rgba(0,0,0,0.08);display:inline-flex;align-items:center;justify-content:center" 
+                    title="حذف">🗑️</button>
+          ` : ''}
+        </div>
       </div>
     </div>
   `;
@@ -12826,7 +12828,7 @@ async function showTodoDetailPage(todoId) {
   
   // Fetch assignees
   const { data: assignees } = await sb.from('todo_assignees')
-    .select('user_id, assigned_at, profile:user_id(full_name)')
+    .select('user_id, assigned_at, profile:user_id!todo_assignees_user_id_profiles_fkey(full_name)')
     .eq('todo_id', todoId);
   
   // Fetch history
