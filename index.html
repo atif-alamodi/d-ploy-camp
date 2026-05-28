@@ -6998,31 +6998,27 @@ function renderTodoCard(td, assignees) {
       <div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span style="font-weight:600;font-size:14px;${td.completed ? 'text-decoration:line-through;color:#9ca3af' : 'color:#1f2937'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${escapeHTML(td.title)}</span>
         
-        <!-- Metadata badges - ALWAYS in fixed order: Priority, Date, Attachment, Layer, Comments -->
-        <!-- 1. Priority (always shown) -->
+        <!-- Badges in STRICT order: 1) Priority  2) Date  3) Attachment -->
+        <!-- 1. Priority -->
         <span style="background:${td.priority === 'urgent' ? '#fee2e2' : td.priority === 'high' ? '#fef3c7' : td.priority === 'low' ? '#f0fdf4' : '#eff6ff'};color:${td.priority === 'urgent' ? '#dc2626' : td.priority === 'high' ? '#92400e' : td.priority === 'low' ? '#15803d' : '#1d4ed8'};padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700;flex-shrink:0" title="الأولوية">
           ${td.priority === 'urgent' ? '🔴' : td.priority === 'high' ? '🟡' : td.priority === 'low' ? '🟢' : '🔵'} ${t(td.priority || 'normal')}
         </span>
         
-        <!-- 2. Date badge (always shown - placeholder if none) -->
+        <!-- 2. Date -->
         <span style="background:${hasSchedule ? '#fef3c7' : '#f9fafb'};color:${hasSchedule ? '#92400e' : '#9ca3af'};padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0;${!hasSchedule ? 'opacity:0.5' : ''}" title="${hasSchedule ? (dateText || 'له تواريخ') : 'لا توجد تواريخ'}">
           📅 ${hasSchedule ? (td.due_date ? formatDate(td.due_date).slice(0,5) : (td.start_date ? formatDate(td.start_date).slice(0,5) : '')) : '—'}
         </span>
         
-        <!-- 3. Attachment badge (always shown - placeholder if none) -->
+        <!-- 3. Attachment -->
         <span style="background:${attachments.length > 0 ? '#f0fdf4' : '#f9fafb'};color:${attachments.length > 0 ? '#15803d' : '#9ca3af'};padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0;${attachments.length === 0 ? 'opacity:0.5' : ''}" title="${attachments.length > 0 ? attachments.length + ' مرفق' : 'لا توجد مرفقات'}">
           📎 ${attachments.length || 0}
         </span>
         
-        <!-- 4. Layer badge (always shown - placeholder if none) -->
-        <span style="background:${hasLayer ? '#e0e7ff' : '#f9fafb'};color:${hasLayer ? '#3730a3' : '#9ca3af'};padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0;${!hasLayer ? 'opacity:0.5' : ''}" title="${hasLayer ? 'طبقة ' + td.layer_number : 'بدون طبقة'}">
-          🎯 ${hasLayer ? td.layer_number : '—'}
-        </span>
+        <!-- 4. Layer (only when set) -->
+        ${hasLayer ? `<span style="background:#e0e7ff;color:#3730a3;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0" title="طبقة ${td.layer_number}">🎯 ${td.layer_number}</span>` : ''}
         
-        <!-- 5. Comments badge (always shown - placeholder if none) -->
-        <span style="background:${commentCount > 0 ? '#fff7ed' : '#f9fafb'};color:${commentCount > 0 ? '#c2410c' : '#9ca3af'};padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0;${commentCount === 0 ? 'opacity:0.5' : ''}" title="${commentCount > 0 ? commentCount + ' تعليق' : 'لا توجد تعليقات'}">
-          💬 ${commentCount || 0}
-        </span>
+        <!-- 5. Comments (only when present) -->
+        ${commentCount > 0 ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0" title="${commentCount} تعليق">💬 ${commentCount}</span>` : ''}
         
         <!-- 6. Progress mini bar (only if > 0%) -->
         ${progress > 0 && !td.completed ? `
