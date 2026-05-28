@@ -6576,7 +6576,7 @@ async function toggleAssignment(userId, rowElement) {
   if (existing) {
     // منع الإزالة لمن لا يملك الصلاحية
     if (!window.__canRemoveAssignees) {
-      toast('⚠️ إزالة المعيّنين متاحة لمنشئ المهمة فقط');
+      toast('الإزالة لمنشئ المهمة فقط');
       return;
     }
     // Remove assignment
