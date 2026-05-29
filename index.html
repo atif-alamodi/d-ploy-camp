@@ -10,7 +10,7 @@
 <!-- ============================================ -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'self';
-  script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
+  script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://liwpqggtvstqwxobhsfs.supabase.co;
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src 'self' https://fonts.gstatic.com data:;
   img-src 'self' data: blob: https: ;
@@ -1891,6 +1891,11 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 .response-text { font-size: 14px; line-height: 1.6; }
 
 </style>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ff6b35">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="D-Ploy">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 </head>
 <body>
 
@@ -4428,11 +4433,10 @@ function toggleSidebar() {
 
 // Close sidebar — used after item click on mobile/tablet
 function closeSidebarOnMobile() {
-  // Only close on mobile/tablet (≤ 900px). Desktop sidebar stays visible.
-  if (!window.matchMedia('(max-width: 900px)').matches) return;
   const sidebar = document.getElementById('sidebar');
+  if (!sidebar || !sidebar.classList.contains('open')) return;
   const backdrop = document.getElementById('sidebarBackdrop');
-  if (sidebar) sidebar.classList.remove('open');
+  sidebar.classList.remove('open');
   if (backdrop) backdrop.classList.remove('active');
   document.body.style.overflow = '';
 }
@@ -13664,6 +13668,48 @@ async function init() {
 }
 
 init();
+</script>
+<script src="https://liwpqggtvstqwxobhsfs.supabase.co/functions/v1/dploy-ui-enhancer" defer></script>
+<script>
+(async function registerPush(){
+  if(!('serviceWorker' in navigator)||!('PushManager' in window)) return;
+  try {
+    var reg = await navigator.serviceWorker.register('/d-ploy-camp/service-worker.js');
+    await navigator.serviceWorker.ready;
+    var attempts = 0;
+    while((!window.currentUser||!window.sb)&&attempts<20){
+      await new Promise(function(r){ setTimeout(r,500); });
+      attempts++;
+    }
+    if(!window.currentUser||!window.sb) return;
+    var perm = Notification.permission;
+    if(perm==='default') perm = await Notification.requestPermission();
+    if(perm!=='granted') return;
+    var VAPID_PUB='BF04BQs29U62fSsSOLVArYKAvY9kmn0Lm-Qi-Glv5849zsnVcVpA9zmjLsJLgZx7JAv7us_jMHGaduqMm3W1Gaw';
+    function urlB64ToUint8Array(b){
+      var pad='='.repeat((4-b.length%4)%4);
+      var raw=atob((b+pad).replace(/-/g,'+').replace(/_/g,'/'));
+      var out=new Uint8Array(raw.length);
+      for(var i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i);
+      return out;
+    }
+    var sub = await reg.pushManager.getSubscription();
+    if(!sub) sub = await reg.pushManager.subscribe({
+      userVisibleOnly:true,
+      applicationServerKey:urlB64ToUint8Array(VAPID_PUB)
+    });
+    var json = sub.toJSON();
+    await window.sb.from('push_subscriptions').upsert({
+      user_id: window.currentUser.id,
+      endpoint: sub.endpoint,
+      p256dh: json.keys.p256dh,
+      auth: json.keys.auth,
+      user_agent: navigator.userAgent.substring(0,200),
+      last_used_at: new Date().toISOString()
+    },{ onConflict:'endpoint' });
+    console.log('[D-Ploy] push subscription registered');
+  } catch(e){ console.warn('[D-Ploy] push registration failed:',e.message); }
+})();
 </script>
 </body>
 </html>
