@@ -13028,12 +13028,32 @@ async function showTodoDetailPage(todoId) {
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
             ${(assignees || []).length === 0 ? '<span style="color:#9ca3af;font-size:12px;font-style:italic">لم يُعيَّن أحد</span>' :
-              (assignees || []).map(a => `
-                <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:linear-gradient(135deg,#fff7ed,#fef3c7);border-radius:50px;font-size:12px;font-weight:600;color:#c2410c;border:1px solid #fed7aa">
-                  <span style="width:18px;height:18px;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">${(a.profile?.full_name || '?').charAt(0).toUpperCase()}</span>
-                  ${escapeHTML(a.profile?.full_name || 'مستخدم')}
-                </span>
-              `).join('')
+              (assignees || []).map(a => {
+                const canEditPersonal = (a.user_id === currentUser?.id) || (currentProfile?.is_super_admin === true);
+                const pp = Math.max(0, Math.min(100, parseInt(a.personal_progress, 10) || 0));
+                const ppInputId = `ppInput_${todo.id}_${a.user_id}`;
+                return `
+                <div style="display:flex;flex-direction:column;gap:6px;padding:10px 12px;background:linear-gradient(135deg,#fff7ed,#fef3c7);border-radius:12px;border:1px solid #fed7aa;min-width:210px">
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span style="width:18px;height:18px;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${(a.profile?.full_name || '?').charAt(0).toUpperCase()}</span>
+                    <span style="font-size:12px;font-weight:600;color:#c2410c;flex:1">${escapeHTML(a.profile?.full_name || 'مستخدم')}</span>
+                    ${a.personal_completed ? '<span style="font-size:11px;color:#15803d;font-weight:700;white-space:nowrap">✓ أنهى</span>' : (canEditPersonal ? `<button onclick="togglePersonalDone('${todo.id}','${a.user_id}')" style="background:#dcfce7;border:1px solid #bbf7d0;color:#15803d;cursor:pointer;font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;white-space:nowrap">إنهاء نصيبي</button>` : '')}
+                  </div>
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <div style="flex:1;height:8px;background:white;border-radius:4px;overflow:hidden;border:1px solid #fed7aa">
+                      <div style="height:100%;width:${pp}%;background:linear-gradient(90deg,#ff6b35,#f7468a)"></div>
+                    </div>
+                    <span style="font-size:11px;color:#9a3412;font-weight:700;min-width:34px;text-align:left">${pp}%</span>
+                  </div>
+                  ${canEditPersonal ? `
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <input type="number" min="0" max="100" id="${ppInputId}" value="${pp}" style="width:64px;padding:4px 6px;border:1px solid #fed7aa;border-radius:8px;font-size:12px">
+                    <button onclick="savePersonalProgress('${todo.id}','${a.user_id}','${ppInputId}')" style="background:#ff6b35;border:none;color:white;cursor:pointer;font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px">💾 حفظ</button>
+                  </div>
+                  ` : ''}
+                </div>
+              `;
+              }).join('')
             }
           </div>
         </div>
@@ -13232,6 +13252,43 @@ async function showTodoDetailPage(todoId) {
       if (box) box.innerHTML = renderReactionsRow('todo', todo.id, reactions || []);
     } catch(e) {}
   }, 100);
+}
+
+// Save a member's personal progress (0-100) on a task, then refresh the detail page
+async function savePersonalProgress(todoId, userId, inputId) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  let val = parseInt(el.value, 10);
+  if (isNaN(val)) val = 0;
+  val = Math.max(0, Math.min(100, val));
+  try {
+    const { data, error } = await sb.rpc('update_personal_progress', {
+      p_todo_id: todoId, p_user_id: userId, p_progress: val
+    });
+    if (error) { toast('❌ ' + error.message); return; }
+    if (data && data.success === false) {
+      toast('❌ ' + (data.message || data.error || 'تعذّر تحديث النسبة'));
+    } else {
+      toast('✅ تم تحديث نسبتك');
+    }
+  } catch(e) { toast('❌ ' + e.message); }
+  await showTodoDetailPage(todoId);
+}
+
+// Mark a member's personal share of the task as completed, then refresh the detail page
+async function togglePersonalDone(todoId, userId) {
+  try {
+    const { data, error } = await sb.rpc('toggle_personal_completion', {
+      p_todo_id: todoId, p_user_id: userId, p_completed: true
+    });
+    if (error) { toast('❌ ' + error.message); return; }
+    if (data && data.success === false) {
+      toast('❌ ' + (data.message || data.error || 'تعذّر إغلاق نصيبك'));
+    } else {
+      toast('أغلقت المهمة لنفسك فقط');
+    }
+  } catch(e) { toast('❌ ' + e.message); }
+  await showTodoDetailPage(todoId);
 }
 
 function closeTodoDetailPage() {
