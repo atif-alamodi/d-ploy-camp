@@ -13217,6 +13217,31 @@ async function showTodoDetailPage(todoId) {
             </div>
           `;
           }
+          // أحداث الإنجاز الفردي والإكمال التلقائي
+          if (h.action === 'personal_progress_updated' || h.action === 'personal_completed' || h.action === 'personal_reopened' || h.action === 'auto_completed_all') {
+            const who = escapeHTML(h.metadata?.editor_name || h.metadata?.actor_name || h.profile?.full_name || 'عضو');
+            let pIcon = '•', pText = '';
+            if (h.action === 'personal_progress_updated') {
+              pIcon = '📊';
+              pText = `<strong>${who}</strong> حدّث إنجازه من ${h.metadata?.from || 0}% إلى ${h.metadata?.to || 0}%`;
+            } else if (h.action === 'personal_completed') {
+              pIcon = '✅';
+              pText = `<strong>${who}</strong> أنهى نصيبه (${h.metadata?.done ?? 0}/${h.metadata?.total ?? 0})`;
+            } else if (h.action === 'personal_reopened') {
+              pIcon = '🔄';
+              pText = `<strong>${who}</strong> أعاد فتح نصيبه`;
+            } else {
+              pIcon = '🎉';
+              pText = 'اكتملت المهمة (أنهى الجميع)';
+            }
+            return `
+            <div style="display:flex;align-items:center;gap:12px;padding:10px;border-bottom:1px solid #f1f5f9;font-size:13px">
+              <div style="font-size:18px">${pIcon}</div>
+              <div style="flex:1;color:#374151">${pText}</div>
+              <div style="font-size:11px;color:#9ca3af;white-space:nowrap">${formatDateTime(h.created_at)}</div>
+            </div>
+          `;
+          }
           return `
             <div style="display:flex;align-items:center;gap:12px;padding:10px;border-bottom:1px solid #f1f5f9;font-size:13px">
               <div style="font-size:18px">${actionIcons[h.action] || '•'}</div>
