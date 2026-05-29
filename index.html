@@ -13125,15 +13125,10 @@ async function showTodoDetailPage(todoId) {
           <div style="font-weight:700;color:#92400e;font-size:14px">📊 نسبة الإنجاز</div>
           <div style="font-size:24px;font-weight:900;color:#c2410c">${todo.progress || 0}%</div>
         </div>
-        <div onclick="${isEditMode ? '' : `openProgressEditor('${todo.id}', ${todo.progress || 0})`}" 
-          style="position:relative;height:12px;background:white;border-radius:6px;${isEditMode ? '' : 'cursor:pointer;'}overflow:hidden">
+        <div style="position:relative;height:12px;background:white;border-radius:6px;overflow:hidden">
           <div style="position:absolute;top:0;left:0;height:100%;background:linear-gradient(90deg,#ff6b35,#f7468a);border-radius:6px;transition:width 0.4s;width:${todo.progress || 0}%"></div>
         </div>
-        ${!isEditMode ? `
-          <button onclick="openProgressEditor('${todo.id}', ${todo.progress || 0})" style="margin-top:10px;background:white;color:#c2410c;border:1px solid #fed7aa;padding:6px 14px;border-radius:50px;font-size:12px;font-weight:700;cursor:pointer;width:100%">
-            📊 تحديث نسبة الإنجاز
-          </button>
-        ` : ''}
+        <div style="margin-top:8px;font-size:11px;color:#9a3412;font-style:italic">يُحسب تلقائياً من إنجاز كل عضو</div>
       </div>
     </div>
     
