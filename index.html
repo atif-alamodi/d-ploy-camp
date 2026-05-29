@@ -13301,6 +13301,7 @@ async function showTodoDetailPage(todoId) {
 // Save a member's personal progress (0-100) on a task, then refresh the detail page
 async function savePersonalProgress(todoId, userId, inputId) {
   const el = document.getElementById(inputId);
+  console.log('[savePersonalProgress] inputs:', { todoId, userId, inputId, elValue: el?.value, currentUserId: currentUser?.id });
   if (!el) return;
   let val = parseInt(el.value, 10);
   if (isNaN(val)) val = 0;
@@ -13309,6 +13310,7 @@ async function savePersonalProgress(todoId, userId, inputId) {
     const { data, error } = await sb.rpc('update_personal_progress', {
       p_todo_id: todoId, p_user_id: userId, p_progress: val
     });
+    console.log('[savePersonalProgress] rpc result:', { data, error });
     if (error) { toast('❌ ' + error.message); return; }
     if (data && data.success === false) {
       toast('❌ ' + (data.message || data.error || 'تعذّر تحديث النسبة'));
