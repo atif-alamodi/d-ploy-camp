@@ -13179,7 +13179,7 @@ async function showTodoDetailPage(todoId) {
       ${(history || []).length === 0 ? '<div style="color:#9ca3af;font-size:13px;text-align:center;padding:12px">لا يوجد نشاط بعد</div>' :
         (history || []).map(h => {
           const actionIcons = { created: '🆕', completed: '✅', reopened: '🔄', progress_updated: '📊', assigned: '👤+', unassigned: '👤-', priority_changed: '🚦', date_changed: '📅', title_changed: '✏️' };
-          const actionLabels = { created: 'أنشأ المهمة', completed: 'أكمل المهمة', reopened: 'أعاد فتح المهمة', progress_updated: 'حدّث نسبة الإنجاز', assigned: 'عيّن عضو', unassigned: 'ألغى التعيين', priority_changed: 'غيّر الأولوية', date_changed: 'غيّر التاريخ', title_changed: 'غيّر العنوان' };
+          const actionLabels = { created: 'أنشأ المهمة', completed: 'أكمل المهمة', reopened: 'أعاد الفتح', progress_updated: 'حدّث نسبة الإنجاز', assigned: 'عيّن عضو', unassigned: 'ألغى التعيين', priority_changed: 'غيّر الأولوية', date_changed: 'غيّر التاريخ', title_changed: 'غيّر العنوان' };
           let extra = '';
           if (h.action === 'progress_updated' && h.metadata) {
             extra = ` من ${h.metadata.from || 0}% إلى ${h.metadata.to || 0}%`;
@@ -13193,7 +13193,7 @@ async function showTodoDetailPage(todoId) {
             <div style="display:flex;align-items:center;gap:12px;padding:10px;border-bottom:1px solid #f1f5f9;font-size:13px">
               <div style="font-size:18px">📊</div>
               <div style="flex:1;color:#374151">
-                <strong>${editor}</strong> حدّث النسبة من ${fromPct}% إلى ${toPct}%
+                <strong>${editor}</strong> رفع النسبة من ${fromPct}% إلى ${toPct}%
               </div>
               <div style="font-size:11px;color:#9ca3af;white-space:nowrap">${formatDateTime(h.created_at)}</div>
             </div>
