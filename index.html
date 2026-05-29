@@ -13674,8 +13674,7 @@ init();
 (async function registerPush(){
   if(!('serviceWorker' in navigator)||!('PushManager' in window)) return;
   try {
-    var reg = await navigator.serviceWorker.register('/d-ploy-camp/service-worker.js');
-    await navigator.serviceWorker.ready;
+    var reg = await navigator.serviceWorker.ready;
     var attempts = 0;
     while((!window.currentUser||!window.sb)&&attempts<20){
       await new Promise(function(r){ setTimeout(r,500); });
