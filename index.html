@@ -12016,6 +12016,7 @@ let notificationChannel = null;
 let messagesChannel = null;
 let messageCommentsChannel = null;
 let todoCommentsChannel = null;
+let todoAssigneesChannel = null;
 let lastSoundTime = 0;
 let soundEnabled = localStorage.getItem('dp_sound_enabled') !== 'false';
 
@@ -12233,6 +12234,23 @@ function subscribeMessages() {
       const row = payload.new || payload.old;
       if (row && row.message_id) {
         await refreshReactionsForMessage(row.message_type, row.message_id);
+      }
+    })
+    .subscribe();
+
+  // Subscribe to todo_assignees changes (personal progress / completion) so the
+  // open task detail page re-renders live for everyone
+  if (todoAssigneesChannel) sb.removeChannel(todoAssigneesChannel);
+  todoAssigneesChannel = sb.channel('todo-assignees-' + activeProject.id)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'todo_assignees'
+    }, async (payload) => {
+      const row = payload.new || payload.old;
+      // If a task detail page is open, re-render it to show updated per-member indicators
+      if (currentDetailTodoId && (!row || row.todo_id === currentDetailTodoId)) {
+        try { await showTodoDetailPage(currentDetailTodoId); } catch(e) {}
       }
     })
     .subscribe();
