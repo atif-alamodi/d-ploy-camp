@@ -13055,7 +13055,13 @@ async function showTodoDetailPage(todoId) {
                   <div style="display:flex;align-items:center;gap:6px">
                     <span style="width:18px;height:18px;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${(a.profile?.full_name || '?').charAt(0).toUpperCase()}</span>
                     <span style="font-size:12px;font-weight:600;color:#c2410c;flex:1">${escapeHTML(a.profile?.full_name || 'مستخدم')}</span>
-                    ${a.personal_completed ? '<span style="font-size:11px;color:#15803d;font-weight:700;white-space:nowrap">✓ أنهى</span>' : (canEditPersonal ? `<button onclick="togglePersonalDone('${todo.id}','${a.user_id}')" style="background:#dcfce7;border:1px solid #bbf7d0;color:#15803d;cursor:pointer;font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;white-space:nowrap">إنهاء نصيبي</button>` : '')}
+                    ${canEditPersonal
+                      ? (a.personal_completed
+                          ? `<span style="font-size:11px;color:#15803d;font-weight:700;white-space:nowrap">✓ أنهى</span><button onclick="togglePersonalDone('${todo.id}','${a.user_id}',false)" style="background:#fef3c7;border:1px solid #fde68a;color:#92400e;cursor:pointer;font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;white-space:nowrap">🔄 إعادة فتح</button>`
+                          : `<button onclick="togglePersonalDone('${todo.id}','${a.user_id}',true)" style="background:#dcfce7;border:1px solid #bbf7d0;color:#15803d;cursor:pointer;font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;white-space:nowrap">✅ إنهاء نصيبي</button>`)
+                      : (a.personal_completed
+                          ? '<span style="font-size:11px;color:#15803d;font-weight:700;white-space:nowrap">✓ أنهى</span>'
+                          : '<span style="font-size:11px;color:#9ca3af;font-weight:700;white-space:nowrap">لم يُنهِ</span>')}
                   </div>
                   <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;height:8px;background:white;border-radius:4px;overflow:hidden;border:1px solid #fed7aa">
@@ -13313,17 +13319,17 @@ async function savePersonalProgress(todoId, userId, inputId) {
   await showTodoDetailPage(todoId);
 }
 
-// Mark a member's personal share of the task as completed, then refresh the detail page
-async function togglePersonalDone(todoId, userId) {
+// Toggle a member's personal share of the task (close/reopen), then refresh the detail page
+async function togglePersonalDone(todoId, userId, completed = true) {
   try {
     const { data, error } = await sb.rpc('toggle_personal_completion', {
-      p_todo_id: todoId, p_user_id: userId, p_completed: true
+      p_todo_id: todoId, p_user_id: userId, p_completed: completed
     });
     if (error) { toast('❌ ' + error.message); return; }
     if (data && data.success === false) {
-      toast('❌ ' + (data.message || data.error || 'تعذّر إغلاق نصيبك'));
+      toast('❌ ' + (data.message || data.error || 'تعذّر تنفيذ العملية'));
     } else {
-      toast('أغلقت المهمة لنفسك فقط');
+      toast(completed ? 'أغلقت المهمة لنفسك فقط' : 'أعدت فتح نصيبك');
     }
   } catch(e) { toast('❌ ' + e.message); }
   await showTodoDetailPage(todoId);
