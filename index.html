@@ -6880,7 +6880,16 @@ function updateAttachmentBadgeOnCard(todoId, newCount) {
 // TASK DETAIL PAGE - EDIT MODE (toggle-based editing)
 // ============================================
 
-function enterTodoEditMode(todoId) {
+async function enterTodoEditMode(todoId) {
+  // التحرير متاح لمنشئ المهمة أو super_admin فقط
+  let canEditTask = currentProfile?.is_super_admin === true;
+  if (!canEditTask) {
+    try {
+      const { data: td } = await sb.from('todos').select('created_by').eq('id', todoId).maybeSingle();
+      if (td && td.created_by === currentUser?.id) canEditTask = true;
+    } catch(e) {}
+  }
+  if (!canEditTask) { toast('🔒 تحرير المهمة متاح لمنشئها أو super_admin فقط'); return; }
   window.__todoEditMode = true;
   showTodoDetailPage(todoId);
 }
@@ -7839,37 +7848,44 @@ async function postInlineComment(todoId, projectId) {
   const input = document.getElementById('commentInput-' + todoId);
   if (!input) return;
   const content = input.value.trim();
-  if (!content) {
+  // Pending file attachments uploaded via the 📎 button (stored in project-files bucket)
+  const pendingAtt = (window._pendingCommentAttachments && window._pendingCommentAttachments[todoId]) || [];
+  if (!content && pendingAtt.length === 0) {
     input.focus();
     return;
   }
-  
+
   // Check if muted
   if (amIMuted()) {
     toast('⚠️ لا يمكنك التعليق - حسابك مُكتم');
     return;
   }
-  
+
   // Capture mentioned user IDs BEFORE clearing
   const mentionedIds = (input.dataset.mentions || '').split(',').filter(Boolean);
-  
+
   input.disabled = true;
-  
+
   try {
     const { error } = await sb.from('todo_comments').insert({
       todo_id: todoId,
       project_id: projectId,
       user_id: currentUser.id,
-      content: content,
-      attachments: []
+      content: content || '📎 مرفق',
+      attachments: pendingAtt
     });
-    
+
     if (error) {
       toast('❌ ' + error.message);
       input.disabled = false;
       return;
     }
-    
+
+    // Clear pending attachments + their preview now that they're saved
+    if (window._pendingCommentAttachments) window._pendingCommentAttachments[todoId] = [];
+    const preview = document.getElementById('commentAttachPreview_' + todoId);
+    if (preview) preview.innerHTML = '';
+
     input.value = '';
     input.dataset.mentions = ''; // clear mentions tracking
     input.disabled = false;
@@ -12964,7 +12980,7 @@ async function showTodoDetailPage(todoId) {
   // Permissions: super admin, creator, assignees, project members (anyone who can see the project)
   // Since RLS already allows project_members to view, and we want everyone who opened it to edit:
   // → Allow super_admin OR creator OR (any active platform user)
-  const canEdit = !!(currentProfile?.is_super_admin || todo.created_by === currentUser?.id || currentUser?.id);
+  const canEditTask = (todo.created_by === currentUser?.id) || (currentProfile?.is_super_admin === true);
   
   // Load layers (needed for the edit mode select)
   let availableLayers = [];
@@ -13010,7 +13026,7 @@ async function showTodoDetailPage(todoId) {
             <button class="btn btn-primary" onclick="saveTodoEdits('${todo.id}')" style="padding:8px 14px;font-size:13px;font-weight:700">💾 حفظ</button>
             <button class="btn btn-ghost" onclick="cancelTodoEdits('${todo.id}')" style="padding:8px 14px;font-size:13px;color:#6b7280;border:1px solid #e5e7eb">❌ إلغاء</button>
           ` : `
-            ${canEdit ? `<button class="btn btn-primary" onclick="enterTodoEditMode('${todo.id}')" style="padding:8px 14px;font-size:13px;font-weight:700">✏️ تحرير</button>` : ''}
+            ${canEditTask ? `<button class="btn btn-primary" onclick="enterTodoEditMode('${todo.id}')" style="padding:8px 14px;font-size:13px;font-weight:700">✏️ تحرير</button>` : ''}
             ${(currentProfile?.is_super_admin || todo.created_by === currentUser?.id) ? 
               `<button class="btn btn-ghost" onclick="openMoveTodoModal('${todo.id}', \`${(todo.title || '').replace(/`/g, '\\`')}\`, '${todo.created_by}')" 
                 style="padding:8px;font-size:18px" title="نقل لمشروع آخر">📦</button>` : ''}
@@ -13202,11 +13218,16 @@ async function showTodoDetailPage(todoId) {
         </h3>
       </div>
       <div id="commentsList-${todo.id}" style="display:flex;flex-direction:column;gap:10px;max-height:500px;overflow-y:auto;margin-bottom:16px;padding:4px"></div>
+      <div id="commentAttachPreview_${todo.id}" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px"></div>
       <div style="display:flex;gap:6px;align-items:flex-end;border-top:1px solid #f1f5f9;padding-top:14px">
-        <textarea id="commentInput-${todo.id}" placeholder="اكتب تعليقاً... استخدم @ للإشارة لعضو • Enter للإرسال • Shift+Enter سطر جديد" 
+        <textarea id="commentInput-${todo.id}" placeholder="اكتب تعليقاً... استخدم @ للإشارة لعضو • Enter للإرسال • Shift+Enter سطر جديد"
           style="flex:1;padding:10px 14px;border:1px solid #e5e7eb;border-radius:14px;font-family:inherit;font-size:14px;resize:none;min-height:42px;max-height:120px;background:white"
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();postInlineComment('${todo.id}','${activeProject.id}')}"></textarea>
-        <button onclick="postInlineComment('${todo.id}','${activeProject.id}')" 
+        <label title="إرفاق ملف" style="display:inline-flex;align-items:center;justify-content:center;background:#fff7ed;color:#ff6b35;border:1px solid #fed7aa;padding:10px 12px;border-radius:50px;font-size:15px;cursor:pointer;white-space:nowrap">
+          📎
+          <input type="file" multiple accept="*/*" style="display:none" onchange="uploadCommentAttachment('${todo.id}', event)">
+        </label>
+        <button onclick="postInlineComment('${todo.id}','${activeProject.id}')"
           style="background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:10px 20px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">
           📤 إرسال
         </button>
