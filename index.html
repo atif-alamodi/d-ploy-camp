@@ -12250,6 +12250,9 @@ function subscribeMessages() {
       const row = payload.new || payload.old;
       // If a task detail page is open, re-render it to show updated per-member indicators
       if (currentDetailTodoId && (!row || row.todo_id === currentDetailTodoId)) {
+        // Don't re-render while the user is typing in a personal-progress field (would wipe the value)
+        const active = document.activeElement;
+        if (active && active.id && active.id.startsWith('ppInput_')) return;
         try { await showTodoDetailPage(currentDetailTodoId); } catch(e) {}
       }
     })
@@ -13301,7 +13304,6 @@ async function showTodoDetailPage(todoId) {
 // Save a member's personal progress (0-100) on a task, then refresh the detail page
 async function savePersonalProgress(todoId, userId, inputId) {
   const el = document.getElementById(inputId);
-  console.log('[savePersonalProgress] inputs:', { todoId, userId, inputId, elValue: el?.value, currentUserId: currentUser?.id });
   if (!el) return;
   let val = parseInt(el.value, 10);
   if (isNaN(val)) val = 0;
@@ -13310,7 +13312,6 @@ async function savePersonalProgress(todoId, userId, inputId) {
     const { data, error } = await sb.rpc('update_personal_progress', {
       p_todo_id: todoId, p_user_id: userId, p_progress: val
     });
-    console.log('[savePersonalProgress] rpc result:', { data, error });
     if (error) { toast('❌ ' + error.message); return; }
     if (data && data.success === false) {
       toast('❌ ' + (data.message || data.error || 'تعذّر تحديث النسبة'));
