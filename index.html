@@ -2196,7 +2196,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
         </div>
         <div class="tool-card" data-tool="messages" onclick="showProjectTab('messages')">
           <div class="tool-card-icon" style="background:#dbeafe">💬</div>
-          <div class="tool-card-title" data-i18n="messages">الرسائل</div>
+          <div class="tool-card-title" data-i18n="messages">لوحة الإعلانات</div>
           <div class="tool-card-count" id="messagesCount">0</div>
         </div>
         <div class="tool-card" data-tool="schedule" onclick="showProjectTab('schedule')">
@@ -2222,6 +2222,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
         <div class="tool-card" data-tool="campfire" onclick="showProjectTab('campfire')">
           <div class="tool-card-icon" style="background:#fff7ed">🔥</div>
           <div class="tool-card-title">Campfire</div>
+          <div style="font-size:11px;color:#9ca3af">مخصّصة للدردشة</div>
           <div class="tool-card-count" id="campfireCount">0</div>
         </div>
         <div class="tool-card" data-tool="gantt" onclick="showProjectTab('gantt')" data-i18n-title="ganttTooltip" title="عرض زمني للمهام مرتبة حسب تواريخ البداية والنهاية - يساعد على تتبع المواعيد">
@@ -3711,7 +3712,7 @@ const translations = {
     yourProjects: 'مشاريعك',
     yourProjectsSub: 'كل مشاريعك في مكان واحد',
     todos: 'المهام',
-    messages: 'الرسائل',
+    messages: 'لوحة الإعلانات',
     schedule: 'الجدول',
     files: 'الملفات',
     checkins: 'Check-ins',
@@ -3945,7 +3946,7 @@ const translations = {
     yourProjects: 'Your Projects',
     yourProjectsSub: 'All your projects in one place',
     todos: 'To-dos',
-    messages: 'Messages',
+    messages: 'Message Board',
     schedule: 'Schedule',
     files: 'Files',
     checkins: 'Check-ins',
@@ -6015,7 +6016,7 @@ async function loadProjectCounts() {
 // ============================================
 const PROJECT_TOOLS = [
   { key: 'todos', icon: '📋', label: 'المهام', desc: 'قوائم المهام والتعليقات' },
-  { key: 'messages', icon: '💬', label: 'الرسائل', desc: 'لوحة الإعلانات والمناقشات' },
+  { key: 'messages', icon: '💬', label: 'لوحة الإعلانات', desc: 'لوحة الإعلانات والمناقشات' },
   { key: 'schedule', icon: '📅', label: 'الجدول', desc: 'الأحداث والمواعيد المهمة' },
   { key: 'files', icon: '📁', label: 'الملفات', desc: 'مشاركة المستندات والصور' },
   { key: 'campfire', icon: '🔥', label: 'Campfire', desc: 'محادثة فورية بين الأعضاء' },
@@ -12285,6 +12286,7 @@ async function renderCampfire(container) {
           <span class="section-icon" style="background:#fff7ed">🔥</span>
           Campfire - دردشة المشروع
         </h3>
+        <div style="font-size:12px;color:#9ca3af;margin-top:2px">مخصّصة للدردشة</div>
       </div>
       <div class="campfire-wrap">
         <div class="campfire-messages" id="campfireMessages">
