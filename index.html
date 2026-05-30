@@ -3869,6 +3869,8 @@ const translations = {
     linkCopied: 'تم نسخ الرابط!',
     shareButton: 'مشاركة',
     shareTitle: 'مشاركة',
+    shareFile: 'مشاركة الملف',
+    fileUnavailable: 'هذا الملف غير متاح أو تم حذفه',
     contentUnavailable: 'هذا المحتوى غير متاح أو تم حذفه',
     loginToView: 'سجّل دخولك لعرض المحتوى المشترك',
     accept: 'قبول الدعوة',
@@ -4108,6 +4110,8 @@ const translations = {
     linkCopied: 'Link copied!',
     shareButton: 'Share',
     shareTitle: 'Share',
+    shareFile: 'Share file',
+    fileUnavailable: 'This file is unavailable or has been deleted',
     contentUnavailable: 'This content is not available or has been deleted',
     loginToView: 'Sign in to view the shared content',
     accept: 'Accept invitation',
@@ -9587,8 +9591,10 @@ async function renderFiles(container) {
       </div>
       ${!files || files.length === 0
         ? `<div class="empty-state"><div class="empty-icon">📁</div><div class="empty-title">${currentLang === 'ar' ? 'لا توجد ملفات بعد' : 'No files yet'}</div><div class="empty-sub">${currentLang === 'ar' ? 'ارفع أي نوع من الملفات' : 'Upload any type of file'}</div></div>`
-        : (files || []).map(f => `
-          <div class="todo-item" style="align-items:center">
+        : (files || []).map(f => {
+          const sName = (f.file_name || '').replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/'/g, "\\'");
+          return `
+          <div class="todo-item" data-file-id="${f.id}" style="align-items:center">
             <div style="font-size:28px;flex-shrink:0">${getFileIcon(f.file_type, f.file_name)}</div>
             <div class="todo-content">
               <div class="todo-title">
@@ -9602,11 +9608,12 @@ async function renderFiles(container) {
               </div>
             </div>
             <div style="display:flex;gap:4px;flex-shrink:0">
+              <button class="btn btn-ghost" style="padding:6px 8px" onclick="shareItem('file','${activeProject.id}','${f.id}', \`${sName}\`)" title="${t('shareFile')}">🔗</button>
               <a href="${escapeHTML(f.file_path)}" download="${escapeHTML(f.file_name)}" target="_blank" class="btn btn-ghost" style="padding:6px 8px" title="${currentLang === 'ar' ? 'تحميل' : 'Download'}">⬇️</a>
               <button class="btn btn-ghost" style="padding:6px 8px" onclick="deleteFile('${f.id}','${escapeHTML(f.storage_path || '')}')">🗑️</button>
             </div>
           </div>
-        `).join('')
+        `;}).join('')
       }
     </div>
   `;
@@ -10445,7 +10452,7 @@ function copyText(text) {
 // Security is enforced by RLS at open time, not here, so the button is available to everyone.
 async function shareItem(type, projectId, itemId, title) {
   const base = 'https://atif-alamodi.github.io/d-ploy-camp/';
-  const param = (type === 'message') ? 'message' : 'todo';
+  const param = ({ message: 'message', file: 'file', todo: 'todo' })[type] || 'todo';
   const url = `${base}?project=${encodeURIComponent(projectId || '')}&${param}=${encodeURIComponent(itemId || '')}`;
   const cleanTitle = (title == null ? '' : String(title));
   const projName = activeProject?.name || '';
@@ -14045,40 +14052,48 @@ function getDeepLinkParams() {
   const projectId = sp.get('project');
   const todoId = sp.get('todo');
   const messageId = sp.get('message');
-  if (projectId && (todoId || messageId)) return { projectId, todoId, messageId };
+  const fileId = sp.get('file');
+  if (projectId && (todoId || messageId || fileId)) return { projectId, todoId, messageId, fileId };
   return null;
 }
 
 // Open a shared item once the user is authenticated. Verifies existence first so
 // RLS-denied / deleted items show a clear message instead of a broken view.
 async function openSharedItem(params) {
-  if (!params || !params.projectId || (!params.todoId && !params.messageId)) return;
+  if (!params || !params.projectId || (!params.todoId && !params.messageId && !params.fileId)) return;
   const cleanUrl = () => { try { history.replaceState({}, '', window.location.pathname); } catch(e) {} };
+  // Scroll to + briefly highlight a card by data attribute
+  const highlight = (selector) => setTimeout(() => {
+    const el = document.querySelector(selector);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.transition = 'box-shadow 0.3s';
+      el.style.boxShadow = '0 0 0 3px #ff6b35';
+      setTimeout(() => { el.style.boxShadow = ''; }, 2200);
+    }
+  }, 700);
   try {
     if (params.todoId) {
       const { data: td } = await sb.from('todos').select('id, project_id').eq('id', params.todoId).maybeSingle();
       if (!td) { toast('⚠️ ' + t('contentUnavailable')); cleanUrl(); return; }
       await openProject(params.projectId || td.project_id);
       await showTodoDetailPage(params.todoId);
-    } else {
+    } else if (params.messageId) {
       const { data: msg } = await sb.from('messages').select('id, project_id').eq('id', params.messageId).maybeSingle();
       if (!msg) { toast('⚠️ ' + t('contentUnavailable')); cleanUrl(); return; }
       await openProject(params.projectId || msg.project_id);
       await showProjectTab('messages');
-      // Scroll to + briefly highlight the shared announcement card
-      setTimeout(() => {
-        const el = document.querySelector(`[data-msg-id="${params.messageId}"]`);
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          el.style.transition = 'box-shadow 0.3s';
-          el.style.boxShadow = '0 0 0 3px #ff6b35';
-          setTimeout(() => { el.style.boxShadow = ''; }, 2200);
-        }
-      }, 700);
+      highlight(`[data-msg-id="${params.messageId}"]`);
+    } else {
+      const { data: f } = await sb.from('project_files').select('id, project_id').eq('id', params.fileId).maybeSingle();
+      if (!f) { toast('⚠️ ' + t('fileUnavailable')); cleanUrl(); return; }
+      await openProject(params.projectId || f.project_id);
+      await showProjectTab('files');
+      highlight(`[data-file-id="${params.fileId}"]`);
     }
     cleanUrl(); // remove params so a refresh doesn't reopen
   } catch(e) {
-    toast('⚠️ ' + t('contentUnavailable'));
+    toast('⚠️ ' + (params.fileId ? t('fileUnavailable') : t('contentUnavailable')));
     cleanUrl();
   }
 }
