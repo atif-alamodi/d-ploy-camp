@@ -2772,10 +2772,12 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
         onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();saveMessageEdit()}else if(event.key==='Escape'){closeModal('editMessageModal')}"></textarea>
     </div>
     
+    <div id="editMessageRecipientNote" style="display:none;font-size:11px;color:#0369a1;background:#eff6ff;border:1px solid #bfdbfe;padding:8px 12px;border-radius:8px;margin-bottom:10px"></div>
+
     <div style="font-size:11px;color:#9ca3af;background:#fafaf9;padding:8px 12px;border-radius:8px;margin-bottom:14px">
       ℹ️ ستظهر علامة "تم التعديل" بجانب الرسالة بعد الحفظ، حتى يعلم الآخرون أنها عُدّلت.
     </div>
-    
+
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('editMessageModal')">إلغاء</button>
       <button class="btn btn-primary" id="saveMessageEditBtn" onclick="saveMessageEdit()">💾 حفظ التعديل</button>
@@ -6194,7 +6196,11 @@ function openEditMessageModal(type, messageId, contextId, currentContent, curren
   
   // Fill content
   document.getElementById('editMessageContentInput').value = currentContent || '';
-  
+
+  // Recipients note is only relevant for message-board posts; hide otherwise
+  const recipNote = document.getElementById('editMessageRecipientNote');
+  if (recipNote && type !== 'message') recipNote.style.display = 'none';
+
   openModal('editMessageModal');
   
   // Focus content after modal animates in
@@ -6317,6 +6323,19 @@ async function deleteTodoComment(commentId, todoId) {
 
 async function editMessage(messageId, currentTitle, currentContent) {
   openEditMessageModal('message', messageId, null, currentContent, currentTitle);
+  // Show read-only recipients note (recipient_ids is fixed at publish time; no re-targeting on edit)
+  const note = document.getElementById('editMessageRecipientNote');
+  if (note) {
+    note.style.display = 'none';
+    try {
+      const { data: msg } = await sb.from('messages').select('recipient_ids').eq('id', messageId).maybeSingle();
+      const rec = msg?.recipient_ids;
+      note.textContent = (rec && rec.length > 0)
+        ? `📬 تم إرسال الإشعار لـ ${rec.length} شخص عند النشر (لا يمكن إعادة التوجيه عند التعديل).`
+        : '📬 أُرسل هذا الإعلان لكل أعضاء المنصة عند النشر (لا يمكن إعادة التوجيه عند التعديل).';
+      note.style.display = 'block';
+    } catch(e) {}
+  }
 }
 
 async function deleteMessage(messageId) {
@@ -8732,7 +8751,7 @@ async function renderMessages(container) {
               <span style="background:${cat.bg};color:${cat.color};padding:2px 10px;border-radius:50px;font-size:11px;font-weight:700">${cat.icon} ${cat.label}</span>
             </div>
             <h3 style="margin:0;font-size:18px;font-weight:900;color:#1f2937">${escapeHTML(m.title)}</h3>
-            <div style="font-size:11px;color:#9ca3af;margin-top:2px">${escapeHTML(m.author?.full_name || '')} • ${formatDateTime(m.created_at)}</div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:2px">${escapeHTML(m.author?.full_name || '')} • ${formatDateTime(m.created_at)}${(m.recipient_ids && m.recipient_ids.length > 0) ? ` • 📬 ${m.recipient_ids.length} مستلم` : ' • 📬 للكل'}</div>
           </div>
           <div style="display:flex;gap:4px">
             <button class="btn btn-ghost" onclick="toggleReactionPicker(event,'message','${m.id}')" style="padding:6px" title="تفاعل">😊</button>
