@@ -5656,8 +5656,7 @@ async function addToProject(userId) {
         user_id: userId,
         title: '👋 تمت إضافتك لمشروع',
         body: `تمت إضافتك لمشروع "${activeProject.name}" بواسطة ${currentProfile?.full_name || 'عضو'}`,
-        related_type: 'project',
-        related_id: activeProject.id
+        link: `/?project=${activeProject.id}`
       });
     } catch(e) {}
     
