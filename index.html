@@ -3205,6 +3205,42 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
   </div>
 </div>
 
+<!-- Manage Clusters Modal -->
+<div class="modal-bg" id="clustersModal">
+  <div class="modal" style="max-width:560px;max-height:90vh;overflow-y:auto">
+    <h3 class="modal-title">📁 إدارة Clusters</h3>
+    <p style="color:#6b7280;font-size:12px;margin-bottom:14px">مجموعات مستلمين محفوظة خاصة بك، تعمل في كل المشاريع.</p>
+
+    <!-- List view -->
+    <div id="clustersListView">
+      <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="showClusterForm()">➕ إنشاء cluster جديد</button>
+      <div id="clustersList" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal('clustersModal')">إغلاق</button>
+      </div>
+    </div>
+
+    <!-- Create / edit form -->
+    <div id="clusterFormView" style="display:none">
+      <input type="hidden" id="clusterEditId" value="">
+      <div class="form-group">
+        <label>اسم الـ Cluster</label>
+        <input type="text" class="form-input" id="clusterNameInput" placeholder="مثل: فريق التطوير">
+      </div>
+      <div class="form-group">
+        <label>الأعضاء</label>
+        <input type="text" class="form-input" id="clusterMemberSearch" placeholder="🔍 ابحث عن عضو..." style="margin-bottom:8px" oninput="renderClusterMemberList()">
+        <div id="clusterMemberList" style="max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;border:1px solid #f1f5f9;border-radius:10px;padding:6px"></div>
+        <div id="clusterSelectedCount" style="font-size:11px;color:#6b7280;font-weight:600;margin-top:6px"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="showClustersList()">رجوع</button>
+        <button class="btn btn-primary" onclick="saveCluster()">💾 حفظ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- New Event Modal -->
 <div class="modal-bg" id="newEventModal">
   <div class="modal">
@@ -9113,8 +9149,132 @@ function onRecipClusterChange() {
   info.textContent = c ? `سيصل الإشعار لـ ${(c.member_ids || []).length} عضو` : '';
 }
 
-// Cluster management modal (full implementation added in the next commit)
-function openClustersModal() { toast('⏳ إدارة الـ Clusters قيد التحميل...'); }
+// ============================================
+// CLUSTER MANAGEMENT (saved recipient groups, per-user, RLS owner-only)
+// ============================================
+let clusterSelectedIds = new Set();
+
+function openClustersModal() {
+  showClustersList();
+  openModal('clustersModal');
+  loadClustersList();
+}
+
+function showClustersList() {
+  document.getElementById('clustersListView').style.display = 'block';
+  document.getElementById('clusterFormView').style.display = 'none';
+}
+
+async function loadClustersList() {
+  const box = document.getElementById('clustersList');
+  if (!box) return;
+  box.innerHTML = '<div style="padding:14px;text-align:center;color:#9ca3af;font-size:12px">⏳ جارٍ التحميل...</div>';
+  const { data, error } = await sb.from('message_clusters')
+    .select('id, name, member_ids')
+    .order('name');
+  if (error) { box.innerHTML = `<div style="padding:14px;text-align:center;color:#ef4444;font-size:12px">❌ ${escapeHTML(error.message)}</div>`; return; }
+  recipClustersCache = data || [];
+  if (recipClustersCache.length === 0) {
+    box.innerHTML = '<div style="padding:14px;text-align:center;color:#9ca3af;font-size:13px">لا توجد clusters بعد — أنشئ أول واحدة</div>';
+    return;
+  }
+  box.innerHTML = recipClustersCache.map(c => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafaf9;border:1px solid #f1f5f9;border-radius:12px">
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:700;color:#1f2937">${escapeHTML(c.name)}</div>
+        <div style="font-size:11px;color:#9ca3af">${(c.member_ids || []).length} أعضاء</div>
+      </div>
+      <button class="btn btn-ghost" style="padding:4px 8px;font-size:13px" onclick="showClusterForm('${c.id}')" title="تعديل">✏️</button>
+      <button class="btn btn-ghost" style="padding:4px 8px;font-size:13px;color:#ef4444" onclick="deleteCluster('${c.id}', '${escapeHTML(c.name).replace(/'/g, "\\'")}')" title="حذف">🗑️</button>
+    </div>
+  `).join('');
+}
+
+async function showClusterForm(clusterId) {
+  document.getElementById('clustersListView').style.display = 'none';
+  document.getElementById('clusterFormView').style.display = 'block';
+  document.getElementById('clusterEditId').value = clusterId || '';
+  document.getElementById('clusterMemberSearch').value = '';
+  // Load active members (reuse recipient cache)
+  if (recipActiveMembers.length === 0) {
+    const { data } = await sb.from('profiles')
+      .select('id, full_name, email')
+      .or('status.eq.active,status.is.null')
+      .order('full_name');
+    recipActiveMembers = data || [];
+  }
+  if (clusterId) {
+    const c = recipClustersCache.find(x => x.id === clusterId);
+    document.getElementById('clusterNameInput').value = c?.name || '';
+    clusterSelectedIds = new Set(c?.member_ids || []);
+  } else {
+    document.getElementById('clusterNameInput').value = '';
+    clusterSelectedIds = new Set();
+  }
+  renderClusterMemberList();
+}
+
+function renderClusterMemberList() {
+  const box = document.getElementById('clusterMemberList');
+  if (!box) return;
+  const q = (document.getElementById('clusterMemberSearch')?.value || '').toLowerCase().trim();
+  let members = recipActiveMembers;
+  if (q) members = members.filter(m => (m.full_name || '').toLowerCase().includes(q) || (m.email || '').toLowerCase().includes(q));
+  if (members.length === 0) {
+    box.innerHTML = '<div style="padding:12px;text-align:center;color:#9ca3af;font-size:12px">لا توجد نتائج</div>';
+  } else {
+    box.innerHTML = members.map(m => {
+      const checked = clusterSelectedIds.has(m.id);
+      const name = m.full_name || m.email || 'عضو';
+      return `
+        <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;cursor:pointer;background:${checked ? '#fff7ed' : 'transparent'}">
+          <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleClusterMember('${m.id}', this.checked)">
+          <span style="font-size:13px;color:#1f2937;font-weight:600">${escapeHTML(name)}</span>
+          <span style="font-size:10px;color:#9ca3af;direction:ltr;margin-right:auto">${escapeHTML(m.email || '')}</span>
+        </label>`;
+    }).join('');
+  }
+  const counter = document.getElementById('clusterSelectedCount');
+  if (counter) counter.textContent = `${clusterSelectedIds.size} عضو مختار`;
+}
+
+function toggleClusterMember(id, checked) {
+  if (checked) clusterSelectedIds.add(id); else clusterSelectedIds.delete(id);
+  const counter = document.getElementById('clusterSelectedCount');
+  if (counter) counter.textContent = `${clusterSelectedIds.size} عضو مختار`;
+}
+
+async function saveCluster() {
+  const name = document.getElementById('clusterNameInput').value.trim();
+  const editId = document.getElementById('clusterEditId').value;
+  if (!name) { toast('⚠️ أدخل اسم الـ Cluster'); return; }
+  const memberIds = [...clusterSelectedIds];
+  if (memberIds.length === 0) { toast('⚠️ اختر عضواً واحداً على الأقل'); return; }
+  let error;
+  if (editId) {
+    ({ error } = await sb.from('message_clusters')
+      .update({ name, member_ids: memberIds, updated_at: new Date().toISOString() })
+      .eq('id', editId));
+  } else {
+    ({ error } = await sb.from('message_clusters')
+      .insert({ name, member_ids: memberIds, owner_id: currentUser.id }));
+  }
+  if (error) { toast('❌ ' + error.message); return; }
+  toast('✅ تم حفظ الـ Cluster');
+  showClustersList();
+  await loadClustersList();
+  // Refresh the recipient dropdown if cluster mode is active
+  try { if (document.getElementById('msgRecipientMode')?.value === 'cluster') await loadRecipientClusters(); } catch(e) {}
+}
+
+async function deleteCluster(id, name) {
+  if (!confirm(`حذف الـ Cluster "${name}"؟`)) return;
+  const { error } = await sb.from('message_clusters').delete().eq('id', id);
+  if (error) { toast('❌ ' + error.message); return; }
+  toast('🗑️ تم الحذف');
+  await loadClustersList();
+  try { if (document.getElementById('msgRecipientMode')?.value === 'cluster') await loadRecipientClusters(); } catch(e) {}
+}
 
 // Resolve recipient_ids for insert: null = everyone, else uuid[]
 function resolveRecipientIds() {
