@@ -7958,18 +7958,11 @@ async function sendMentionNotifications(userIds, contextType, contextId, content
     ? (currentLang === 'ar' ? 'نادى الجميع' : 'mentioned @all')
     : (currentLang === 'ar' ? 'ذكرك' : 'mentioned you');
   
-  const notifs = targetIds.map(uid => ({
-    user_id: uid,
-    title: `${titlePrefix} ${senderName} ${verb} في ${contextLabels[contextType] || 'محادثة'}`,
-    body: `في ${projectName}: ${shortContent}`,
-    related_type: contextType,
-    related_id: contextId
-  }));
-  
-  // 1. Insert in-app notifications (synchronous, fast)
-  try {
-    await sb.from('notifications').insert(notifs);
-  } catch(e) { console.warn('Mention notifications failed:', e); }
+  // 1. In-app mention notifications (with redirect links) are created automatically by DB
+  // triggers (notify_message_mentions, notify_campfire_mentions, notify_on_todo_comment).
+  // The previous client insert used nonexistent columns (related_type/related_id) so it
+  // always failed; removing it also avoids duplicate notifications.
+  void titlePrefix; void verb; void contextLabels; void contextType; void contextId;
   
   // 2. Send emails via Edge Function (fire-and-forget, parallel)
   try {
