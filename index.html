@@ -9234,6 +9234,22 @@ async function renderCheckins(container) {
     .eq('project_id', activeProject.id)
     .order('created_at', { ascending: false });
 
+  // Bulk fetch reactions for all check-in responses (same pattern as messages/campfire)
+  let reactionsByResponse = {};
+  const responseIds = (responses || []).map(r => r.id);
+  if (responseIds.length > 0) {
+    try {
+      const { data: reactions } = await sb.rpc('get_reactions_for_messages', {
+        p_message_type: 'checkin',
+        p_message_ids: responseIds
+      });
+      (reactions || []).forEach(r => {
+        if (!reactionsByResponse[r.message_id]) reactionsByResponse[r.message_id] = [];
+        reactionsByResponse[r.message_id].push(r);
+      });
+    } catch(e) {}
+  }
+
   let html = `
     <div class="section-card">
       <div class="section-header">
@@ -9261,8 +9277,10 @@ async function renderCheckins(container) {
                 <div class="avatar" style="width:24px; height:24px; font-size:10px">${initials(r.user?.full_name || '?')}</div>
                 <strong>${escapeHTML(r.user?.full_name || '')}</strong>
                 <span>• ${timeAgo(r.created_at)}</span>
+                <button class="btn btn-ghost" onclick="toggleReactionPicker(event,'checkin','${r.id}')" style="padding:2px 6px;font-size:13px;margin-right:auto" title="تفاعل">😊</button>
               </div>
               <div class="response-text">${escapeHTML(r.response)}</div>
+              <div id="reactions-checkin-${r.id}" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px">${renderReactionsRow('checkin', r.id, reactionsByResponse[r.id] || [])}</div>
             </div>
           `).join('') + '</div>' : ''}
         </div>
