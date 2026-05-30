@@ -12082,7 +12082,9 @@ if (!window.__universalMentionListenerInstalled) {
     if (!ta.id || (
       !ta.id.startsWith('commentInput-') &&
       !ta.id.startsWith('msgCommentInput-') &&
-      ta.id !== 'campfireInput'
+      ta.id !== 'campfireInput' &&
+      ta.id !== 'newMsgContent' &&
+      ta.id !== 'editMessageContentInput'
     )) return;
     
     handleMentionDetect(ta);
