@@ -8649,6 +8649,9 @@ async function renderMessages(container) {
     html += messages.map(m => {
       const isMine = m.created_by === currentUser?.id;
       const canModify = isMine || currentProfile?.is_super_admin;
+      // Editing an announcement is allowed only for its author or super_admin
+      // (matches RLS author_or_admin_update_message).
+      const canEditMessage = (m.created_by === currentUser?.id) || (currentProfile?.is_super_admin === true);
       const msgReactions = reactionsByMsg[m.id] || [];
       const cat = categoryConfig[m.category || 'general'] || categoryConfig.general;
       const commentCount = commentCounts[m.id] || 0;
@@ -8674,7 +8677,11 @@ async function renderMessages(container) {
             <button class="btn btn-ghost" onclick="toggleReactionPicker(event,'message','${m.id}')" style="padding:6px" title="تفاعل">😊</button>
             ${canModify ? `
               <button class="btn btn-ghost" onclick="openMoveMessageModal('${m.id}', \`${safeTitle}\`, '${m.created_by}')" style="padding:6px" title="نقل لمشروع آخر">📦</button>
+            ` : ''}
+            ${canEditMessage ? `
               <button class="btn btn-ghost" onclick="editMessage('${m.id}', \`${safeTitle}\`, \`${safeContent}\`)" style="padding:6px" title="تعديل">✏️</button>
+            ` : ''}
+            ${canModify ? `
               <button class="btn btn-ghost" onclick="deleteMessage('${m.id}')" style="padding:6px;color:#ef4444" title="حذف">🗑️</button>
             ` : ''}
           </div>
