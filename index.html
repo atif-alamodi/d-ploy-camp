@@ -3867,6 +3867,10 @@ const translations = {
     invitationLink: 'رابط الدعوة:',
     copyLink: 'نسخ الرابط',
     linkCopied: 'تم نسخ الرابط!',
+    shareButton: 'مشاركة',
+    shareTitle: 'مشاركة',
+    contentUnavailable: 'هذا المحتوى غير متاح أو تم حذفه',
+    loginToView: 'سجّل دخولك لعرض المحتوى المشترك',
     accept: 'قبول الدعوة',
     decline: 'رفض',
     mustLogin: 'يجب تسجيل الدخول أولاً لقبول الدعوة',
@@ -4102,6 +4106,10 @@ const translations = {
     invitationLink: 'Invitation link:',
     copyLink: 'Copy link',
     linkCopied: 'Link copied!',
+    shareButton: 'Share',
+    shareTitle: 'Share',
+    contentUnavailable: 'This content is not available or has been deleted',
+    loginToView: 'Sign in to view the shared content',
     accept: 'Accept invitation',
     decline: 'Decline',
     mustLogin: 'You must log in first to accept the invitation',
@@ -7570,6 +7578,8 @@ function renderTodoCard(td, assignees) {
   const commentCount = td._commentCount || 0;
   const progress = td.progress || 0;
   const canDeleteTodo = (td.created_by === currentUser?.id) || currentProfile?.is_super_admin;
+  const tdShareTitle = (td.title || '').replace(/`/g, '\\`').replace(/'/g, "\\'");
+  const tdProjId = td.project_id || activeProject?.id || '';
   
   return `
     <div class="todo-item-compact ${td.completed ? 'completed' : ''}" 
@@ -7629,6 +7639,7 @@ function renderTodoCard(td, assignees) {
       <!-- Right side: assignees + open arrow -->
       ${assigneesHtml}
       <span style="color:#ff6b35;font-size:13px;font-weight:600;flex-shrink:0;white-space:nowrap">› افتح</span>
+      <button onclick="event.stopPropagation();shareItem('todo','${tdProjId}','${td.id}', \`${tdShareTitle}\`)" style="background:transparent;border:none;color:#6b7280;padding:4px;cursor:pointer;font-size:13px;opacity:0.5;border-radius:6px;flex-shrink:0" onmouseover="this.style.opacity='1';this.style.background='#eff6ff';this.style.color='#2563eb'" onmouseout="this.style.opacity='0.5';this.style.background='transparent';this.style.color='#6b7280'" title="${t('shareButton')}">🔗</button>
       ${canDeleteTodo ? `<button onclick="event.stopPropagation();deleteTodo('${td.id}')" style="background:transparent;border:none;color:#ef4444;padding:4px;cursor:pointer;font-size:13px;opacity:0.4;border-radius:6px;flex-shrink:0" onmouseover="this.style.opacity='1';this.style.background='#fee2e2'" onmouseout="this.style.opacity='0.4';this.style.background='transparent'" title="حذف">🗑️</button>` : ''}
     </div>
   `;
@@ -8791,6 +8802,7 @@ async function renderMessages(container) {
           </div>
           <div style="display:flex;gap:4px">
             <button class="btn btn-ghost" onclick="toggleReactionPicker(event,'message','${m.id}')" style="padding:6px" title="تفاعل">😊</button>
+            <button class="btn btn-ghost" onclick="shareItem('message','${m.project_id || activeProject?.id || ''}','${m.id}', \`${safeTitle}\`)" style="padding:6px" title="${t('shareButton')}">🔗</button>
             ${canModify ? `
               <button class="btn btn-ghost" onclick="openMoveMessageModal('${m.id}', \`${safeTitle}\`, '${m.created_by}')" style="padding:6px" title="نقل لمشروع آخر">📦</button>
             ` : ''}
@@ -10423,6 +10435,35 @@ async function sendInvite() {
 function copyText(text) {
   navigator.clipboard.writeText(text);
   toast(t('linkCopied'));
+}
+
+// Share a task or announcement. Uses the native share sheet on mobile (navigator.share),
+// falls back to copying the link on desktop. type: 'todo' | 'message'.
+// Security is enforced by RLS at open time, not here, so the button is available to everyone.
+async function shareItem(type, projectId, itemId, title) {
+  const base = 'https://atif-alamodi.github.io/d-ploy-camp/';
+  const param = (type === 'message') ? 'message' : 'todo';
+  const url = `${base}?project=${encodeURIComponent(projectId || '')}&${param}=${encodeURIComponent(itemId || '')}`;
+  const cleanTitle = (title == null ? '' : String(title));
+  const projName = activeProject?.name || '';
+  const shareText = `${cleanTitle}${projName ? ' — ' + projName : ''}`;
+  // a) Native share sheet (mobile)
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: cleanTitle || t('shareTitle'), text: shareText, url });
+      return;
+    } catch(e) {
+      if (e && e.name === 'AbortError') return; // user cancelled — do nothing
+      // otherwise fall through to clipboard
+    }
+  }
+  // b) Clipboard fallback (desktop)
+  try {
+    await navigator.clipboard.writeText(`${shareText}\n${url}`);
+    toast('🔗 ' + t('linkCopied'));
+  } catch(e) {
+    toast('🔗 ' + url);
+  }
 }
 
 async function copyInviteLink(token) {
@@ -13526,6 +13567,7 @@ async function showTodoDetailPage(todoId) {
               `<button class="btn btn-ghost" onclick="openMoveTodoModal('${todo.id}', \`${(todo.title || '').replace(/`/g, '\\`')}\`, '${todo.created_by}')" 
                 style="padding:8px;font-size:18px" title="نقل لمشروع آخر">📦</button>` : ''}
             <button class="btn btn-ghost" onclick="toggleReactionPicker(event,'todo','${todo.id}')" style="padding:8px;font-size:18px" title="تفاعل">😊</button>
+            <button class="btn btn-ghost" onclick="shareItem('todo','${todo.project_id || activeProject?.id || ''}','${todo.id}', \`${(todo.title || '').replace(/`/g, '\\`')}\`)" style="padding:8px;font-size:18px" title="${t('shareButton')}">🔗</button>
           `}
         </div>
       </div>
