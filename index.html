@@ -6468,6 +6468,38 @@ function toggleNotificationsPanel() {
   }
 }
 
+// Icon for a notification based on its type (handles new 'mention'/'reaction' types;
+// unknown types fall back to a generic bell so they are never dropped).
+function notifIconFor(type, title) {
+  const map = {
+    mention: '🏷️', reaction: '👍', todo: '✅', todo_comment: '💬',
+    message: '📢', msg_comment: '💬', comment: '💬', project: '📁',
+    file: '📎', assignment: '👤', campfire: '🔥', checkin: '🎯'
+  };
+  if (map[type]) return map[type];
+  // Some notifications encode the kind via an emoji already in the title
+  if (title && /[🏷️📣📢]/.test(title)) return '🏷️';
+  if (title && /👍|❤️|🎉|🔥|👏/.test(title)) return '👍';
+  return '🔔';
+}
+
+// Click handler shared by both notification views: mark read, then open link if useful.
+window.__notifCache = window.__notifCache || {};
+async function handleNotifClick(id) {
+  const n = window.__notifCache[id] || {};
+  try {
+    await sb.from('notifications').update({ read: true, read_at: new Date().toISOString() }).eq('id', id);
+  } catch(e) {}
+  // Reactions have no destination; mentions/comments/todos open their link if present
+  if (n.link && n.type !== 'reaction') {
+    window.open(n.link, '_blank');
+  }
+  try { await loadNotifications(); } catch(e) {}
+  try { await updateNotificationBadge(); } catch(e) {}
+  try { if (document.getElementById('notificationsList')) await loadNotificationsList(); } catch(e) {}
+  try { if (document.getElementById('notifList')) await loadNotifList(); } catch(e) {}
+}
+
 async function loadNotificationsList() {
   const list = document.getElementById('notificationsList');
   if (!list) return;
@@ -6485,11 +6517,12 @@ async function loadNotificationsList() {
   
   list.innerHTML = notifs.map(n => {
     const isUnread = !n.read_at;
+    window.__notifCache[n.id] = n;
     return `
       <div style="padding:12px 14px;background:${isUnread ? '#fff7ed' : '#fafaf9'};border:1px solid ${isUnread ? '#fed7aa' : '#f1f5f9'};border-radius:12px;margin-bottom:8px;cursor:pointer"
-        onclick="markNotificationRead('${n.id}')">
+        onclick="handleNotifClick('${n.id}')">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-          <div style="font-weight:700;font-size:13px;color:#1f2937">${escapeHTML(n.title || 'إشعار')}</div>
+          <div style="font-weight:700;font-size:13px;color:#1f2937"><span style="margin-left:4px">${notifIconFor(n.type, n.title)}</span>${escapeHTML(n.title || 'إشعار')}</div>
           ${isUnread ? '<span style="background:#ff6b35;width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px"></span>' : ''}
         </div>
         ${n.body ? `<div style="font-size:12px;color:#6b7280;margin-top:4px;line-height:1.6">${escapeHTML(n.body)}</div>` : ''}
@@ -13201,13 +13234,15 @@ async function loadNotifList() {
     list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">لا توجد إشعارات</div>';
     return;
   }
-  list.innerHTML = notifs.map(n => `
-    <div class="notif-item ${n.read ? '' : 'unread'}" onclick="markNotifRead('${n.id}')">
-      <div style="font-weight:600;font-size:13px">${escapeHTML(n.title)}</div>
+  list.innerHTML = notifs.map(n => {
+    window.__notifCache[n.id] = n;
+    return `
+    <div class="notif-item ${n.read ? '' : 'unread'}" onclick="handleNotifClick('${n.id}')">
+      <div style="font-weight:600;font-size:13px"><span style="margin-left:4px">${notifIconFor(n.type, n.title)}</span>${escapeHTML(n.title)}</div>
       ${n.body ? `<div style="font-size:12px;color:var(--text-soft);margin-top:2px">${escapeHTML(n.body)}</div>` : ''}
       <div class="notif-item-time">${timeAgo(n.created_at)}</div>
     </div>
-  `).join('');
+  `;}).join('');
 }
 
 async function markNotifRead(id) {
