@@ -3165,6 +3165,14 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
       <label>📄 المحتوى</label>
       <textarea class="form-input" id="newMsgContent" style="min-height:140px" placeholder="اكتب التفاصيل هنا..."></textarea>
     </div>
+    <div class="form-group">
+      <label>📎 المرفقات (اختياري)</label>
+      <div id="newMsgAttachPreview" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+      <label style="display:inline-flex;align-items:center;gap:6px;background:#fff7ed;color:#ff6b35;border:1px dashed #fed7aa;padding:10px 16px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;width:100%;box-sizing:border-box;justify-content:center">
+        📎 إرفاق ملفات
+        <input type="file" multiple accept="*/*" style="display:none" onchange="uploadNewMsgAttachment(event)">
+      </label>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeMessageModal()">إلغاء</button>
       <button class="btn btn-primary" onclick="createMessage()">📢 نشر</button>
@@ -8673,7 +8681,18 @@ async function renderMessages(container) {
         </div>
         
         <div style="font-size:14px;color:#374151;line-height:1.8;white-space:pre-wrap;margin-bottom:12px">${escapeHTML(m.content)}</div>
-        
+
+        ${(m.attachments && m.attachments.length > 0) ? `
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+          ${m.attachments.map(a => `
+            <a href="${escapeHTML(a.url)}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;color:#15803d;text-decoration:none;font-size:13px;font-weight:600">
+              ${getFileIcon(a.type, a.name)} ${escapeHTML(a.name || 'ملف')}
+              ${a.size ? `<span style="font-size:10px;color:#9ca3af">${Math.round(a.size/1024)}KB</span>` : ''}
+            </a>
+          `).join('')}
+        </div>
+        ` : ''}
+
         <div id="reactions-message-${m.id}" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">${renderReactionsRow('message', m.id, msgReactions)}</div>
         
         <!-- Comments section - ALWAYS visible like Basecamp -->
@@ -8905,6 +8924,29 @@ async function deleteMessageOld(id) {
   if (activeTab === 'messages') await loadProjectTab('messages');
 }
 
+// Pending attachments for the new-message modal (same structure as task attachments)
+let newMsgAttachments = [];
+
+async function uploadNewMsgAttachment(event) {
+  const files = Array.from(event.target.files || []);
+  if (!files.length) return;
+  const preview = document.getElementById('newMsgAttachPreview');
+  for (const file of files) {
+    try {
+      const path = `messages/${activeProject.id}/${Date.now()}_${sanitizeFileName(file.name)}`;
+      const { error } = await sb.storage.from('project-files').upload(path, file);
+      if (error) { toast('❌ ' + file.name + ': ' + error.message); continue; }
+      const { data: urlData } = sb.storage.from('project-files').getPublicUrl(path);
+      const att = { name: file.name, url: urlData.publicUrl, path, size: file.size, type: file.type };
+      newMsgAttachments.push(att);
+      if (preview) {
+        preview.innerHTML += `<div style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:11px">${getFileIcon(file.type, file.name)} ${escapeHTML(file.name)}</div>`;
+      }
+    } catch(e) { toast('❌ ' + e.message); }
+  }
+  event.target.value = '';
+}
+
 async function createMessage() {
   const title = document.getElementById('newMsgTitle').value.trim();
   const msgBody = document.getElementById('newMsgContent').value.trim();
@@ -8915,11 +8957,12 @@ async function createMessage() {
     return;
   }
   const { error: msgErr } = await sb.from('messages').insert({
-    project_id: activeProject.id, 
-    title, 
-    content: msgBody, 
+    project_id: activeProject.id,
+    title,
+    content: msgBody,
     category,
     cover_image: cover,
+    attachments: newMsgAttachments,
     created_by: currentUser.id
   });
   if (msgErr) { toast('❌ ' + msgErr.message); return; }
@@ -8936,6 +8979,9 @@ function closeMessageModal() {
   document.getElementById('newMsgContent').value = '';
   document.getElementById('newMsgCoverImage').value = '';
   document.getElementById('newMsgCategory').value = 'announcement';
+  newMsgAttachments = [];
+  const attPreview = document.getElementById('newMsgAttachPreview');
+  if (attPreview) attPreview.innerHTML = '';
   document.getElementById('coverImagePreview').style.display = 'none';
   document.getElementById('uploadCoverBtn').style.display = 'block';
   // Reset category selection
