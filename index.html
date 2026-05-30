@@ -8721,10 +8721,15 @@ async function renderMessages(container) {
               <span style="font-size:10px;color:#9ca3af;align-self:center;padding:0 6px">Shift+Enter = سطر جديد</span>
             </div>
             
-            <textarea id="msgCommentInput-${m.id}" placeholder="اكتب تعليقاً... استخدم @ للإشارة لعضو • Shift+Enter سطر جديد • Enter للإرسال" 
+            <textarea id="msgCommentInput-${m.id}" placeholder="اكتب تعليقاً... استخدم @ للإشارة لعضو • Shift+Enter سطر جديد • Enter للإرسال"
               style="width:100%;padding:10px 14px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 14px 14px;font-family:inherit;font-size:13px;resize:vertical;min-height:70px;max-height:300px;background:white;line-height:1.7;box-sizing:border-box"></textarea>
-            <div style="display:flex;justify-content:flex-end;margin-top:8px">
-              <button onclick="postMessageComment('${m.id}')" 
+            <div id="msgCommentAttachPreview-${m.id}" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px">
+              <label title="إرفاق ملف" style="display:inline-flex;align-items:center;gap:4px;background:#fff7ed;color:#ff6b35;border:1px solid #fed7aa;padding:7px 12px;border-radius:50px;cursor:pointer;font-size:13px;font-weight:600">
+                📎 إرفاق
+                <input type="file" multiple accept="*/*" style="display:none" onchange="uploadMsgCommentAttachment('${m.id}', event)">
+              </label>
+              <button onclick="postMessageComment('${m.id}')"
                 style="background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;border:none;padding:8px 20px;border-radius:50px;font-weight:700;font-size:13px;cursor:pointer">📤 إرسال التعليق</button>
             </div>
           </div>
@@ -8786,10 +8791,19 @@ async function loadMessageComments(messageId) {
           <div style="background:${isMine ? '#fff7ed' : 'white'};border:1px solid ${isMine ? '#fed7aa' : '#e5e7eb'};border-radius:12px;padding:8px 12px">
             <div style="font-weight:600;font-size:11px;color:#ff6b35;margin-bottom:2px">${escapeHTML(name)}</div>
             <div style="font-size:13px;line-height:1.7;color:#1f2937;word-wrap:break-word;white-space:pre-wrap">${formatCommentText(c.content)}</div>
+            ${(c.attachments && c.attachments.length > 0) ? `
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
+              ${c.attachments.map(a => `
+                <a href="${escapeHTML(a.url)}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:5px 9px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;color:#15803d;text-decoration:none;font-size:11px;font-weight:600">
+                  ${getFileIcon(a.type, a.name)} ${escapeHTML(a.name || 'ملف')}
+                </a>
+              `).join('')}
+            </div>
+            ` : ''}
             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:4px">
               <div style="font-size:10px;color:#9ca3af">${timeLine}</div>
               <div style="display:flex;gap:2px;align-items:center">
-                <button onclick="event.stopPropagation();toggleReactionPicker(event,'message_comment','${c.id}')" 
+                <button onclick="event.stopPropagation();toggleReactionPicker(event,'message_comment','${c.id}')"
                   style="background:transparent;border:none;font-size:13px;cursor:pointer;opacity:0.6;padding:2px 4px;border-radius:50%" 
                   onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="تفاعل بالإيموجي">😊</button>
                 ${canModify ? `
@@ -8827,21 +8841,47 @@ async function loadMessageComments(messageId) {
   }, 100);
 }
 
+// Pending attachments for message-board comment composers, keyed by message id
+window._pendingMsgCommentAttachments = window._pendingMsgCommentAttachments || {};
+
+async function uploadMsgCommentAttachment(messageId, event) {
+  const files = Array.from(event.target.files || []);
+  if (!files.length) return;
+  const preview = document.getElementById('msgCommentAttachPreview-' + messageId);
+  window._pendingMsgCommentAttachments[messageId] = window._pendingMsgCommentAttachments[messageId] || [];
+  for (const file of files) {
+    try {
+      const path = `message-comments/${messageId}/${Date.now()}_${sanitizeFileName(file.name)}`;
+      const { error } = await sb.storage.from('project-files').upload(path, file);
+      if (error) { toast('❌ ' + file.name + ': ' + error.message); continue; }
+      const { data: urlData } = sb.storage.from('project-files').getPublicUrl(path);
+      const att = { name: file.name, url: urlData.publicUrl, path, size: file.size, type: file.type };
+      window._pendingMsgCommentAttachments[messageId].push(att);
+      if (preview) {
+        preview.innerHTML += `<div style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:11px">${getFileIcon(file.type, file.name)} ${escapeHTML(file.name)}</div>`;
+      }
+    } catch(e) { toast('❌ ' + e.message); }
+  }
+  event.target.value = '';
+}
+
 async function postMessageComment(messageId) {
   const input = document.getElementById('msgCommentInput-' + messageId);
   if (!input) return;
   const content = input.value.trim();
-  if (!content) { input.focus(); return; }
+  const pendingAtt = (window._pendingMsgCommentAttachments && window._pendingMsgCommentAttachments[messageId]) || [];
+  if (!content && pendingAtt.length === 0) { input.focus(); return; }
   if (amIMuted()) { toast('⚠️ حسابك مكتوم'); return; }
-  
+
   // Capture @mentions before clearing
   const mentionedIds = (input.dataset.mentions || '').split(',').filter(Boolean);
-  
+
   input.disabled = true;
   try {
     const { error } = await sb.from('message_comments').insert({
       message_id: messageId,
-      content,
+      content: content || '📎 مرفق',
+      attachments: pendingAtt,
       created_by: currentUser.id
     });
     if (error) { toast('❌ ' + error.message); input.disabled = false; return; }
@@ -8849,6 +8889,9 @@ async function postMessageComment(messageId) {
     input.dataset.mentions = '';
     input.style.height = 'auto';
     input.disabled = false;
+    if (window._pendingMsgCommentAttachments) window._pendingMsgCommentAttachments[messageId] = [];
+    const attPrev = document.getElementById('msgCommentAttachPreview-' + messageId);
+    if (attPrev) attPrev.innerHTML = '';
     input.focus();
     
     // Reload just THIS message's comments (not the whole tab - that would erase the input)
