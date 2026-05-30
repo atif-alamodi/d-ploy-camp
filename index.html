@@ -3166,6 +3166,31 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
       <textarea class="form-input" id="newMsgContent" style="min-height:140px" placeholder="اكتب التفاصيل هنا..."></textarea>
     </div>
     <div class="form-group">
+      <label>📬 المستلمون</label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px" id="msgRecipientModePicker">
+        <button type="button" id="recipModeAll" onclick="selectRecipientMode('all')" style="padding:6px 12px;border-radius:50px;border:1px solid transparent;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;cursor:pointer;font-size:12px;font-weight:700">🌐 للكل</button>
+        <button type="button" id="recipModeSpecific" onclick="selectRecipientMode('specific')" style="padding:6px 12px;border-radius:50px;border:1px solid #e5e7eb;background:white;color:#374151;cursor:pointer;font-size:12px;font-weight:600">👥 أشخاص محددون</button>
+        <button type="button" id="recipModeCluster" onclick="selectRecipientMode('cluster')" style="padding:6px 12px;border-radius:50px;border:1px solid #e5e7eb;background:white;color:#374151;cursor:pointer;font-size:12px;font-weight:600">📁 Cluster محفوظ</button>
+      </div>
+      <input type="hidden" id="msgRecipientMode" value="all">
+
+      <!-- Mode: specific people -->
+      <div id="recipSpecificBox" style="display:none">
+        <input type="text" class="form-input" id="recipMemberSearch" placeholder="🔍 ابحث عن عضو بالاسم أو البريد..." style="margin-bottom:8px" oninput="renderRecipientMemberList()">
+        <div id="recipMemberList" style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;border:1px solid #f1f5f9;border-radius:10px;padding:6px"></div>
+        <div id="recipSelectedCount" style="font-size:11px;color:#6b7280;font-weight:600;margin-top:6px"></div>
+      </div>
+
+      <!-- Mode: saved cluster -->
+      <div id="recipClusterBox" style="display:none">
+        <div style="display:flex;gap:6px;align-items:center">
+          <select class="form-input" id="recipClusterSelect" style="flex:1" onchange="onRecipClusterChange()"></select>
+          <button type="button" class="btn btn-secondary" style="padding:8px 12px;font-size:12px;white-space:nowrap" onclick="openClustersModal()">⚙️ إدارة</button>
+        </div>
+        <div id="recipClusterInfo" style="font-size:11px;color:#6b7280;font-weight:600;margin-top:6px"></div>
+      </div>
+    </div>
+    <div class="form-group">
       <label>📎 المرفقات (اختياري)</label>
       <div id="newMsgAttachPreview" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
       <label style="display:inline-flex;align-items:center;gap:6px;background:#fff7ed;color:#ff6b35;border:1px dashed #fed7aa;padding:10px 16px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;width:100%;box-sizing:border-box;justify-content:center">
@@ -8997,6 +9022,116 @@ async function uploadNewMsgAttachment(event) {
   event.target.value = '';
 }
 
+// ============================================
+// MESSAGE RECIPIENTS (all / specific people / saved cluster)
+// recipient_ids: null/empty = everyone; array = those users only
+// ============================================
+let recipActiveMembers = [];       // active platform members for the picker
+let recipSelectedIds = new Set();  // selected user ids in "specific" mode
+let recipClustersCache = [];       // current user's saved clusters
+
+function selectRecipientMode(mode) {
+  document.getElementById('msgRecipientMode').value = mode;
+  const map = { all: 'recipModeAll', specific: 'recipModeSpecific', cluster: 'recipModeCluster' };
+  Object.entries(map).forEach(([m, id]) => {
+    const b = document.getElementById(id);
+    if (!b) return;
+    const on = (m === mode);
+    b.style.background = on ? 'linear-gradient(135deg,#ff6b35,#f7468a)' : 'white';
+    b.style.color = on ? 'white' : '#374151';
+    b.style.borderColor = on ? 'transparent' : '#e5e7eb';
+  });
+  document.getElementById('recipSpecificBox').style.display = (mode === 'specific') ? 'block' : 'none';
+  document.getElementById('recipClusterBox').style.display = (mode === 'cluster') ? 'block' : 'none';
+  if (mode === 'specific') loadRecipientMembers();
+  if (mode === 'cluster') loadRecipientClusters();
+}
+
+async function loadRecipientMembers() {
+  if (recipActiveMembers.length === 0) {
+    const { data } = await sb.from('profiles')
+      .select('id, full_name, email')
+      .or('status.eq.active,status.is.null')
+      .order('full_name');
+    recipActiveMembers = data || [];
+  }
+  renderRecipientMemberList();
+}
+
+function renderRecipientMemberList() {
+  const box = document.getElementById('recipMemberList');
+  if (!box) return;
+  const q = (document.getElementById('recipMemberSearch')?.value || '').toLowerCase().trim();
+  let members = recipActiveMembers;
+  if (q) members = members.filter(m => (m.full_name || '').toLowerCase().includes(q) || (m.email || '').toLowerCase().includes(q));
+  if (members.length === 0) {
+    box.innerHTML = '<div style="padding:12px;text-align:center;color:#9ca3af;font-size:12px">لا توجد نتائج</div>';
+  } else {
+    box.innerHTML = members.map(m => {
+      const checked = recipSelectedIds.has(m.id);
+      const name = m.full_name || m.email || 'عضو';
+      return `
+        <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;cursor:pointer;background:${checked ? '#fff7ed' : 'transparent'}">
+          <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleRecipientMember('${m.id}', this.checked)">
+          <span style="font-size:13px;color:#1f2937;font-weight:600">${escapeHTML(name)}</span>
+          <span style="font-size:10px;color:#9ca3af;direction:ltr;margin-right:auto">${escapeHTML(m.email || '')}</span>
+        </label>`;
+    }).join('');
+  }
+  const counter = document.getElementById('recipSelectedCount');
+  if (counter) counter.textContent = recipSelectedIds.size > 0 ? `تم اختيار ${recipSelectedIds.size} عضو` : 'لم يتم اختيار أحد بعد';
+}
+
+function toggleRecipientMember(id, checked) {
+  if (checked) recipSelectedIds.add(id); else recipSelectedIds.delete(id);
+  const counter = document.getElementById('recipSelectedCount');
+  if (counter) counter.textContent = recipSelectedIds.size > 0 ? `تم اختيار ${recipSelectedIds.size} عضو` : 'لم يتم اختيار أحد بعد';
+}
+
+async function loadRecipientClusters() {
+  const { data } = await sb.from('message_clusters')
+    .select('id, name, member_ids')
+    .order('name');
+  recipClustersCache = data || [];
+  const sel = document.getElementById('recipClusterSelect');
+  if (sel) {
+    if (recipClustersCache.length === 0) {
+      sel.innerHTML = '<option value="">لا توجد clusters محفوظة — أنشئ واحداً</option>';
+    } else {
+      sel.innerHTML = '<option value="">— اختر cluster —</option>' +
+        recipClustersCache.map(c => `<option value="${c.id}">${escapeHTML(c.name)} (${(c.member_ids || []).length} أعضاء)</option>`).join('');
+    }
+  }
+  onRecipClusterChange();
+}
+
+function onRecipClusterChange() {
+  const sel = document.getElementById('recipClusterSelect');
+  const info = document.getElementById('recipClusterInfo');
+  if (!sel || !info) return;
+  const c = recipClustersCache.find(x => x.id === sel.value);
+  info.textContent = c ? `سيصل الإشعار لـ ${(c.member_ids || []).length} عضو` : '';
+}
+
+// Cluster management modal (full implementation added in the next commit)
+function openClustersModal() { toast('⏳ إدارة الـ Clusters قيد التحميل...'); }
+
+// Resolve recipient_ids for insert: null = everyone, else uuid[]
+function resolveRecipientIds() {
+  const mode = document.getElementById('msgRecipientMode')?.value || 'all';
+  if (mode === 'specific') {
+    const ids = [...recipSelectedIds];
+    return ids.length > 0 ? ids : null;
+  }
+  if (mode === 'cluster') {
+    const sel = document.getElementById('recipClusterSelect');
+    const c = recipClustersCache.find(x => x.id === sel?.value);
+    const ids = (c && Array.isArray(c.member_ids)) ? c.member_ids : [];
+    return ids.length > 0 ? ids : null;
+  }
+  return null; // "all"
+}
+
 async function createMessage() {
   const title = document.getElementById('newMsgTitle').value.trim();
   const msgBody = document.getElementById('newMsgContent').value.trim();
@@ -9006,6 +9141,7 @@ async function createMessage() {
     toast('⚠️ العنوان والمحتوى مطلوبان');
     return;
   }
+  const recipientIds = resolveRecipientIds(); // null or uuid[]
   const { error: msgErr } = await sb.from('messages').insert({
     project_id: activeProject.id,
     title,
@@ -9013,11 +9149,13 @@ async function createMessage() {
     category,
     cover_image: cover,
     attachments: newMsgAttachments,
+    recipient_ids: recipientIds,
     created_by: currentUser.id
   });
   if (msgErr) { toast('❌ ' + msgErr.message); return; }
+  const recipCount = recipientIds ? recipientIds.length : 0;
   closeMessageModal();
-  toast('✅ تم النشر');
+  toast(recipCount > 0 ? `✅ تم النشر — سيصل الإشعار لـ ${recipCount} عضو` : '✅ تم النشر — سيصل لكل أعضاء المنصة');
   logActivity('نشر إعلاناً', 'message', title);
   notifyProjectMembers('message', `${title}: ${msgBody.substring(0,80)}`);
   await loadProjectTab('messages');
@@ -9032,6 +9170,11 @@ function closeMessageModal() {
   newMsgAttachments = [];
   const attPreview = document.getElementById('newMsgAttachPreview');
   if (attPreview) attPreview.innerHTML = '';
+  // Reset recipients to default "all"
+  recipSelectedIds = new Set();
+  const recipSearch = document.getElementById('recipMemberSearch');
+  if (recipSearch) recipSearch.value = '';
+  try { selectRecipientMode('all'); } catch(e) {}
   document.getElementById('coverImagePreview').style.display = 'none';
   document.getElementById('uploadCoverBtn').style.display = 'block';
   // Reset category selection
