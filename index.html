@@ -14083,7 +14083,10 @@ async function openSharedItem(params) {
   }
 }
 
-// Consume a pending deep link saved before login (logged-out share-link flow).
+// Consume a deep link after authentication. Handles both flows:
+//  - logged-out user who followed a share link (saved in sessionStorage before login)
+//  - already signed-in user who opened a share link directly (read from the URL)
+// openSharedItem() cleans the URL afterwards so a refresh does not reopen.
 async function consumePendingDeepLink() {
   let params = null;
   try {
@@ -14091,6 +14094,8 @@ async function consumePendingDeepLink() {
     if (s) params = JSON.parse(s);
   } catch(e) {}
   sessionStorage.removeItem('pending_deep_link');
+  // Already signed-in: the link is still in the address bar.
+  if (!params) params = getDeepLinkParams();
   if (params) await openSharedItem(params);
 }
 
