@@ -7853,17 +7853,11 @@ async function notifyTodoStakeholders(todoId, projectId, commentContent) {
     const taskTitle = todo.title || 'مهمة';
     const shortContent = (commentContent || '').substring(0, 100);
     
-    const notifications = Array.from(recipientIds).map(uid => ({
-      user_id: uid,
-      title: `💬 تعليق جديد من ${commenterName}`,
-      body: `على مهمة "${taskTitle}" في "${projName}": ${shortContent}`,
-      related_type: 'todo_comment',
-      related_id: todoId
-    }));
-    
-    // Bulk insert notifications
-    const { error } = await sb.from('notifications').insert(notifications);
-    if (error) console.warn('Notifications insert error:', error);
+    // In-app comment notifications (with redirect links) are created automatically by the
+    // DB trigger notify_on_todo_comment. The previous client insert used non-existent
+    // columns (related_type/related_id) so it always failed; removing it also prevents
+    // duplicate notifications. Variables kept referenced to avoid unused warnings.
+    void recipientIds; void commenterName; void taskTitle; void projName; void shortContent;
   } catch(e) {
     console.warn('notifyTodoStakeholders error:', e);
   }
