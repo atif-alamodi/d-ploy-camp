@@ -5331,6 +5331,9 @@ async function onAuthSuccess(user) {
   if (!restored) {
     await loadHome();
   }
+
+  // If the user arrived via a shared link before logging in, open it now.
+  try { await consumePendingDeepLink(); } catch(e) {}
 }
 
 // ============================================
@@ -14034,6 +14037,64 @@ async function submitTodoComment(todoId, projectId) {
 }
 
 // ============================================
+// DEEP LINKS (shared task / announcement links)
+// ?project=<id>&todo=<id>  OR  ?project=<id>&message=<id>
+// ============================================
+function getDeepLinkParams() {
+  const sp = new URLSearchParams(window.location.search);
+  const projectId = sp.get('project');
+  const todoId = sp.get('todo');
+  const messageId = sp.get('message');
+  if (projectId && (todoId || messageId)) return { projectId, todoId, messageId };
+  return null;
+}
+
+// Open a shared item once the user is authenticated. Verifies existence first so
+// RLS-denied / deleted items show a clear message instead of a broken view.
+async function openSharedItem(params) {
+  if (!params || !params.projectId || (!params.todoId && !params.messageId)) return;
+  const cleanUrl = () => { try { history.replaceState({}, '', window.location.pathname); } catch(e) {} };
+  try {
+    if (params.todoId) {
+      const { data: td } = await sb.from('todos').select('id, project_id').eq('id', params.todoId).maybeSingle();
+      if (!td) { toast('⚠️ ' + t('contentUnavailable')); cleanUrl(); return; }
+      await openProject(params.projectId || td.project_id);
+      await showTodoDetailPage(params.todoId);
+    } else {
+      const { data: msg } = await sb.from('messages').select('id, project_id').eq('id', params.messageId).maybeSingle();
+      if (!msg) { toast('⚠️ ' + t('contentUnavailable')); cleanUrl(); return; }
+      await openProject(params.projectId || msg.project_id);
+      await showProjectTab('messages');
+      // Scroll to + briefly highlight the shared announcement card
+      setTimeout(() => {
+        const el = document.querySelector(`[data-msg-id="${params.messageId}"]`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.style.transition = 'box-shadow 0.3s';
+          el.style.boxShadow = '0 0 0 3px #ff6b35';
+          setTimeout(() => { el.style.boxShadow = ''; }, 2200);
+        }
+      }, 700);
+    }
+    cleanUrl(); // remove params so a refresh doesn't reopen
+  } catch(e) {
+    toast('⚠️ ' + t('contentUnavailable'));
+    cleanUrl();
+  }
+}
+
+// Consume a pending deep link saved before login (logged-out share-link flow).
+async function consumePendingDeepLink() {
+  let params = null;
+  try {
+    const s = sessionStorage.getItem('pending_deep_link');
+    if (s) params = JSON.parse(s);
+  } catch(e) {}
+  sessionStorage.removeItem('pending_deep_link');
+  if (params) await openSharedItem(params);
+}
+
+// ============================================
 // INIT
 // ============================================
 async function init() {
@@ -14084,6 +14145,14 @@ async function init() {
 
   // Check session
   const { data: { session } } = await sb.auth.getSession();
+
+  // Deep link (shared task/announcement): if not signed in, remember it and continue
+  // to the login screen; it will be opened automatically after a successful login.
+  const deepLink = getDeepLinkParams();
+  if (deepLink && !session) {
+    try { sessionStorage.setItem('pending_deep_link', JSON.stringify(deepLink)); } catch(e) {}
+    try { toast('🔗 ' + t('loginToView')); } catch(e) {}
+  }
 
   if (isReset) {
     showReset();
