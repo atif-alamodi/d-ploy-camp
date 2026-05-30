@@ -10387,7 +10387,10 @@ async function renderLayers(container) {
   const countEl = document.getElementById('layersCount');
   if (countEl) countEl.textContent = (layers?.length || 0) + ' طبقات';
   
+  // Editing/deleting a layer stays restricted (matches RLS update/delete: creator or leader).
   const canManage = currentProfile?.platform_role === 'super_admin' || currentProfile?.platform_role === 'team_leader';
+  // Creating a layer is open to any active user (matches RLS layers_insert: auth.uid() = created_by).
+  const canCreateLayer = true;
   
   // Get all todos with layer assignments
   const { data: todos } = await sb.from('todos').select('*').eq('project_id', activeProject.id);
@@ -10399,7 +10402,7 @@ async function renderLayers(container) {
           <span class="section-icon" style="background:#e0e7ff">🎯</span>
           الجدولة الطبقية - تجزئة المشروع
         </h3>
-        ${canManage ? '<button class="btn btn-primary" onclick="openModal(\'newLayerModal\')">➕ طبقة جديدة</button>' : ''}
+        ${canCreateLayer ? '<button class="btn btn-primary" onclick="openModal(\'newLayerModal\')">➕ طبقة جديدة</button>' : ''}
       </div>
       
       <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;line-height:1.7">
@@ -10415,7 +10418,7 @@ async function renderLayers(container) {
       <div style="text-align:center;padding:32px;color:var(--text-muted)">
         <div style="font-size:48px;margin-bottom:12px">🎯</div>
         <h4>لا توجد طبقات بعد</h4>
-        <p style="font-size:13px;margin-top:8px">${canManage ? 'أنشئ أول طبقة لبدء تجزئة المشروع' : 'لم يقم القائد بتجزئة المشروع بعد'}</p>
+        <p style="font-size:13px;margin-top:8px">${canCreateLayer ? 'أنشئ أول طبقة لبدء تجزئة المشروع' : 'لم يقم القائد بتجزئة المشروع بعد'}</p>
       </div>
     `;
   } else {
