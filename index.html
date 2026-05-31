@@ -3871,6 +3871,17 @@ const translations = {
     shareTitle: 'مشاركة',
     shareFile: 'مشاركة الملف',
     fileUnavailable: 'هذا الملف غير متاح أو تم حذفه',
+    selectFiles: 'تحديد ملفات',
+    filesSelected: '{count} ملف محدّد',
+    shareSelected: 'مشاركة المحدّدة',
+    clearSelection: 'إلغاء التحديد',
+    selectAll: 'اختيار الكل',
+    sharedFiles: 'ملفات مشتركة',
+    sharedFilesCount: 'ملفات مشتركة ({available} من {requested})',
+    someFilesUnavailable: 'بعض الملفات غير متاحة أو محذوفة',
+    noSharedFilesAvailable: 'لا توجد ملفات متاحة من هذا الرابط',
+    maxFilesShareLimit: 'الحد الأقصى 50 ملفاً في رابط واحد',
+    viewAllProjectFiles: 'عرض كل ملفات المشروع',
     contentUnavailable: 'هذا المحتوى غير متاح أو تم حذفه',
     loginToView: 'سجّل دخولك لعرض المحتوى المشترك',
     accept: 'قبول الدعوة',
@@ -4112,6 +4123,17 @@ const translations = {
     shareTitle: 'Share',
     shareFile: 'Share file',
     fileUnavailable: 'This file is unavailable or has been deleted',
+    selectFiles: 'Select files',
+    filesSelected: '{count} files selected',
+    shareSelected: 'Share selected',
+    clearSelection: 'Clear selection',
+    selectAll: 'Select all',
+    sharedFiles: 'Shared files',
+    sharedFilesCount: 'Shared files ({available} of {requested})',
+    someFilesUnavailable: 'Some files are unavailable or deleted',
+    noSharedFilesAvailable: 'No files available from this link',
+    maxFilesShareLimit: 'Maximum 50 files per share link',
+    viewAllProjectFiles: 'View all project files',
     contentUnavailable: 'This content is not available or has been deleted',
     loginToView: 'Sign in to view the shared content',
     accept: 'Accept invitation',
@@ -9569,16 +9591,54 @@ function formatFileSize(bytes) {
 }
 
 async function renderFiles(container) {
-  const { data: files } = await sb
+  const selectMode = window.__fileSelectMode === true;
+  const selected = window.__selectedFileIds || (window.__selectedFileIds = new Set());
+  const sharedFilter = Array.isArray(window.__sharedFilesFilter) ? window.__sharedFilesFilter : null;
+
+  let { data: files } = await sb
     .from('project_files').select('*, uploader:uploaded_by(full_name)')
     .eq('project_id', activeProject.id)
     .order('created_at', { ascending: false });
+  files = files || [];
+
+  // Shared-files filtered view (?files=id1,id2,...)
+  let sharedHeader = '';
+  if (sharedFilter) {
+    const byId = {}; files.forEach(f => { byId[f.id] = f; });
+    const available = sharedFilter.map(id => byId[id]).filter(Boolean);
+    if (available.length === 0) {
+      toast('⚠️ ' + t('noSharedFilesAvailable'));
+      window.__sharedFilesFilter = null; // fall back to full list
+    } else {
+      files = available;
+      const label = t('sharedFilesCount').replace('{available}', available.length).replace('{requested}', sharedFilter.length);
+      sharedHeader = `
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font-size:18px">📤</span>
+          <div style="flex:1;min-width:160px">
+            <div style="font-weight:700;font-size:13px;color:#1e40af">${label}</div>
+            ${available.length < sharedFilter.length ? `<div style="font-size:11px;color:#6b7280;margin-top:2px">${t('someFilesUnavailable')}</div>` : ''}
+          </div>
+          <button class="btn btn-secondary" style="font-size:12px;padding:6px 12px" onclick="clearSharedFilesFilter()">${t('viewAllProjectFiles')}</button>
+        </div>`;
+    }
+  }
+
+  // Action bar shown while in multi-select mode
+  const actionBar = selectMode ? `
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span id="fileSelCounter" style="font-weight:700;font-size:13px;color:#c2410c;flex:1;min-width:120px">${t('filesSelected').replace('{count}', selected.size)}</span>
+      <button class="btn btn-secondary" style="font-size:12px;padding:6px 12px" onclick="selectAllFiles()">✓ ${t('selectAll')}</button>
+      <button class="btn btn-primary" style="font-size:12px;padding:6px 12px" onclick="shareSelectedFiles()">🔗 ${t('shareSelected')}</button>
+      <button class="btn btn-ghost" style="font-size:12px;padding:6px 12px" onclick="exitFileSelectMode()">✖️ ${t('clearSelection')}</button>
+    </div>` : '';
 
   container.innerHTML = `
     <div class="section-card">
       <div class="section-header">
         <h3 class="section-title"><span class="section-icon" style="background:#dcfce7">📁</span> ${currentLang === 'ar' ? 'الملفات' : 'Files'}</h3>
         <div style="display:flex;gap:8px">
+          ${(!selectMode && files.length > 0 && !sharedFilter) ? `<button class="btn btn-secondary" onclick="enterFileSelectMode()" title="${t('selectFiles')}">✓ ${t('selectFiles')}</button>` : ''}
           <label class="btn btn-primary" style="cursor:pointer" title="${currentLang === 'ar' ? 'رفع ملف' : 'Upload file'}">
             📤 ${currentLang === 'ar' ? 'رفع ملف' : 'Upload'}
             <input type="file" id="fileUploadInput" multiple accept="*/*" style="display:none" onchange="handleFileUpload(event)">
@@ -9586,37 +9646,90 @@ async function renderFiles(container) {
           <button class="btn btn-secondary" onclick="addFileLink()" title="${currentLang === 'ar' ? 'إضافة رابط' : 'Add link'}">🔗 ${currentLang === 'ar' ? 'رابط' : 'Link'}</button>
         </div>
       </div>
+      ${sharedHeader}
+      ${actionBar}
       <div id="fileUploadProgress" style="display:none;padding:12px;background:var(--primary-light);border-radius:var(--radius);margin-bottom:12px;font-size:13px;color:var(--primary)">
         ⏳ ${currentLang === 'ar' ? 'جارٍ الرفع...' : 'Uploading...'}
       </div>
-      ${!files || files.length === 0
+      ${files.length === 0
         ? `<div class="empty-state"><div class="empty-icon">📁</div><div class="empty-title">${currentLang === 'ar' ? 'لا توجد ملفات بعد' : 'No files yet'}</div><div class="empty-sub">${currentLang === 'ar' ? 'ارفع أي نوع من الملفات' : 'Upload any type of file'}</div></div>`
-        : (files || []).map(f => {
+        : files.map(f => {
           const sName = (f.file_name || '').replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/'/g, "\\'");
+          const isSel = selected.has(f.id);
           return `
-          <div class="todo-item" data-file-id="${f.id}" style="align-items:center">
+          <div class="todo-item" data-file-id="${f.id}" style="align-items:center;${isSel ? 'background:#fff7ed;' : ''}${selectMode ? 'cursor:pointer' : ''}" ${selectMode ? `onclick="toggleFileSelection('${f.id}', this)"` : ''}>
+            ${selectMode ? `<input type="checkbox" ${isSel ? 'checked' : ''} onclick="event.stopPropagation();toggleFileSelection('${f.id}', this.closest('.todo-item'))" style="width:18px;height:18px;flex-shrink:0;cursor:pointer">` : ''}
             <div style="font-size:28px;flex-shrink:0">${getFileIcon(f.file_type, f.file_name)}</div>
             <div class="todo-content">
               <div class="todo-title">
-                <a href="${escapeHTML(f.file_path)}" target="_blank" style="color:var(--primary);text-decoration:none;word-break:break-all">
-                  ${escapeHTML(f.file_name)}
-                </a>
+                ${selectMode
+                  ? `<span style="color:#1f2937;word-break:break-all">${escapeHTML(f.file_name)}</span>`
+                  : `<a href="${escapeHTML(f.file_path)}" target="_blank" style="color:var(--primary);text-decoration:none;word-break:break-all">${escapeHTML(f.file_name)}</a>`}
               </div>
               <div class="todo-meta">
                 ${escapeHTML(f.uploader?.full_name || '')} • ${timeAgo(f.created_at)}
                 ${f.file_size ? ` • ${formatFileSize(f.file_size)}` : ''}
               </div>
             </div>
+            ${selectMode ? '' : `
             <div style="display:flex;gap:4px;flex-shrink:0">
               <button class="btn btn-ghost" style="padding:6px 8px" onclick="shareItem('file','${activeProject.id}','${f.id}', \`${sName}\`)" title="${t('shareFile')}">🔗</button>
               <a href="${escapeHTML(f.file_path)}" download="${escapeHTML(f.file_name)}" target="_blank" class="btn btn-ghost" style="padding:6px 8px" title="${currentLang === 'ar' ? 'تحميل' : 'Download'}">⬇️</a>
               <button class="btn btn-ghost" style="padding:6px 8px" onclick="deleteFile('${f.id}','${escapeHTML(f.storage_path || '')}')">🗑️</button>
-            </div>
+            </div>`}
           </div>
         `;}).join('')
       }
     </div>
   `;
+}
+
+// ---- Multi-file selection + cluster share ----
+function enterFileSelectMode() {
+  window.__fileSelectMode = true;
+  window.__selectedFileIds = new Set();
+  loadProjectTab('files');
+}
+function exitFileSelectMode() {
+  window.__fileSelectMode = false;
+  window.__selectedFileIds = new Set();
+  loadProjectTab('files');
+}
+function toggleFileSelection(id, rowEl) {
+  const set = window.__selectedFileIds || (window.__selectedFileIds = new Set());
+  if (set.has(id)) set.delete(id); else set.add(id);
+  if (rowEl) {
+    const cb = rowEl.querySelector('input[type="checkbox"]');
+    if (cb) cb.checked = set.has(id);
+    rowEl.style.background = set.has(id) ? '#fff7ed' : '';
+  }
+  const c = document.getElementById('fileSelCounter');
+  if (c) c.textContent = t('filesSelected').replace('{count}', set.size);
+}
+function selectAllFiles() {
+  const set = window.__selectedFileIds || (window.__selectedFileIds = new Set());
+  const ids = Array.from(document.querySelectorAll('.todo-item[data-file-id]')).map(el => el.getAttribute('data-file-id'));
+  const allSelected = ids.length > 0 && ids.every(id => set.has(id));
+  window.__selectedFileIds = allSelected ? new Set() : new Set(ids);
+  loadProjectTab('files');
+}
+function clearSharedFilesFilter() {
+  window.__sharedFilesFilter = null;
+  loadProjectTab('files');
+}
+async function shareSelectedFiles() {
+  const ids = Array.from(window.__selectedFileIds || []);
+  if (ids.length === 0) { toast('⚠️ ' + t('filesSelected').replace('{count}', 0)); return; }
+  if (ids.length > 50) { toast('⚠️ ' + t('maxFilesShareLimit')); return; }
+  const url = `https://atif-alamodi.github.io/d-ploy-camp/?project=${encodeURIComponent(activeProject?.id || '')}&files=${ids.map(encodeURIComponent).join(',')}`;
+  const projName = activeProject?.name || '';
+  const text = `${ids.length} ${currentLang === 'ar' ? 'ملفات من مشروع' : 'files from project'} ${projName}`.trim();
+  if (navigator.share) {
+    try { await navigator.share({ title: t('sharedFiles'), text, url }); return; }
+    catch(e) { if (e && e.name === 'AbortError') return; }
+  }
+  try { await navigator.clipboard.writeText(`${text}\n${url}`); toast('🔗 ' + t('linkCopied')); }
+  catch(e) { toast('🔗 ' + url); }
 }
 
 async function handleFileUpload(event) {
@@ -14053,7 +14166,8 @@ function getDeepLinkParams() {
   const todoId = sp.get('todo');
   const messageId = sp.get('message');
   const fileId = sp.get('file');
-  if (projectId && (todoId || messageId || fileId)) return { projectId, todoId, messageId, fileId };
+  const filesParam = sp.get('files');
+  if (projectId && (todoId || messageId || fileId || filesParam)) return { projectId, todoId, messageId, fileId, filesParam };
   return null;
 }
 
@@ -14084,6 +14198,12 @@ async function openSharedItem(params) {
       await openProject(params.projectId || msg.project_id);
       await showProjectTab('messages');
       highlight(`[data-msg-id="${params.messageId}"]`);
+    } else if (params.filesParam) {
+      const ids = params.filesParam.split(',').map(s => s.trim()).filter(Boolean);
+      await openProject(params.projectId);
+      window.__sharedFilesFilter = ids;       // renderFiles shows the filtered "Shared files (X of Y)" view
+      window.__fileSelectMode = false;
+      await showProjectTab('files');
     } else {
       const { data: f } = await sb.from('project_files').select('id, project_id').eq('id', params.fileId).maybeSingle();
       if (!f) { toast('⚠️ ' + t('fileUnavailable')); cleanUrl(); return; }
