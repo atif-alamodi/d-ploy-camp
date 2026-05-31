@@ -6589,6 +6589,7 @@ function toggleNotificationsPanel() {
   
   if (notificationsPanelOpen) {
     loadNotificationsList();
+    attachNotifPanelDelegation();
   }
 }
 
@@ -6684,6 +6685,53 @@ async function updateNotificationBadge() {
       badge.style.display = 'none';
     }
   }
+}
+
+// Parse project/todo from a notification-redirect link (used by the panel items above)
+function extractProjectFromLink(link) {
+  if (!link) return '';
+  try { var u = new URL(link); return u.searchParams.get('project') || u.searchParams.get('dploy_project') || ''; }
+  catch(e) { return ''; }
+}
+function extractTodoFromLink(link) {
+  if (!link) return '';
+  try { var u = new URL(link); return u.searchParams.get('todo') || u.searchParams.get('dploy_todo') || ''; }
+  catch(e) { return ''; }
+}
+
+// One delegated click handler on the notifications panel list (attached once).
+// Marks the notification read, closes the panel, and navigates in-app to the
+// related project/task via the shared deep-link opener.
+function attachNotifPanelDelegation() {
+  var list = document.getElementById('notificationsList');
+  if (!list || list.__notifDelegated) return;
+  list.__notifDelegated = true;
+  list.addEventListener('click', async function(e) {
+    var item = e.target.closest('[data-notif-id]');
+    if (!item) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var notifId = item.dataset.notifId;
+    var link = item.dataset.notifLink || '';
+    var projectId = item.dataset.notifProject || '';
+    var todoId = item.dataset.notifTodo || '';
+    var messageId = '', fileId = '';
+    try { var u = new URL(link); if (!projectId) projectId = u.searchParams.get('project') || ''; messageId = u.searchParams.get('message') || ''; fileId = u.searchParams.get('file') || ''; } catch(err) {}
+    // Mark as read (set all read flags so unread state + badge update everywhere)
+    if (notifId && window.sb) {
+      try { await sb.from('notifications').update({ read: true, is_read: true, read_at: new Date().toISOString() }).eq('id', notifId); } catch(err) {}
+      try { await updateNotificationBadge(); } catch(err) {}
+    }
+    // Close the side panel
+    var sidePanel = document.getElementById('notificationsSidePanel');
+    if (sidePanel) { sidePanel.style.transform = `translateX(${currentLang === 'ar' ? '-' : ''}100%)`; notificationsPanelOpen = false; }
+    // Navigate in-app (reuses the shared deep-link opener for task / message / file)
+    if (projectId && (todoId || messageId || fileId)) {
+      try { await openSharedItem({ projectId: projectId, todoId: todoId || null, messageId: messageId || null, fileId: fileId || null, filesParam: null }); } catch(err) {}
+    } else if (projectId && typeof openProject === 'function') {
+      try { await openProject(projectId); } catch(err) {}
+    }
+  });
 }
 
 // ============================================
