@@ -3171,17 +3171,17 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
       <textarea class="form-input" id="newMsgContent" style="min-height:140px" placeholder="اكتب التفاصيل هنا..."></textarea>
     </div>
     <div class="form-group">
-      <label>📬 المستلمون</label>
+      <label data-i18n="recipientsLabel">📬 المستلمون</label>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px" id="msgRecipientModePicker">
-        <button type="button" id="recipModeAll" onclick="selectRecipientMode('all')" style="padding:6px 12px;border-radius:50px;border:1px solid transparent;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;cursor:pointer;font-size:12px;font-weight:700">🌐 للكل</button>
-        <button type="button" id="recipModeSpecific" onclick="selectRecipientMode('specific')" style="padding:6px 12px;border-radius:50px;border:1px solid #e5e7eb;background:white;color:#374151;cursor:pointer;font-size:12px;font-weight:600">👥 أشخاص محددون</button>
-        <button type="button" id="recipModeCluster" onclick="selectRecipientMode('cluster')" style="padding:6px 12px;border-radius:50px;border:1px solid #e5e7eb;background:white;color:#374151;cursor:pointer;font-size:12px;font-weight:600">📁 Cluster محفوظ</button>
+        <button type="button" id="recipModeAll" data-i18n="recipAll" onclick="selectRecipientMode('all')" style="padding:6px 12px;border-radius:50px;border:1px solid transparent;background:linear-gradient(135deg,#ff6b35,#f7468a);color:white;cursor:pointer;font-size:12px;font-weight:700">🌐 للكل</button>
+        <button type="button" id="recipModeSpecific" data-i18n="recipSpecific" onclick="selectRecipientMode('specific')" style="padding:6px 12px;border-radius:50px;border:1px solid #e5e7eb;background:white;color:#374151;cursor:pointer;font-size:12px;font-weight:600">👥 أشخاص محددون</button>
+        <button type="button" id="recipModeCluster" data-i18n="recipCluster" onclick="selectRecipientMode('cluster')" style="padding:6px 12px;border-radius:50px;border:1px solid #e5e7eb;background:white;color:#374151;cursor:pointer;font-size:12px;font-weight:600">📁 Cluster محفوظ</button>
       </div>
       <input type="hidden" id="msgRecipientMode" value="all">
 
       <!-- Mode: specific people -->
       <div id="recipSpecificBox" style="display:none">
-        <input type="text" class="form-input" id="recipMemberSearch" placeholder="🔍 ابحث عن عضو بالاسم أو البريد..." style="margin-bottom:8px" oninput="renderRecipientMemberList()">
+        <input type="text" class="form-input" id="recipMemberSearch" data-i18n-placeholder="recipSearchPh" placeholder="🔍 ابحث عن عضو بالاسم أو البريد..." style="margin-bottom:8px" oninput="renderRecipientMemberList()">
         <div id="recipMemberList" style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;border:1px solid #f1f5f9;border-radius:10px;padding:6px"></div>
         <div id="recipSelectedCount" style="font-size:11px;color:#6b7280;font-weight:600;margin-top:6px"></div>
       </div>
@@ -3190,22 +3190,22 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
       <div id="recipClusterBox" style="display:none">
         <div style="display:flex;gap:6px;align-items:center">
           <select class="form-input" id="recipClusterSelect" style="flex:1" onchange="onRecipClusterChange()"></select>
-          <button type="button" class="btn btn-secondary" style="padding:8px 12px;font-size:12px;white-space:nowrap" onclick="openClustersModal()">⚙️ إدارة</button>
+          <button type="button" class="btn btn-secondary" data-i18n="manageBtn" style="padding:8px 12px;font-size:12px;white-space:nowrap" onclick="openClustersModal()">⚙️ إدارة</button>
         </div>
         <div id="recipClusterInfo" style="font-size:11px;color:#6b7280;font-weight:600;margin-top:6px"></div>
       </div>
     </div>
     <div class="form-group">
-      <label>📎 المرفقات (اختياري)</label>
+      <label data-i18n="attachmentsOptional">📎 المرفقات (اختياري)</label>
       <div id="newMsgAttachPreview" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
       <label style="display:inline-flex;align-items:center;gap:6px;background:#fff7ed;color:#ff6b35;border:1px dashed #fed7aa;padding:10px 16px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;width:100%;box-sizing:border-box;justify-content:center">
-        📎 إرفاق ملفات
+        <span data-i18n="attachFiles">📎 إرفاق ملفات</span>
         <input type="file" multiple accept="*/*" style="display:none" onchange="uploadNewMsgAttachment(event)">
       </label>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeMessageModal()">إلغاء</button>
-      <button class="btn btn-primary" onclick="createMessage()">📢 نشر</button>
+      <button class="btn btn-ghost" data-i18n="msgCancel" onclick="closeMessageModal()">إلغاء</button>
+      <button class="btn btn-primary" data-i18n="msgPublish" onclick="createMessage()">📢 نشر</button>
     </div>
   </div>
 </div>
@@ -3213,15 +3213,15 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
 <!-- Manage Clusters Modal -->
 <div class="modal-bg" id="clustersModal">
   <div class="modal" style="max-width:560px;max-height:90vh;overflow-y:auto">
-    <h3 class="modal-title">📁 إدارة Clusters</h3>
-    <p style="color:#6b7280;font-size:12px;margin-bottom:14px">مجموعات مستلمين محفوظة خاصة بك، تعمل في كل المشاريع.</p>
+    <h3 class="modal-title" data-i18n="manageClusters">📁 إدارة Clusters</h3>
+    <p style="color:#6b7280;font-size:12px;margin-bottom:14px" data-i18n="clustersDesc">مجموعات مستلمين محفوظة خاصة بك، تعمل في كل المشاريع.</p>
 
     <!-- List view -->
     <div id="clustersListView">
-      <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="showClusterForm()">➕ إنشاء cluster جديد</button>
+      <button class="btn btn-primary" data-i18n="createCluster" style="width:100%;margin-bottom:12px" onclick="showClusterForm()">➕ إنشاء cluster جديد</button>
       <div id="clustersList" style="display:flex;flex-direction:column;gap:8px"></div>
       <div class="modal-actions">
-        <button class="btn btn-ghost" onclick="closeModal('clustersModal')">إغلاق</button>
+        <button class="btn btn-ghost" data-i18n="clustersClose" onclick="closeModal('clustersModal')">إغلاق</button>
       </div>
     </div>
 
@@ -3229,18 +3229,18 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
     <div id="clusterFormView" style="display:none">
       <input type="hidden" id="clusterEditId" value="">
       <div class="form-group">
-        <label>اسم الـ Cluster</label>
-        <input type="text" class="form-input" id="clusterNameInput" placeholder="مثل: فريق التطوير">
+        <label data-i18n="clusterName">اسم الـ Cluster</label>
+        <input type="text" class="form-input" id="clusterNameInput" data-i18n-placeholder="clusterNameHint" placeholder="مثل: فريق التطوير">
       </div>
       <div class="form-group">
-        <label>الأعضاء</label>
-        <input type="text" class="form-input" id="clusterMemberSearch" placeholder="🔍 ابحث عن عضو..." style="margin-bottom:8px" oninput="renderClusterMemberList()">
+        <label data-i18n="membersLabel">الأعضاء</label>
+        <input type="text" class="form-input" id="clusterMemberSearch" data-i18n-placeholder="searchMemberPh" placeholder="🔍 ابحث عن عضو..." style="margin-bottom:8px" oninput="renderClusterMemberList()">
         <div id="clusterMemberList" style="max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;border:1px solid #f1f5f9;border-radius:10px;padding:6px"></div>
         <div id="clusterSelectedCount" style="font-size:11px;color:#6b7280;font-weight:600;margin-top:6px"></div>
       </div>
       <div class="modal-actions">
-        <button class="btn btn-ghost" onclick="showClustersList()">رجوع</button>
-        <button class="btn btn-primary" onclick="saveCluster()">💾 حفظ</button>
+        <button class="btn btn-ghost" data-i18n="clustersBack" onclick="showClustersList()">رجوع</button>
+        <button class="btn btn-primary" data-i18n="clustersSave" onclick="saveCluster()">💾 حفظ</button>
       </div>
     </div>
   </div>
@@ -3882,6 +3882,26 @@ const translations = {
     noSharedFilesAvailable: 'لا توجد ملفات متاحة من هذا الرابط',
     maxFilesShareLimit: 'الحد الأقصى 50 ملفاً في رابط واحد',
     viewAllProjectFiles: 'عرض كل ملفات المشروع',
+    recipientsLabel: '📬 المستلمون',
+    recipAll: '🌐 للكل',
+    recipSpecific: '👥 أشخاص محددون',
+    recipCluster: '📁 Cluster محفوظ',
+    recipSearchPh: '🔍 ابحث عن عضو بالاسم أو البريد...',
+    manageBtn: '⚙️ إدارة',
+    attachmentsOptional: '📎 المرفقات (اختياري)',
+    attachFiles: '📎 إرفاق ملفات',
+    msgCancel: 'إلغاء',
+    msgPublish: '📢 نشر',
+    manageClusters: '📁 إدارة Clusters',
+    clustersDesc: 'مجموعات مستلمين محفوظة خاصة بك، تعمل في كل المشاريع.',
+    createCluster: '➕ إنشاء cluster جديد',
+    clustersClose: 'إغلاق',
+    clusterName: 'اسم الـ Cluster',
+    clusterNameHint: 'مثل: فريق التطوير',
+    membersLabel: 'الأعضاء',
+    searchMemberPh: '🔍 ابحث عن عضو...',
+    clustersBack: 'رجوع',
+    clustersSave: '💾 حفظ',
     contentUnavailable: 'هذا المحتوى غير متاح أو تم حذفه',
     loginToView: 'سجّل دخولك لعرض المحتوى المشترك',
     accept: 'قبول الدعوة',
@@ -4134,6 +4154,26 @@ const translations = {
     noSharedFilesAvailable: 'No files available from this link',
     maxFilesShareLimit: 'Maximum 50 files per share link',
     viewAllProjectFiles: 'View all project files',
+    recipientsLabel: '📬 Recipients',
+    recipAll: '🌐 Everyone',
+    recipSpecific: '👥 Specific people',
+    recipCluster: '📁 Saved cluster',
+    recipSearchPh: '🔍 Search a member by name or email...',
+    manageBtn: '⚙️ Manage',
+    attachmentsOptional: '📎 Attachments (optional)',
+    attachFiles: '📎 Attach files',
+    msgCancel: 'Cancel',
+    msgPublish: '📢 Publish',
+    manageClusters: '📁 Manage Clusters',
+    clustersDesc: 'Your saved recipient groups, available across all projects.',
+    createCluster: '➕ Create new cluster',
+    clustersClose: 'Close',
+    clusterName: 'Cluster name',
+    clusterNameHint: 'e.g., Development team',
+    membersLabel: 'Members',
+    searchMemberPh: '🔍 Search a member...',
+    clustersBack: 'Back',
+    clustersSave: '💾 Save',
     contentUnavailable: 'This content is not available or has been deleted',
     loginToView: 'Sign in to view the shared content',
     accept: 'Accept invitation',
