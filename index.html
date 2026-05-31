@@ -3902,6 +3902,28 @@ const translations = {
     searchMemberPh: '🔍 ابحث عن عضو...',
     clustersBack: 'رجوع',
     clustersSave: '💾 حفظ',
+    recipSelectedN: 'تم اختيار {count} عضو',
+    recipNoneSelected: 'لم يتم اختيار أحد بعد',
+    notifyReachN: 'سيصل الإشعار لـ {count} عضو',
+    clusterMembersN: '{count} عضو مختار',
+    clusterMembersCount: '{count} أعضاء',
+    noClustersSaved: 'لا توجد clusters محفوظة — أنشئ واحداً',
+    chooseCluster: '— اختر cluster —',
+    clusterOption: '{name} ({count} أعضاء)',
+    noClustersYet: 'لا توجد clusters بعد — أنشئ أول واحدة',
+    enterClusterName: '⚠️ أدخل اسم الـ Cluster',
+    pickOneMember: '⚠️ اختر عضواً واحداً على الأقل',
+    clusterSaved: '✅ تم حفظ الـ Cluster',
+    clusterDeleted: '🗑️ تم الحذف',
+    deleteClusterConfirm: 'حذف الـ Cluster "{name}"؟',
+    clusterEditTitle: 'تعديل',
+    clusterDeleteTitle: 'حذف',
+    publishedReachN: '✅ تم النشر — سيصل الإشعار لـ {count} عضو',
+    publishedReachAll: '✅ تم النشر — سيصل لكل أعضاء المنصة',
+    notifSentN: '📬 تم إرسال الإشعار لـ {count} شخص عند النشر (لا يمكن إعادة التوجيه عند التعديل).',
+    notifSentAll: '📬 أُرسل هذا الإعلان لكل أعضاء المنصة عند النشر (لا يمكن إعادة التوجيه عند التعديل).',
+    recipNBadge: '📬 {count} مستلم',
+    recipAllBadge: '📬 للكل',
     contentUnavailable: 'هذا المحتوى غير متاح أو تم حذفه',
     loginToView: 'سجّل دخولك لعرض المحتوى المشترك',
     accept: 'قبول الدعوة',
@@ -4174,6 +4196,28 @@ const translations = {
     searchMemberPh: '🔍 Search a member...',
     clustersBack: 'Back',
     clustersSave: '💾 Save',
+    recipSelectedN: '{count} members selected',
+    recipNoneSelected: 'No one selected yet',
+    notifyReachN: 'Notification will reach {count} members',
+    clusterMembersN: '{count} members selected',
+    clusterMembersCount: '{count} members',
+    noClustersSaved: 'No saved clusters — create one',
+    chooseCluster: '— Choose a cluster —',
+    clusterOption: '{name} ({count} members)',
+    noClustersYet: 'No clusters yet — create your first',
+    enterClusterName: '⚠️ Enter a cluster name',
+    pickOneMember: '⚠️ Select at least one member',
+    clusterSaved: '✅ Cluster saved',
+    clusterDeleted: '🗑️ Deleted',
+    deleteClusterConfirm: 'Delete cluster "{name}"?',
+    clusterEditTitle: 'Edit',
+    clusterDeleteTitle: 'Delete',
+    publishedReachN: '✅ Published — notification will reach {count} members',
+    publishedReachAll: '✅ Published — will reach everyone on the platform',
+    notifSentN: '📬 Notification was sent to {count} people on publish (cannot re-target on edit).',
+    notifSentAll: '📬 This announcement was sent to everyone on the platform on publish (cannot re-target on edit).',
+    recipNBadge: '📬 {count} recipients',
+    recipAllBadge: '📬 Everyone',
     contentUnavailable: 'This content is not available or has been deleted',
     loginToView: 'Sign in to view the shared content',
     accept: 'Accept invitation',
@@ -6411,8 +6455,8 @@ async function editMessage(messageId, currentTitle, currentContent) {
       const { data: msg } = await sb.from('messages').select('recipient_ids').eq('id', messageId).maybeSingle();
       const rec = msg?.recipient_ids;
       note.textContent = (rec && rec.length > 0)
-        ? `📬 تم إرسال الإشعار لـ ${rec.length} شخص عند النشر (لا يمكن إعادة التوجيه عند التعديل).`
-        : '📬 أُرسل هذا الإعلان لكل أعضاء المنصة عند النشر (لا يمكن إعادة التوجيه عند التعديل).';
+        ? t('notifSentN').replace('{count}', rec.length)
+        : t('notifSentAll');
       note.style.display = 'block';
     } catch(e) {}
   }
@@ -8867,7 +8911,7 @@ async function renderMessages(container) {
               <span style="background:${cat.bg};color:${cat.color};padding:2px 10px;border-radius:50px;font-size:11px;font-weight:700">${cat.icon} ${cat.label}</span>
             </div>
             <h3 style="margin:0;font-size:18px;font-weight:900;color:#1f2937">${escapeHTML(m.title)}</h3>
-            <div style="font-size:11px;color:#9ca3af;margin-top:2px">${escapeHTML(m.author?.full_name || '')} • ${formatDateTime(m.created_at)}${(m.recipient_ids && m.recipient_ids.length > 0) ? ` • 📬 ${m.recipient_ids.length} مستلم` : ' • 📬 للكل'}</div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:2px">${escapeHTML(m.author?.full_name || '')} • ${formatDateTime(m.created_at)}${(m.recipient_ids && m.recipient_ids.length > 0) ? ` • ${t('recipNBadge').replace('{count}', m.recipient_ids.length)}` : ` • ${t('recipAllBadge')}`}</div>
           </div>
           <div style="display:flex;gap:4px">
             <button class="btn btn-ghost" onclick="toggleReactionPicker(event,'message','${m.id}')" style="padding:6px" title="تفاعل">😊</button>
@@ -9251,13 +9295,13 @@ function renderRecipientMemberList() {
     }).join('');
   }
   const counter = document.getElementById('recipSelectedCount');
-  if (counter) counter.textContent = recipSelectedIds.size > 0 ? `تم اختيار ${recipSelectedIds.size} عضو` : 'لم يتم اختيار أحد بعد';
+  if (counter) counter.textContent = recipSelectedIds.size > 0 ? t('recipSelectedN').replace('{count}', recipSelectedIds.size) : t('recipNoneSelected');
 }
 
 function toggleRecipientMember(id, checked) {
   if (checked) recipSelectedIds.add(id); else recipSelectedIds.delete(id);
   const counter = document.getElementById('recipSelectedCount');
-  if (counter) counter.textContent = recipSelectedIds.size > 0 ? `تم اختيار ${recipSelectedIds.size} عضو` : 'لم يتم اختيار أحد بعد';
+  if (counter) counter.textContent = recipSelectedIds.size > 0 ? t('recipSelectedN').replace('{count}', recipSelectedIds.size) : t('recipNoneSelected');
 }
 
 async function loadRecipientClusters() {
@@ -9268,10 +9312,10 @@ async function loadRecipientClusters() {
   const sel = document.getElementById('recipClusterSelect');
   if (sel) {
     if (recipClustersCache.length === 0) {
-      sel.innerHTML = '<option value="">لا توجد clusters محفوظة — أنشئ واحداً</option>';
+      sel.innerHTML = '<option value="">' + t('noClustersSaved') + '</option>';
     } else {
-      sel.innerHTML = '<option value="">— اختر cluster —</option>' +
-        recipClustersCache.map(c => `<option value="${c.id}">${escapeHTML(c.name)} (${(c.member_ids || []).length} أعضاء)</option>`).join('');
+      sel.innerHTML = '<option value="">' + t('chooseCluster') + '</option>' +
+        recipClustersCache.map(c => `<option value="${c.id}">${escapeHTML(t('clusterOption').replace('{name}', c.name).replace('{count}', (c.member_ids || []).length))}</option>`).join('');
     }
   }
   onRecipClusterChange();
@@ -9282,7 +9326,7 @@ function onRecipClusterChange() {
   const info = document.getElementById('recipClusterInfo');
   if (!sel || !info) return;
   const c = recipClustersCache.find(x => x.id === sel.value);
-  info.textContent = c ? `سيصل الإشعار لـ ${(c.member_ids || []).length} عضو` : '';
+  info.textContent = c ? t('notifyReachN').replace('{count}', (c.member_ids || []).length) : '';
 }
 
 // ============================================
@@ -9304,24 +9348,24 @@ function showClustersList() {
 async function loadClustersList() {
   const box = document.getElementById('clustersList');
   if (!box) return;
-  box.innerHTML = '<div style="padding:14px;text-align:center;color:#9ca3af;font-size:12px">⏳ جارٍ التحميل...</div>';
+  box.innerHTML = '<div style="padding:14px;text-align:center;color:#9ca3af;font-size:12px">⏳ ' + t('loading') + '</div>';
   const { data, error } = await sb.from('message_clusters')
     .select('id, name, member_ids')
     .order('name');
   if (error) { box.innerHTML = `<div style="padding:14px;text-align:center;color:#ef4444;font-size:12px">❌ ${escapeHTML(error.message)}</div>`; return; }
   recipClustersCache = data || [];
   if (recipClustersCache.length === 0) {
-    box.innerHTML = '<div style="padding:14px;text-align:center;color:#9ca3af;font-size:13px">لا توجد clusters بعد — أنشئ أول واحدة</div>';
+    box.innerHTML = '<div style="padding:14px;text-align:center;color:#9ca3af;font-size:13px">' + t('noClustersYet') + '</div>';
     return;
   }
   box.innerHTML = recipClustersCache.map(c => `
     <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafaf9;border:1px solid #f1f5f9;border-radius:12px">
       <div style="flex:1">
         <div style="font-size:14px;font-weight:700;color:#1f2937">${escapeHTML(c.name)}</div>
-        <div style="font-size:11px;color:#9ca3af">${(c.member_ids || []).length} أعضاء</div>
+        <div style="font-size:11px;color:#9ca3af">${t('clusterMembersCount').replace('{count}', (c.member_ids || []).length)}</div>
       </div>
-      <button class="btn btn-ghost" style="padding:4px 8px;font-size:13px" onclick="showClusterForm('${c.id}')" title="تعديل">✏️</button>
-      <button class="btn btn-ghost" style="padding:4px 8px;font-size:13px;color:#ef4444" onclick="deleteCluster('${c.id}', '${escapeHTML(c.name).replace(/'/g, "\\'")}')" title="حذف">🗑️</button>
+      <button class="btn btn-ghost" style="padding:4px 8px;font-size:13px" onclick="showClusterForm('${c.id}')" title="${t('clusterEditTitle')}">✏️</button>
+      <button class="btn btn-ghost" style="padding:4px 8px;font-size:13px;color:#ef4444" onclick="deleteCluster('${c.id}', '${escapeHTML(c.name).replace(/'/g, "\\'")}')" title="${t('clusterDeleteTitle')}">🗑️</button>
     </div>
   `).join('');
 }
@@ -9371,21 +9415,21 @@ function renderClusterMemberList() {
     }).join('');
   }
   const counter = document.getElementById('clusterSelectedCount');
-  if (counter) counter.textContent = `${clusterSelectedIds.size} عضو مختار`;
+  if (counter) counter.textContent = t('clusterMembersN').replace('{count}', clusterSelectedIds.size);
 }
 
 function toggleClusterMember(id, checked) {
   if (checked) clusterSelectedIds.add(id); else clusterSelectedIds.delete(id);
   const counter = document.getElementById('clusterSelectedCount');
-  if (counter) counter.textContent = `${clusterSelectedIds.size} عضو مختار`;
+  if (counter) counter.textContent = t('clusterMembersN').replace('{count}', clusterSelectedIds.size);
 }
 
 async function saveCluster() {
   const name = document.getElementById('clusterNameInput').value.trim();
   const editId = document.getElementById('clusterEditId').value;
-  if (!name) { toast('⚠️ أدخل اسم الـ Cluster'); return; }
+  if (!name) { toast(t('enterClusterName')); return; }
   const memberIds = [...clusterSelectedIds];
-  if (memberIds.length === 0) { toast('⚠️ اختر عضواً واحداً على الأقل'); return; }
+  if (memberIds.length === 0) { toast(t('pickOneMember')); return; }
   let error;
   if (editId) {
     ({ error } = await sb.from('message_clusters')
@@ -9396,7 +9440,7 @@ async function saveCluster() {
       .insert({ name, member_ids: memberIds, owner_id: currentUser.id }));
   }
   if (error) { toast('❌ ' + error.message); return; }
-  toast('✅ تم حفظ الـ Cluster');
+  toast(t('clusterSaved'));
   showClustersList();
   await loadClustersList();
   // Refresh the recipient dropdown if cluster mode is active
@@ -9404,10 +9448,10 @@ async function saveCluster() {
 }
 
 async function deleteCluster(id, name) {
-  if (!confirm(`حذف الـ Cluster "${name}"؟`)) return;
+  if (!confirm(t('deleteClusterConfirm').replace('{name}', name))) return;
   const { error } = await sb.from('message_clusters').delete().eq('id', id);
   if (error) { toast('❌ ' + error.message); return; }
-  toast('🗑️ تم الحذف');
+  toast(t('clusterDeleted'));
   await loadClustersList();
   try { if (document.getElementById('msgRecipientMode')?.value === 'cluster') await loadRecipientClusters(); } catch(e) {}
 }
@@ -9451,7 +9495,7 @@ async function createMessage() {
   if (msgErr) { toast('❌ ' + msgErr.message); return; }
   const recipCount = recipientIds ? recipientIds.length : 0;
   closeMessageModal();
-  toast(recipCount > 0 ? `✅ تم النشر — سيصل الإشعار لـ ${recipCount} عضو` : '✅ تم النشر — سيصل لكل أعضاء المنصة');
+  toast(recipCount > 0 ? t('publishedReachN').replace('{count}', recipCount) : t('publishedReachAll'));
   logActivity('نشر إعلاناً', 'message', title);
   notifyProjectMembers('message', `${title}: ${msgBody.substring(0,80)}`);
   await loadProjectTab('messages');
