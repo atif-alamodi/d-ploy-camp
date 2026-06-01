@@ -7750,12 +7750,17 @@ function renderTodoCard(td, assignees) {
       onmouseover="this.style.borderColor='#ff6b35';this.style.background='#fff7ed';this.style.transform='translateX(-2px)'"
       onmouseout="this.style.borderColor='#e5e7eb';this.style.background='white';this.style.transform=''">
       
-      <!-- Checkbox -->
-      <div onclick="event.stopPropagation();toggleTodo('${td.id}', ${!td.completed})" 
+      <!-- Checkbox: full task completion is super_admin only; others see read-only status -->
+      ${currentProfile?.is_super_admin === true
+        ? `<div onclick="event.stopPropagation();toggleTodo('${td.id}', ${!td.completed})"
         style="width:22px;height:22px;border:2px solid ${td.completed ? '#10b981' : '#d1d5db'};border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;background:${td.completed ? '#10b981' : 'transparent'};color:white;font-size:14px;flex-shrink:0;transition:all 0.2s;margin-top:1px"
         title="${td.completed ? 'إعادة فتح' : 'إكمال'}">
         ${td.completed ? '✓' : ''}
-      </div>
+      </div>`
+        : `<div style="width:22px;height:22px;border:2px solid ${td.completed ? '#10b981' : '#d1d5db'};border-radius:50%;display:flex;align-items:center;justify-content:center;background:${td.completed ? '#10b981' : 'transparent'};color:white;font-size:14px;flex-shrink:0;margin-top:1px"
+        title="${td.completed ? 'مكتملة' : 'يكتمل الإغلاق تلقائياً عند إنهاء جميع الأعضاء'}">
+        ${td.completed ? '✓' : ''}
+      </div>`}
       
       <!-- Title + badges below in a two-row layout -->
       <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">
@@ -12332,7 +12337,9 @@ async function loadMyTasks() {
   }
   list.innerHTML = `<div class="section-card">${todos.map(td => `
     <div class="todo-item ${td.completed ? 'completed' : ''}">
-      <div class="todo-checkbox ${td.completed ? 'checked' : ''}" onclick="toggleTodo('${td.id}', ${!td.completed})">${td.completed ? '✓' : ''}</div>
+      ${currentProfile?.is_super_admin === true
+        ? `<div class="todo-checkbox ${td.completed ? 'checked' : ''}" onclick="toggleTodo('${td.id}', ${!td.completed})" title="${td.completed ? 'إعادة فتح' : 'إكمال'}">${td.completed ? '✓' : ''}</div>`
+        : `<div class="todo-checkbox ${td.completed ? 'checked' : ''}" style="cursor:default" title="${td.completed ? 'مكتملة' : 'يكتمل الإغلاق تلقائياً عند إنهاء جميع الأعضاء'}">${td.completed ? '✓' : ''}</div>`}
       <div class="todo-content">
         <div class="todo-title">${escapeHTML(td.title)}</div>
         <div class="todo-meta">
@@ -13796,10 +13803,16 @@ async function showTodoDetailPage(todoId) {
     <div class="section-card" style="margin-bottom:20px">
       <!-- Header with title, status checkbox, and action buttons -->
       <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:16px">
-        <div onclick="toggleTodo('${todo.id}', ${!todo.completed}).then(() => showTodoDetailPage('${todo.id}'))" 
-          style="width:32px;height:32px;border:2.5px solid ${todo.completed ? '#10b981' : '#d1d5db'};border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;background:${todo.completed ? '#10b981' : 'transparent'};color:white;font-size:18px;flex-shrink:0;transition:all 0.2s">
+        ${currentProfile?.is_super_admin === true
+          ? `<div onclick="toggleTodo('${todo.id}', ${!todo.completed}).then(() => showTodoDetailPage('${todo.id}'))"
+          style="width:32px;height:32px;border:2.5px solid ${todo.completed ? '#10b981' : '#d1d5db'};border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;background:${todo.completed ? '#10b981' : 'transparent'};color:white;font-size:18px;flex-shrink:0;transition:all 0.2s"
+          title="${todo.completed ? 'إعادة فتح المهمة' : 'إغلاق المهمة كلياً'}">
           ${todo.completed ? '✓' : ''}
-        </div>
+        </div>`
+          : `<div style="width:32px;height:32px;border:2.5px solid ${todo.completed ? '#10b981' : '#d1d5db'};border-radius:50%;display:flex;align-items:center;justify-content:center;background:${todo.completed ? '#10b981' : 'transparent'};color:white;font-size:18px;flex-shrink:0"
+          title="${todo.completed ? 'مكتملة' : 'يكتمل إغلاق المهمة تلقائياً عند إنهاء جميع الأعضاء لنصيبهم'}">
+          ${todo.completed ? '✓' : ''}
+        </div>`}
         <div style="flex:1;min-width:0">
           ${isEditMode ? `
             <input type="text" id="editTitleInput" value="${escapeHTML(todo.title)}" 
@@ -13835,6 +13848,11 @@ async function showTodoDetailPage(todoId) {
       ${todo.reopened_at && !todo.completed ? `
         <div style="padding:10px 14px;background:#fef3c7;border-radius:12px;border:1px solid #fcd34d;font-size:13px;color:#92400e;margin-bottom:14px">
           🔄 <strong>أُعيد فتحها</strong> ${timeAgo(todo.reopened_at)} ${todo.reopened_by_profile ? '— بواسطة ' + escapeHTML(todo.reopened_by_profile.full_name) : ''}
+        </div>
+      ` : ''}
+      ${(!todo.completed && currentProfile?.is_super_admin !== true) ? `
+        <div style="padding:8px 12px;background:#eff6ff;border-radius:10px;border:1px solid #bfdbfe;font-size:11px;color:#1e40af;margin-bottom:14px">
+          ℹ️ يكتمل إغلاق المهمة تلقائياً عند إنهاء جميع الأعضاء لنصيبهم. أنهِ نصيبك من قسم الأعضاء أدناه.
         </div>
       ` : ''}
       
