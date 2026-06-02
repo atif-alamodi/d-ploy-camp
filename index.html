@@ -3797,6 +3797,7 @@ const translations = {
     searchByName: '🔍 ابحث بالاسم...',
     openTodos: 'مهام مفتوحة',
     completed: 'مكتملة',
+    autoCloseNote: 'يكتمل إغلاق المهمة تلقائياً عند إنهاء جميع الأعضاء لنصيبهم',
     yourProjects: 'مشاريعك',
     yourProjectsSub: 'كل مشاريعك في مكان واحد',
     todos: 'المهام',
@@ -4091,6 +4092,7 @@ const translations = {
     searchByName: '🔍 Search by name...',
     openTodos: 'Open Todos',
     completed: 'Completed',
+    autoCloseNote: 'The task closes automatically once all members complete their parts',
     yourProjects: 'Your Projects',
     yourProjectsSub: 'All your projects in one place',
     todos: 'To-dos',
@@ -7758,7 +7760,7 @@ function renderTodoCard(td, assignees) {
         ${td.completed ? '✓' : ''}
       </div>`
         : `<div style="width:22px;height:22px;border:2px solid ${td.completed ? '#10b981' : '#d1d5db'};border-radius:50%;display:flex;align-items:center;justify-content:center;background:${td.completed ? '#10b981' : 'transparent'};color:white;font-size:14px;flex-shrink:0;margin-top:1px"
-        title="${td.completed ? 'مكتملة' : 'يكتمل الإغلاق تلقائياً عند إنهاء جميع الأعضاء'}">
+        title="${td.completed ? t('completed') : t('autoCloseNote')}">
         ${td.completed ? '✓' : ''}
       </div>`}
       
@@ -12339,7 +12341,7 @@ async function loadMyTasks() {
     <div class="todo-item ${td.completed ? 'completed' : ''}">
       ${currentProfile?.is_super_admin === true
         ? `<div class="todo-checkbox ${td.completed ? 'checked' : ''}" onclick="toggleTodo('${td.id}', ${!td.completed})" title="${td.completed ? 'إعادة فتح' : 'إكمال'}">${td.completed ? '✓' : ''}</div>`
-        : `<div class="todo-checkbox ${td.completed ? 'checked' : ''}" style="cursor:default" title="${td.completed ? 'مكتملة' : 'يكتمل الإغلاق تلقائياً عند إنهاء جميع الأعضاء'}">${td.completed ? '✓' : ''}</div>`}
+        : `<div class="todo-checkbox ${td.completed ? 'checked' : ''}" style="cursor:default" title="${td.completed ? t('completed') : t('autoCloseNote')}">${td.completed ? '✓' : ''}</div>`}
       <div class="todo-content">
         <div class="todo-title">${escapeHTML(td.title)}</div>
         <div class="todo-meta">
@@ -13810,7 +13812,7 @@ async function showTodoDetailPage(todoId) {
           ${todo.completed ? '✓' : ''}
         </div>`
           : `<div style="width:32px;height:32px;border:2.5px solid ${todo.completed ? '#10b981' : '#d1d5db'};border-radius:50%;display:flex;align-items:center;justify-content:center;background:${todo.completed ? '#10b981' : 'transparent'};color:white;font-size:18px;flex-shrink:0"
-          title="${todo.completed ? 'مكتملة' : 'يكتمل إغلاق المهمة تلقائياً عند إنهاء جميع الأعضاء لنصيبهم'}">
+          title="${todo.completed ? t('completed') : t('autoCloseNote')}">
           ${todo.completed ? '✓' : ''}
         </div>`}
         <div style="flex:1;min-width:0">
@@ -13852,7 +13854,7 @@ async function showTodoDetailPage(todoId) {
       ` : ''}
       ${(!todo.completed && currentProfile?.is_super_admin !== true) ? `
         <div style="padding:8px 12px;background:#eff6ff;border-radius:10px;border:1px solid #bfdbfe;font-size:11px;color:#1e40af;margin-bottom:14px">
-          ℹ️ يكتمل إغلاق المهمة تلقائياً عند إنهاء جميع الأعضاء لنصيبهم. أنهِ نصيبك من قسم الأعضاء أدناه.
+          ℹ️ ${t('autoCloseNote')}
         </div>
       ` : ''}
       
