@@ -4415,6 +4415,17 @@ document.getElementById('langToggle').onclick = doLangToggle;
   if (_sideLang) _sideLang.onclick = doLangToggle;
 }
 
+// Belt-and-suspenders alongside the CSS :has() rule: hide the floating language
+// toggle inside the app (the in-sidebar button is used there), show it on the auth
+// screen. Works even on browsers without :has() support.
+function syncLangToggleVisibility() {
+  const floating = document.getElementById('langToggle');
+  if (!floating) return;
+  const app = document.getElementById('appScreen');
+  const appVisible = app && !app.classList.contains('hidden');
+  floating.style.display = appVisible ? 'none' : '';
+}
+
 // Initial language load
 currentLang = localStorage.getItem('dploy_lang') || 'ar';
 applyTranslations();
@@ -5403,6 +5414,7 @@ async function onAuthSuccess(user) {
     await sb.auth.signOut();
     document.getElementById('appScreen').classList.add('hidden');
     document.getElementById('authScreen').classList.remove('hidden');
+    syncLangToggleVisibility();
     showAlert('loginAlert', '⏳ حسابك بانتظار موافقة مدير المنصة. ستصلك رسالة بريد إلكتروني عند الموافقة.', 'info');
     return;
   }
@@ -5410,6 +5422,7 @@ async function onAuthSuccess(user) {
     await sb.auth.signOut();
     document.getElementById('appScreen').classList.add('hidden');
     document.getElementById('authScreen').classList.remove('hidden');
+    syncLangToggleVisibility();
     showAlert('loginAlert', '❌ تم رفض طلب التسجيل الخاص بك.', 'error');
     return;
   }
@@ -5448,6 +5461,7 @@ async function onAuthSuccess(user) {
 
   document.getElementById('authScreen').classList.add('hidden');
   document.getElementById('appScreen').classList.remove('hidden');
+  syncLangToggleVisibility();
 
   // Check for pending invitation token (supports ?invite_token= and #invite=)
   const searchParams = new URLSearchParams(window.location.search);
@@ -14439,6 +14453,7 @@ async function init() {
     // Show reset password form immediately (no auth needed - token validates)
     document.getElementById('authScreen').classList.remove('hidden');
     document.getElementById('appScreen').classList.add('hidden');
+    syncLangToggleVisibility();
     document.getElementById('loginForm')?.classList.add('hidden');
     document.getElementById('signupForm')?.classList.add('hidden');
     document.getElementById('forgotForm')?.classList.add('hidden');
@@ -14467,6 +14482,7 @@ async function init() {
       if (hasResetToken) {
         document.getElementById('authScreen').classList.remove('hidden');
         document.getElementById('appScreen').classList.add('hidden');
+        syncLangToggleVisibility();
         showReset();
       }
       // Otherwise ignore - user is just logging in normally
@@ -14590,6 +14606,7 @@ async function init() {
   }
 }
 
+syncLangToggleVisibility();
 init();
 </script>
 <script src="https://liwpqggtvstqwxobhsfs.supabase.co/functions/v1/dploy-ui-enhancer" defer></script>
