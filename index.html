@@ -2228,43 +2228,43 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
           <div class="tool-card-icon" style="background:#fef3c7">📋</div>
           <div class="tool-card-title" data-i18n="todos">المهام</div>
           <div class="tool-card-count" id="todosCount">0</div>
-          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4">قوائم المهام ومتابعة الإنجاز</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4" data-i18n="todosDesc">قوائم المهام ومتابعة الإنجاز</div>
         </div>
         <div class="tool-card" data-tool="messages" onclick="showProjectTab('messages')">
           <div class="tool-card-icon" style="background:#dbeafe">💬</div>
           <div class="tool-card-title" data-i18n="messages">لوحة الإعلانات</div>
           <div class="tool-card-count" id="messagesCount">0</div>
-          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4">الإعلانات والمنشورات والنقاشات</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4" data-i18n="messagesDesc">الإعلانات والمنشورات والنقاشات</div>
         </div>
         <div class="tool-card" data-tool="campfire" onclick="showProjectTab('campfire')">
           <div class="tool-card-icon" style="background:#fff7ed">🔥</div>
           <div class="tool-card-title">Campfire</div>
           <div class="tool-card-count" id="campfireCount">0</div>
-          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4">مخصّصة للدردشة</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4" data-i18n="campfireDesc">مخصّصة للدردشة</div>
         </div>
         <div class="tool-card" data-tool="files" onclick="showProjectTab('files')">
           <div class="tool-card-icon" style="background:#dcfce7">📁</div>
           <div class="tool-card-title" data-i18n="files">الملفات</div>
           <div class="tool-card-count" id="filesCount">0</div>
-          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4">ملفات ومرفقات المشروع</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4" data-i18n="filesDesc">ملفات ومرفقات المشروع</div>
         </div>
         <div class="tool-card" data-tool="checkins" onclick="showProjectTab('checkins')">
           <div class="tool-card-icon" style="background:#fef3c7">🎯</div>
           <div class="tool-card-title" data-i18n="checkins">Check-ins</div>
           <div class="tool-card-count" id="checkinsCount">0</div>
-          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4">أسئلة المتابعة الدورية للفريق</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4" data-i18n="checkinsDesc">أسئلة المتابعة الدورية للفريق</div>
         </div>
         <div class="tool-card" data-tool="members" onclick="showProjectTab('members')">
           <div class="tool-card-icon" style="background:#ede9fe">👥</div>
           <div class="tool-card-title" data-i18n="members">الأعضاء</div>
           <div class="tool-card-count" id="membersCount">0</div>
-          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4">أعضاء المشروع وإدارتهم</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4" data-i18n="membersDesc">أعضاء المشروع وإدارتهم</div>
         </div>
         <div class="tool-card" data-tool="schedule" onclick="showProjectTab('schedule')">
           <div class="tool-card-icon" style="background:#fce7f3">📅</div>
           <div class="tool-card-title" data-i18n="schedule">الجدول</div>
           <div class="tool-card-count" id="scheduleCount">0</div>
-          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4">المواعيد والأحداث المجدولة</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4" data-i18n="scheduleDesc">المواعيد والأحداث المجدولة</div>
         </div>
         <div class="tool-card" data-tool="gantt" onclick="showProjectTab('gantt')" data-i18n-title="ganttTooltip" title="عرض زمني للمهام مرتبة حسب تواريخ البداية والنهاية - يساعد على تتبع المواعيد">
           <div class="tool-card-icon" style="background:#fef3c7">📅</div>
@@ -2282,7 +2282,7 @@ body.ltr .perm-toggle.enabled .perm-switch::after {
           <div class="tool-card-icon" style="background:#f0fdf4">📊</div>
           <div class="tool-card-title" data-i18n="activity">النشاط</div>
           <div class="tool-card-count" id="activityCount"></div>
-          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4">سجل نشاط المشروع وتحديثاته</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:4px;line-height:1.4" data-i18n="activityDesc">سجل نشاط المشروع وتحديثاته</div>
         </div>
       </div>
 
@@ -3829,6 +3829,14 @@ const translations = {
     yourProjectsSub: 'كل مشاريعك في مكان واحد',
     todos: 'المهام',
     messages: 'لوحة الإعلانات',
+    todosDesc: 'قوائم المهام ومتابعة الإنجاز',
+    messagesDesc: 'الإعلانات والمنشورات والنقاشات',
+    campfireDesc: 'مخصّصة للدردشة',
+    filesDesc: 'ملفات ومرفقات المشروع',
+    checkinsDesc: 'أسئلة المتابعة الدورية للفريق',
+    membersDesc: 'أعضاء المشروع وإدارتهم',
+    scheduleDesc: 'المواعيد والأحداث المجدولة',
+    activityDesc: 'سجل نشاط المشروع وتحديثاته',
     schedule: 'الجدول',
     files: 'الملفات',
     checkins: 'Check-ins',
@@ -4134,6 +4142,14 @@ const translations = {
     yourProjectsSub: 'All your projects in one place',
     todos: 'To-dos',
     messages: 'Message Board',
+    todosDesc: 'Task lists and progress tracking',
+    messagesDesc: 'Announcements, posts and discussions',
+    campfireDesc: 'For chatting',
+    filesDesc: 'Project files and attachments',
+    checkinsDesc: 'Recurring team check-in questions',
+    membersDesc: 'Project members and management',
+    scheduleDesc: 'Scheduled dates and events',
+    activityDesc: 'Project activity log and updates',
     schedule: 'Schedule',
     files: 'Files',
     checkins: 'Check-ins',
