@@ -12882,6 +12882,8 @@ let messagesChannel = null;
 let messageCommentsChannel = null;
 let todoCommentsChannel = null;
 let todoAssigneesChannel = null;
+let activityChannel = null;
+let ganttChannel = null;
 let lastSoundTime = 0;
 let soundEnabled = localStorage.getItem('dp_sound_enabled') !== 'false';
 
@@ -13503,6 +13505,29 @@ async function renderActivity(container) {
       }
     </div>
   `;
+
+  // Live updates: any new activity_log row for this project re-renders the list.
+  subscribeActivity();
+}
+
+// Realtime subscription for the Activity tab (activity_log INSERTs).
+// Re-fetches the list so new actions from any member appear immediately.
+function subscribeActivity() {
+  if (!activeProject?.id) return;
+  if (activityChannel) { try { sb.removeChannel(activityChannel); } catch(e) {} }
+  activityChannel = sb.channel('activity-' + activeProject.id)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'activity_log',
+      filter: 'project_id=eq.' + activeProject.id
+    }, async () => {
+      // Only refresh while the Activity tab is the one being viewed
+      if (activeTab === 'activity') {
+        try { await renderActivity(document.getElementById('projectContent')); } catch(e) {}
+      }
+    })
+    .subscribe();
 }
 
 // ============================================
