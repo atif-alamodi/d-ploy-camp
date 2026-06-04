@@ -3886,6 +3886,16 @@ const translations = {
     noProjects: 'لا توجد مشاريع بعد',
     createFirst: 'أنشئ مشروعك الأول للبدء',
     noTodos: 'لا توجد مهام بعد',
+    activityLogTitle: 'سجل نشاط المشروع',
+    noActivityYet: 'لا يوجد نشاط بعد',
+    messageBoardTitle: 'لوحة الإعلانات',
+    noMessagesYet: 'لا توجد إعلانات بعد',
+    noMessagesSub: 'انشر أول إعلان أو فكرة للفريق',
+    ganttNoTasks: 'لا توجد مهام بعد',
+    ganttNoTasksSub: 'أضف مهام لرؤيتها في المخطط الزمني',
+    campfireTitle: 'Campfire - دردشة المشروع',
+    campfireForChat: 'مخصّصة للدردشة',
+    campfireStart: 'ابدأ المحادثة...',
     noMessages: 'لا توجد رسائل بعد',
     noEvents: 'لا توجد أحداث',
     noFiles: 'لا توجد ملفات بعد',
@@ -4181,6 +4191,16 @@ const translations = {
     noProjects: 'No projects yet',
     createFirst: 'Create your first project to get started',
     noTodos: 'No tasks yet',
+    activityLogTitle: 'Project activity log',
+    noActivityYet: 'No activity yet',
+    messageBoardTitle: 'Message Board',
+    noMessagesYet: 'No announcements yet',
+    noMessagesSub: 'Post the first announcement or idea for the team',
+    ganttNoTasks: 'No tasks yet',
+    ganttNoTasksSub: 'Add tasks to see them on the timeline',
+    campfireTitle: 'Campfire - project chat',
+    campfireForChat: 'For chatting',
+    campfireStart: 'Start the conversation...',
     noMessages: 'No messages yet',
     noEvents: 'No events',
     noFiles: 'No files yet',
@@ -8958,7 +8978,7 @@ async function renderMessages(container) {
   let html = `
     <div class="section-card">
       <div class="section-header">
-        <h3 class="section-title"><span class="section-icon" style="background:#dbeafe">📢</span> لوحة الإعلانات (Message Board)</h3>
+        <h3 class="section-title"><span class="section-icon" style="background:#dbeafe">📢</span> ${t('messageBoardTitle')}</h3>
         ${muted ? '' : `<button class="btn btn-primary" onclick="openModal('newMessageModal')">➕ إعلان جديد</button>`}
       </div>
       <p style="color:#6b7280;font-size:13px;margin-bottom:14px">انشر الإعلانات والتعاميم والإنجازات. كل عضو يستطيع التعليق والتفاعل تحتها.</p>
@@ -8991,7 +9011,7 @@ async function renderMessages(container) {
   };
 
   if (!messages || messages.length === 0) {
-    html += `<div class="empty-state"><div class="empty-icon">📢</div><div class="empty-title">لا توجد إعلانات بعد</div><div class="empty-text">انشر أول إعلان أو فكرة للفريق</div></div>`;
+    html += `<div class="empty-state"><div class="empty-icon">📢</div><div class="empty-title">${t('noMessagesYet')}</div><div class="empty-text">${t('noMessagesSub')}</div></div>`;
   } else {
     html += messages.map(m => {
       const isMine = m.created_by === currentUser?.id;
@@ -11091,8 +11111,8 @@ async function renderGantt(container) {
       <div class="section-card">
         <div style="text-align:center;padding:40px;color:var(--text-muted)">
           <div style="font-size:48px;margin-bottom:12px">📅</div>
-          <h3 style="margin-bottom:8px">لا توجد مهام بعد</h3>
-          <p style="font-size:13px">أضف مهام لرؤيتها في المخطط الزمني</p>
+          <h3 style="margin-bottom:8px">${t('ganttNoTasks')}</h3>
+          <p style="font-size:13px">${t('ganttNoTasksSub')}</p>
           <button class="btn btn-primary" style="margin-top:16px" onclick="showProjectTab('todos')">📋 إضافة مهام</button>
         </div>
       </div>`;
@@ -13156,13 +13176,13 @@ async function renderCampfire(container) {
       <div class="section-header">
         <h3 class="section-title">
           <span class="section-icon" style="background:#fff7ed">🔥</span>
-          Campfire - دردشة المشروع
+          ${t('campfireTitle')}
         </h3>
-        <div style="font-size:12px;color:#9ca3af;margin-top:2px">مخصّصة للدردشة</div>
+        <div style="font-size:12px;color:#9ca3af;margin-top:2px">${t('campfireForChat')}</div>
       </div>
       <div class="campfire-wrap">
         <div class="campfire-messages" id="campfireMessages">
-          <div class="campfire-empty">🔥<div>ابدأ المحادثة...</div></div>
+          <div class="campfire-empty">🔥<div>${t('campfireStart')}</div></div>
         </div>
         <div class="campfire-input-row">
           <textarea class="campfire-input" id="campfireInput" placeholder="اكتب رسالة... (Shift+Enter سطر جديد، Enter للإرسال)"
@@ -13191,7 +13211,7 @@ async function loadCampfireMessages() {
   if (!box) return;
 
   if (!msgs || msgs.length === 0) {
-    box.innerHTML = '<div class="campfire-empty">🔥<div>ابدأ المحادثة...</div></div>';
+    box.innerHTML = `<div class="campfire-empty">🔥<div>${t('campfireStart')}</div></div>`;
     return;
   }
 
@@ -13506,11 +13526,11 @@ async function renderActivity(container) {
       <div class="section-header">
         <h3 class="section-title">
           <span class="section-icon" style="background:#f0fdf4">📊</span>
-          سجل نشاط المشروع
+          ${t('activityLogTitle')}
         </h3>
       </div>
       ${!acts || acts.length === 0
-        ? '<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">لا يوجد نشاط بعد</div></div>'
+        ? `<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">${t('noActivityYet')}</div></div>`
         : `<div style="padding:0 4px">${acts.map(a => `
           <div class="activity-item">
             <div class="activity-icon" style="background:var(--bg-elevated)">${icons[a.entity_type] || '📌'}</div>
