@@ -11077,7 +11077,10 @@ async function notifyProjectMembers(notifType, notifContent, excludeUserId) {
 // ============================================
 async function renderGantt(container) {
   if (!activeProject?.id) return;
-  
+
+  // Live updates: any todo change (dates/title/new/deleted) for this project re-renders.
+  subscribeGantt();
+
   const { data: todos } = await sb.from('todos')
     .select('*, profile:assigned_to(full_name)')
     .eq('project_id', activeProject.id)
@@ -11197,6 +11200,25 @@ async function renderGantt(container) {
   `;
   
   container.innerHTML = html;
+}
+
+// Realtime subscription for the Timeline (Gantt) tab. The chart is derived from todos
+// (start/due dates), so any todos change for this project refreshes it live.
+function subscribeGantt() {
+  if (!activeProject?.id) return;
+  if (ganttChannel) { try { sb.removeChannel(ganttChannel); } catch(e) {} }
+  ganttChannel = sb.channel('gantt-' + activeProject.id)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'todos',
+      filter: 'project_id=eq.' + activeProject.id
+    }, async () => {
+      if (activeTab === 'gantt') {
+        try { await renderGantt(document.getElementById('projectContent')); } catch(e) {}
+      }
+    })
+    .subscribe();
 }
 
 // ============================================
